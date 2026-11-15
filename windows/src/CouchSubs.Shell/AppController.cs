@@ -32,6 +32,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private OnboardingStep step;
     private byte[]? accountId;
     private RegisteredConsole? console;
+    private GameConsoleKind consoleKind;
+    private bool consoleKindLocked;
+    private string? xboxToken;
+    private XboxConsole? xboxConsole;
+    private int xboxGeneration;
     private LgTv? tv;
     private TvAppState tvApp = TvAppState.Unknown;
     /// <summary>Son eşleşmede TV uygulaması açılamadı.</summary>
@@ -107,19 +112,25 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         this.sleep = sleep;
         this.text = text;
         this.post = post;
+        if (services.Xbox is { } xbox) xbox.TokenUpdated += OnXboxTokenUpdated;
         accountId = store.Load<byte[]>(StoreKeys.AccountId);
         console = store.Load<RegisteredConsole>(StoreKeys.Console);
+        consoleKind = store.Load<GameConsoleKind?>(StoreKeys.ConsoleKind) ?? GameConsoleKind.PlayStation;
+        consoleKindLocked = store.Load<bool?>(StoreKeys.ConsoleKindLocked) ?? false;
+        xboxToken = store.Load<string>(StoreKeys.XboxToken);
+        xboxConsole = store.Load<XboxConsole>(StoreKeys.XboxConsole);
         tv = store.Load<LgTv>(StoreKeys.Tv);
         var loaded = settingsStore.Load();
         settings = loaded.WithCuratedModels();
         // Listede olmayan model varsayılana döndüyse ayar hemen kaydedilir.
         if (settings != loaded) settingsStore.Save(settings);
         var paired = tv is not null && store.Load<string>(StoreKeys.TvKey) is not null;
-        // Remote Play penceresinden okurken PS5 eşleşmesi (hesap, PS5 kaydı) gerekmez; sihirbaz açılmaz, kayıt da değişmez.
-        var ready = settings.FrameSource == FrameSource.RemotePlayWindow
-                    || SetupIsComplete(store, accountId is not null && console is not null, paired);
+        // Remote Play penceresinden okurken PS5 eşleşmesi gerekmez.
+        var consoleReady = consoleKind == GameConsoleKind.Xbox ? xboxToken is not null && xboxConsole is not null : accountId is not null && console is not null;
+        var ready = (!IsXbox && settings.FrameSource == FrameSource.RemotePlayWindow)
+                    || SetupIsComplete(store, consoleReady, paired);
         // Yarım kalan kurulum (ör. TV uygulaması kurulurken kapatıldı) PS5 kayıtlıysa TV adımından sürer.
-        step = ready ? OnboardingStep.Done : accountId is not null && console is not null ? OnboardingStep.Tv : OnboardingStep.Welcome;
+        step = ready ? OnboardingStep.Done : consoleReady ? OnboardingStep.Tv : OnboardingStep.Welcome;
         AttachServer();
         StartPacksAndPool();
         services.Translation.EngineFailure += OnEngineFailure;
@@ -171,17 +182,70 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == OnboardingStep.Done) store.Save(StoreKeys.SetupComplete, true);
         }
     }
-    public static int StepCount => (int)OnboardingStep.Done;
-    public int StepNumber => Math.Min((int)step + 1, StepCount);
+    public int StepCount => (int)OnboardingStep.Done - (consoleKind == GameConsoleKind.Xbox ? 1 : 0);
+    public int StepNumber => Math.Min((int)step + 1 - (consoleKind == GameConsoleKind.Xbox && step > OnboardingStep.SecondAccount ? 1 : 0), StepCount);
+    public GameConsoleKind ConsoleKind => consoleKind;
+    public bool ConsoleKindLocked => consoleKindLocked;
+    public bool IsXbox => consoleKind == GameConsoleKind.Xbox;
+    public string ConsoleTitle => IsXbox ? "Xbox" : "PS5";
+    public bool HasXboxAccount => xboxToken is not null;
+    public XboxConsole? SelectedXboxConsole => xboxConsole;
+    public void SelectConsoleKind(GameConsoleKind kind)
+    {
+        if (step != OnboardingStep.Welcome || consoleKindLocked || kind == consoleKind || kind == GameConsoleKind.Xbox && services.Xbox is null) return;
+        consoleKind = kind;
+        store.Save(StoreKeys.ConsoleKind, kind);
+        Changed(nameof(ConsoleKind), nameof(IsXbox), nameof(ConsoleTitle), nameof(StepCount), nameof(StepNumber), nameof(CanStart), nameof(CanAdvance), nameof(Ps5StatusText));
+    }
+    public async Task<XboxLoginChallenge> BeginXboxLoginAsync()
+    {
+        var login = await (services.Xbox ?? throw new InvalidOperationException("Xbox yayını bu sürümde kullanılamıyor.")).BeginLoginAsync();
+        OpenInBrowser(login.Url);
+        return login;
+    }
+    public async Task CompleteXboxLoginAsync()
+    {
+        xboxToken = await (services.Xbox ?? throw new InvalidOperationException("Xbox yayını bu sürümde kullanılamıyor.")).CompleteLoginAsync();
+        store.Save(StoreKeys.XboxToken, xboxToken);
+        Changed(nameof(HasXboxAccount), nameof(CanAdvance), nameof(CanStart));
+    }
+    private void OnXboxTokenUpdated(string token)
+    {
+        var generation = xboxGeneration;
+        post(() =>
+        {
+            if (generation != xboxGeneration || !IsXbox || token == xboxToken) return;
+            xboxToken = token;
+            store.Save(StoreKeys.XboxToken, token);
+        });
+    }
+    public Task<IReadOnlyList<XboxConsole>> DiscoverXboxConsolesAsync() =>
+        (services.Xbox ?? throw new InvalidOperationException("Xbox yayını bu sürümde kullanılamıyor.")).DiscoverAsync(xboxToken ?? throw new InvalidOperationException("Microsoft girişi tamamlanmadı."));
+    public void SelectXboxConsole(XboxConsole selected)
+    {
+        if (!selected.StreamingEnabled) return;
+        xboxConsole = selected;
+        store.Save(StoreKeys.XboxConsole, selected);
+        Changed(nameof(SelectedXboxConsole), nameof(CanAdvance), nameof(CanStart), nameof(Ps5StatusText));
+    }
     public bool HasAccount => accountId is not null;
     public RegisteredConsole? Console => console;
     public LgTv? Tv => tv;
     public bool IsRunning { get => isRunning; private set => Set(ref isRunning, value, [nameof(Ps5StatusText), nameof(Ps5Tone), nameof(TvTone)]); }
     public bool IsStarting { get => isStarting; private set => Set(ref isStarting, value); }
     public SessionState SessionState { get => sessionState; private set => Set(ref sessionState, value, [nameof(Ps5StatusText), nameof(Ps5Tone)]); }
-    public string Ps5StatusText => settings.FrameSource == FrameSource.RemotePlayWindow
-        ? WindowStatusText(sessionState, isRunning, text, installed: !RemotePlayMissing)
-        : StatusText(sessionState, isRunning, text, console is null ? null : string.IsNullOrEmpty(console.Name) ? "PS5" : console.Name);
+    public string Ps5StatusText => IsXbox ? XboxStatusText()
+        : settings.FrameSource == FrameSource.RemotePlayWindow
+            ? WindowStatusText(sessionState, isRunning, text, installed: !RemotePlayMissing)
+            : StatusText(sessionState, isRunning, text, console is null ? null : string.IsNullOrEmpty(console.Name) ? "PS5" : console.Name);
+    private string XboxStatusText() => sessionState.Phase switch
+    {
+        SessionPhase.Streaming => text["Connected"],
+        SessionPhase.Connecting => text["Connecting…"],
+        _ when !isRunning => xboxConsole is null ? text["Not connected"] : $"{xboxConsole.Name} hazır. Çeviriyi başlatınca bağlanır.",
+        _ when !string.IsNullOrWhiteSpace(sessionState.Reason?.Detail) => $"Xbox bağlantısı yeniden deneniyor: {sessionState.Reason.Detail}",
+        _ => "Xbox bağlantısı yeniden deneniyor…",
+    };
     public StatusTone Ps5Tone => Ps5ToneFor(sessionState, isRunning);
     public int TvClients { get => tvClients; private set => Set(ref tvClients, value, [nameof(TvTone), nameof(TvStatusText)]); }
     public StatusTone TvTone => HasTv ? TvToneFor(tvClients, isRunning) : StatusTone.Idle;
@@ -194,8 +258,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// <summary>Altyazı TV'ye de gidecek ama TV eşleşmedi: ana ekranda "TV bağla" düğmesi çıkar.</summary>
     public bool NeedsTv => ShowsOnTv && !HasTv;
     /// <summary>Çeviri başlatılabilir mi: PS5 kurulu ve altyazının gideceği bir yer var (TV eşleşmiş ya da bilgisayar ekranı seçili).</summary>
-    /// <summary>Görüntü kaynağı hazır (PS5 kurulu ya da Remote Play penceresi seçili) ve altyazının gideceği bir yer var.</summary>
-    public bool CanStart => (settings.FrameSource == FrameSource.RemotePlayWindow || (console is not null && accountId is not null))
+    /// <summary>Görüntü kaynağı hazır ve altyazının gideceği bir yer var.</summary>
+    public bool CanStart => (IsXbox ? xboxToken is not null && xboxConsole is not null
+                            : settings.FrameSource == FrameSource.RemotePlayWindow || (console is not null && accountId is not null))
                             && (ShowsOnComputer || HasTv);
     public string LastSource { get => lastSource; private set => Set(ref lastSource, value); }
     public string LastTranslation { get => lastTranslation; private set => Set(ref lastTranslation, value); }
@@ -265,8 +330,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public bool CanAdvance => step switch
     {
         OnboardingStep.Welcome or OnboardingStep.SecondAccount or OnboardingStep.Test or OnboardingStep.BetterTranslation => true,
-        OnboardingStep.PsnLogin => accountId is not null,
-        OnboardingStep.Console => console is not null,
+        OnboardingStep.PsnLogin => IsXbox ? xboxToken is not null : accountId is not null,
+        OnboardingStep.Console => IsXbox ? xboxConsole is not null : console is not null,
         OnboardingStep.Tv => HasTv || settings.Output == SubtitleOutput.Computer,
         OnboardingStep.Translation => ModelInstalled,
         _ => false,
@@ -276,13 +341,19 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         if (!CanAdvance || step == OnboardingStep.Done) return;
         // Model büyük; kullanıcı diğer adımlarla uğraşırken arka planda iner.
-        if (step == OnboardingStep.Welcome) StartModelDownload();
-        Step = step + 1;
+        if (step == OnboardingStep.Welcome)
+        {
+            StartModelDownload();
+            consoleKindLocked = true;
+            store.Save(StoreKeys.ConsoleKindLocked, true);
+            Changed(nameof(ConsoleKindLocked));
+        }
+        Step = step == OnboardingStep.Welcome && IsXbox ? OnboardingStep.PsnLogin : step + 1;
     }
 
     public void Back()
     {
-        if (step > OnboardingStep.Welcome) Step = step - 1;
+        if (step > OnboardingStep.Welcome) Step = step == OnboardingStep.PsnLogin && IsXbox ? OnboardingStep.Welcome : step - 1;
     }
 
     /// <summary>Ücretsiz Gemini anahtarı kayıtlı ve çeviri Gemini ile yapılıyor ("Daha iyi çeviri" adımı tamam).</summary>
@@ -1056,15 +1127,22 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public void ResetSetup()
     {
         Stop();
-        foreach (var key in new[] { StoreKeys.AccountId, StoreKeys.Console, StoreKeys.Tv, StoreKeys.TvKey, StoreKeys.TvDevKey, StoreKeys.TvAppVersion,
-                     StoreKeys.SetupComplete, StoreKeys.LoginPasscode }) store.Remove(key);
+        xboxGeneration++;
+        services.Xbox?.Clear();
+        foreach (var key in new[] { StoreKeys.AccountId, StoreKeys.Console, StoreKeys.ConsoleKind, StoreKeys.ConsoleKindLocked, StoreKeys.XboxToken, StoreKeys.XboxConsole,
+                     StoreKeys.Tv, StoreKeys.TvKey, StoreKeys.TvDevKey, StoreKeys.TvAppVersion, StoreKeys.SetupComplete, StoreKeys.LoginPasscode }) store.Remove(key);
         accountId = null;
         console = null;
+        consoleKind = GameConsoleKind.PlayStation;
+        consoleKindLocked = false;
+        xboxToken = null;
+        xboxConsole = null;
         tv = null;
         tvAppMissing = false;
         TvApp = TvAppState.Unknown;
         Step = OnboardingStep.Welcome;
-        Changed(nameof(HasAccount), nameof(Console), nameof(Tv), nameof(HasTv), nameof(NeedsTv), nameof(CanStart), nameof(HasLoginPasscode));
+        Changed(nameof(HasAccount), nameof(Console), nameof(ConsoleKind), nameof(ConsoleKindLocked), nameof(IsXbox), nameof(ConsoleTitle), nameof(HasXboxAccount),
+            nameof(SelectedXboxConsole), nameof(StepCount), nameof(StepNumber), nameof(Ps5StatusText), nameof(Tv), nameof(HasTv), nameof(NeedsTv), nameof(CanStart), nameof(HasLoginPasscode));
     }
 
     /// <summary>İkinci hesabın PS5 giriş şifresi şifreli depoda kayıtlı mı (şifrenin kendisi arayüze dönmez).</summary>
@@ -1091,9 +1169,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         // Düğmeye iki kez basılması ya da beklerken tekrar çağrılması ikinci bir oturum açmaz.
         if (isRunning || isStarting || !CanStart) return;
-        // PS5'e bağlanmak için eşleşmiş PS5 ve ikinci hesap gerekir; Remote Play penceresinden okumak için gerekmez.
-        var readsWindow = settings.FrameSource == FrameSource.RemotePlayWindow;
-        if (!readsWindow && (console is null || accountId is null)) return;
+        // PS5 için eşleşmiş konsol ve ikinci hesap gerekir; Remote Play penceresi ve Xbox için gerekmez.
+        var readsWindow = !IsXbox && settings.FrameSource == FrameSource.RemotePlayWindow;
+        if (!IsXbox && !readsWindow && (console is null || accountId is null)) return;
         IsStarting = true;
         try
         {
@@ -1108,10 +1186,15 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (settings.Dubbing.Enabled && DubbingInstalled) MakeDubber()?.Prepare();
             SubtitleLog.Write($"oturum başladı: {settings.SourceLanguage}→{settings.TargetLanguage}, "
                 + $"motor: {(OnlineTranslationActive ? settings.OnlineEngine.ToString() : "ücretsiz")}, paketler: {(settings.GamePacks ? "açık" : "kapalı")}, "
-                + $"görüntü: {(readsWindow ? "Remote Play penceresi" : "PS5")}");
+                + $"görüntü: {(IsXbox ? "Xbox" : readsWindow ? "Remote Play penceresi" : "PS5")}");
 
             IStreamSession stream;
-            if (readsWindow)
+            if (IsXbox)
+            {
+                RemotePlayLog.Note($"Çeviri başladı; {ConsoleTitle} bağlantısı açılıyor.");
+                stream = (services.Xbox ?? throw new InvalidOperationException("Xbox yayını bu sürümde kullanılamıyor.")).MakeStream(xboxConsole!, xboxToken!);
+            }
+            else if (readsWindow)
             {
                 RemotePlayLog.Note($"Çeviri başladı; görüntü bu bilgisayardaki Remote Play penceresinden ({settings.RemotePlayApp})");
                 stream = services.MakeWindowStream(settings.RemotePlayApp);
@@ -1332,7 +1415,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         services.Translation.EngineFailure -= OnEngineFailure;
+        if (services.Xbox is { } xbox) xbox.TokenUpdated -= OnXboxTokenUpdated;
         Stop();
+        if (services.Xbox is IDisposable disposableXbox) disposableXbox.Dispose();
         server.Dispose();
         poolTimer?.Dispose();
         packTimer?.Dispose();
@@ -1832,13 +1917,13 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         if (state.Phase != SessionState.Phase)
             SubtitleLog.Write(state.Phase switch
             {
-                SessionPhase.Connecting => "PS5: bağlanıyor",
-                SessionPhase.Streaming => "PS5: bağlandı",
-                _ => "PS5: bağlantı yok",
+                SessionPhase.Connecting => $"{ConsoleTitle}: bağlanıyor",
+                SessionPhase.Streaming => $"{ConsoleTitle}: bağlandı",
+                _ => $"{ConsoleTitle}: bağlantı yok",
             });
         SessionState = state;
         UpdateTroubleClocks();
-        UpdateGameProbe(state.Phase == SessionPhase.Streaming);
+        if (!IsXbox) UpdateGameProbe(state.Phase == SessionPhase.Streaming);
         // Bağlantı koptuysa TV'de eski altyazı kalmasın.
         if (state.Phase == SessionPhase.Disconnected)
         {
@@ -2037,7 +2122,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private void UpdateTroubleClocks()
     {
         var now = Clock();
-        var ps5Trouble = isRunning && sessionState.Phase != SessionPhase.Streaming && sessionState.Reason?.Kind is not
+        var ps5Trouble = !IsXbox && isRunning && sessionState.Phase != SessionPhase.Streaming && sessionState.Reason?.Kind is not
             (DisconnectKind.ConsoleAsleep or DisconnectKind.InUse or DisconnectKind.Refused or DisconnectKind.LoginPasscode
              or DisconnectKind.LoginPasscodeIncorrect or DisconnectKind.RegistrationInvalid);
         ps5TroubleSince = ps5Trouble ? ps5TroubleSince ?? now : null;

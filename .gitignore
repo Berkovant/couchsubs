@@ -3,6 +3,13 @@ prototip/okuyucu/okuyucu
 .DS_Store
 .superpowers/
 build/
+/greenlight-main-v2/
+windows/**/bin/
+windows/**/obj/
+windows/.dotnet-sdk/
+windows/.dotnet/
+windows/.nuget/
+windows/xbox-build.log
 *.xcodeproj/xcuserdata/
 third-party/build/
 .build/

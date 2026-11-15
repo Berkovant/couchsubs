@@ -85,10 +85,24 @@ a trademark of Marvel and Sony Interactive Entertainment LLC.
 | Microsoft.ML.Tokenizers | MIT | https://github.com/dotnet/machinelearning |
 | System.Security.Cryptography.ProtectedData | MIT | https://github.com/dotnet/runtime |
 | Microsoft WebView2 SDK | BSD-3-Clause | https://www.nuget.org/packages/Microsoft.Web.WebView2 |
+| Greenlight protocol reference | MIT | https://github.com/unknownskl/greenlight |
+| Node.js 22.14.0 runtime (Xbox helper) | MIT and bundled third-party licenses | https://github.com/nodejs/node |
+| xal-node (Xbox Microsoft device-code authentication) | MIT | https://github.com/unknownskl/xal-node |
+| xbox-webapi (home console discovery) | MIT | https://github.com/unknownskl/xbox-webapi |
+| xbox-xcloud-player (WebRTC video reception) | MIT | https://github.com/unknownskl/xbox-xcloud-player |
+| ip-address (ICE/Teredo address handling) | MIT | https://github.com/beaugunderson/ip-address |
+| jose (Xbox token handling, bundled dependency) | MIT | https://github.com/panva/jose |
+| uuid (bundled dependency) | MIT | https://github.com/uuidjs/uuid |
+| uuid4 (bundled dependency) | ISC | https://www.npmjs.com/package/uuid4 |
+| events (bundled browser EventEmitter) | MIT | https://github.com/browserify/events |
 | SSH.NET (LG TV connection) | MIT | https://github.com/sshnet/SSH.NET |
 | BouncyCastle.Cryptography (used by SSH.NET) | MIT | https://github.com/bcgit/bc-csharp |
 | Microsoft.Extensions.Logging.Abstractions (used by SSH.NET) | MIT | https://github.com/dotnet/runtime |
 | Microsoft Visual C++ 2015–2022 runtime (`vcruntime140*.dll`, `msvcp140*.dll`, `concrt140.dll`; needed by ONNX Runtime) | Microsoft Visual Studio license terms, "Distributable Code" (redist.txt) | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
+
+The full copyright and license notices for Greenlight, the Xbox helper's bundled libraries, and the bundled Node.js
+runtime are in `windows/xbox-bridge/licenses/` in the source tree and `xbox-bridge/licenses/` in the Windows package.
+The Xbox helper adapts Greenlight's home-streaming protocol sequence; the full Greenlight application is not bundled.
 
 The Visual C++ runtime DLLs are Microsoft's redistributable files, copied unmodified from the Visual Studio
 `VC\Redist\MSVC\…\x64\Microsoft.VC14x.CRT` folder and placed next to `CouchSubs.exe` (app-local deployment, as

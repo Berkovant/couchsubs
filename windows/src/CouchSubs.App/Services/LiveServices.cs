@@ -16,6 +16,7 @@ namespace CouchSubs.App.Services;
 /// <summary>Uygulama denetleyicisinin gerçek dünya bağlantıları (PS5, PSN, TV, OCR, çeviri).</summary>
 public sealed class LiveServices : IAppServices
 {
+    public IXboxService? Xbox { get; } = new XboxService();
     public ITranslationModel Translation { get; } = new MarianModel();
 
     // DeepL yalnız İngilizce→Türkçe için açılır; önceki oturumların çevirileri kotadan yemeden yeniden kullanılır.
