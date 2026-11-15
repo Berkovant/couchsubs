@@ -53,6 +53,8 @@ import com.couchsubs.mobile.translation.Glossary
 import com.couchsubs.mobile.translation.MlKitTranslator
 import com.couchsubs.mobile.translation.TranslationCache
 import com.couchsubs.mobile.ui.MainActivity
+import com.couchsubs.mobile.xbox.XboxError
+import com.couchsubs.mobile.xbox.XboxStreamSession
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -139,6 +141,7 @@ class TranslationService : Service() {
     @Volatile private var streaming = false
     private var begun = false
     @Volatile private var styleListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+    @Volatile private var targetListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -181,16 +184,23 @@ class TranslationService : Service() {
     }
 
     private fun begin() {
+        val xbox = settings.xbox
         val console = settings.console
         val accountId = settings.accountId
-        if (console == null || accountId == null) {
+        // Xbox (Beta): Microsoft girişi ve seçili Xbox yeter; PSN ve PS5 eşlemesi gerekmez.
+        if (xbox && (settings.xboxConsole == null || !Services.xboxAuth.signedIn)) {
+            LiveState.update { it.copy(running = false, error = getString(R.string.error_xbox_not_ready)) }
+            stopSelf()
+            return
+        }
+        if (!xbox && (console == null || accountId == null)) {
             LiveState.update { it.copy(running = false, error = getString(R.string.error_not_paired)) }
             stopSelf()
             return
         }
         // Yerine geçen kaynak yalnız debug yapısında kurulur (Play görüntüleri için kayıtlı klip); PS5 kitaplığı gerekmez.
         val replacement = FrameSources.replacement
-        if (replacement == null && !NativeBridge.available) {
+        if (replacement == null && !xbox && !NativeBridge.available) {
             LiveState.update { it.copy(running = false, error = getString(R.string.error_native)) }
             stopSelf()
             return
@@ -221,7 +231,8 @@ class TranslationService : Service() {
         }, "CouchSubs start").start()
     }
 
-    private fun setup(console: RegisteredConsole, accountId: ByteArray, replacement: FrameSourceFactory?) {
+    private fun setup(console: RegisteredConsole?, accountId: ByteArray?, replacement: FrameSourceFactory?) {
+        val xboxConsole = if (settings.xbox) settings.xboxConsole else null
         // Paketler ücretsiz: uygulamayla gelenler ve sunucudan inmiş güncel sürümler. Ayardan kapatılırsa aranmaz.
         val library = Services.packLibrary(this)
         packs = library
@@ -242,6 +253,8 @@ class TranslationService : Service() {
         }
         // Çeviri sürerken Ayarlar'da yazı boyu ya da rengi değişirse TV hemen yeni görünüme geçer (iPhone ile aynı).
         styleListener = settings.onStyleChanged { server?.sendStyle(settings.style) }
+        // Çeviri sürerken hedef TV'ye (ya da telefona) çevrilirse altyazı hemen oraya gider (iPhone ile aynı).
+        targetListener = settings.onTargetChanged { server?.sendsToTv = settings.target == SubtitleTarget.TV }
         region = settings.region
         extraAreas = settings.extraAreas.active()
         areasListener = settings.onAreasChanged {
@@ -359,13 +372,13 @@ class TranslationService : Service() {
                     }
                 }
             }
-            PlayedGame.start(console.name.ifEmpty { console.host }, settings, startedAt)
+            PlayedGame.start(xboxConsole?.name?.ifEmpty { "Xbox" } ?: console!!.name.ifEmpty { console.host }, settings, startedAt)
             // Oyun iki dakikada tanınmazsa kart açılır (ayar ve ortak havuz açıksa, oturumda bir kez).
             background.scheduleWithFixedDelay({ PlayedGame.checkAsk(System.currentTimeMillis()) }, 15, 15, TimeUnit.SECONDS)
-            // Bağlıyken iki dakikada bir PS5'e çalışan oyun sorulur.
-            background.scheduleWithFixedDelay({
+            // Bağlıyken iki dakikada bir PS5'e çalışan oyun sorulur (Xbox'ta bu soru yok; oyun paketten tanınır).
+            if (xboxConsole == null) background.scheduleWithFixedDelay({
                 try {
-                    val host = settings.console?.host ?: console.host
+                    val host = settings.console?.host ?: console!!.host
                     if (streaming) PlayedGame.consoleReported(ConsoleDiscovery.runningGame(host))
                 } catch (error: Exception) {
                     Log.w(TAG, "running game", error)
@@ -373,7 +386,8 @@ class TranslationService : Service() {
             }, GAME_PROBE_MS / 4, GAME_PROBE_MS, TimeUnit.MILLISECONDS)
         }
         val source = replacement?.create(this, onFrame, onState)
-            ?: StreamSession(console, accountId, onFrame, onState, onConsoleMoved = { moved -> settings.console = moved },
+            ?: xboxConsole?.let { XboxStreamSession(this, Services.xboxAuth, it, onFrame, onState, ::describeXbox) }
+            ?: StreamSession(console!!, accountId!!, onFrame, onState, onConsoleMoved = { moved -> settings.console = moved },
                 loginPasscode = settings.loginPasscode)
         synchronized(lifecycle) {
             // Kurulum sürerken durdurulduysa (onDestroy çalıştı) açılan bağlantı başlatılmaz.
@@ -383,7 +397,7 @@ class TranslationService : Service() {
                 return
             }
             session = source
-            Backend.breadcrumb("çeviri: PS5 oturumu açılıyor")
+            Backend.breadcrumb(if (xboxConsole != null) "çeviri: Xbox oturumu açılıyor" else "çeviri: PS5 oturumu açılıyor")
             source.start()
         }
         background.scheduleWithFixedDelay({
@@ -527,7 +541,23 @@ class TranslationService : Service() {
 
     @Volatile private var glossaryInUse = Glossary.Empty
 
-    private fun describe(state: SessionState): String = when (state) {
+    /** Xbox hatasının ekrandaki anlatımı. */
+    private fun describeXbox(kind: XboxError): String = getString(when (kind) {
+        XboxError.SIGN_IN_REQUIRED, XboxError.CODE_EXPIRED, XboxError.SIGN_IN_DECLINED -> R.string.xbox_error_sign_in
+        XboxError.NO_XBOX_ACCOUNT -> R.string.xbox_error_no_account
+        XboxError.CONSOLE_UNAVAILABLE -> R.string.xbox_error_console
+        XboxError.BUSY -> R.string.xbox_error_busy
+        XboxError.TIMEOUT -> R.string.xbox_error_timeout
+        XboxError.NETWORK -> R.string.xbox_error_network
+        XboxError.SERVICE -> R.string.xbox_error_service
+    })
+
+    private fun describe(state: SessionState): String =
+        // Xbox oturumu nedeni kullanıcının dilinde verir.
+        if (state is SessionState.Disconnected && state.kind == DisconnectKind.OTHER && settings.xbox && state.detail != null) state.detail
+        else describePs(state)
+
+    private fun describePs(state: SessionState): String = when (state) {
         SessionState.Connecting -> getString(R.string.phase_connecting)
         SessionState.Streaming -> getString(R.string.phase_streaming)
         is SessionState.Disconnected -> when (state.kind) {
@@ -569,6 +599,8 @@ class TranslationService : Service() {
         PlayedGame.stop()
         styleListener?.let(settings::removeListener)
         styleListener = null
+        targetListener?.let(settings::removeListener)
+        targetListener = null
         areasListener?.let(settings::removeListener)
         areasListener = null
         regionWatcher?.reset()

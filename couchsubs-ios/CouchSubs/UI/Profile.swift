@@ -42,8 +42,20 @@ struct ProfileScreen: View {
                 .buttonStyle(.plain)
             }
             Tile(spacing: 0) {
+                NavigationLink(value: Route.platform) {
+                    ListRow(symbol: "gamecontroller.fill", title: "Console", detail: model.isXbox ? "Xbox (Beta)" : "PlayStation 5")
+                }
+                RowDivider()
                 NavigationLink(value: Route.ps5) {
-                    ListRow(symbol: "gamecontroller", title: "PS5 and connection", detail: model.console?.name)
+                    if model.isXbox {
+                        ListRow(symbol: "gamecontroller", title: "Xbox and connection", detail: model.xboxConsole?.name)
+                    } else {
+                        ListRow(symbol: "gamecontroller", title: "PS5 and connection", detail: model.console?.name)
+                    }
+                }
+                if model.isXbox && model.xboxSignedIn {
+                    RowDivider()
+                    Button { model.signOutXbox() } label: { ListRow(symbol: "person.crop.circle.badge.xmark", title: "Sign out of Microsoft") }
                 }
                 RowDivider()
                 NavigationLink(value: Route.target) { ListRow(symbol: "tv", title: "Subtitle target", detail: targetName) }
@@ -201,6 +213,14 @@ struct SettingsScreen: View {
                               selection: $model.settings.style.backgroundShape)
                 Text("Drag Background all the way to Solid to fully hide the English subtitle in the game. A full-width band also covers the sides.")
                     .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
+                Toggle(isOn: $model.settings.style.stackPrevious) {
+                    VStack(alignment: .leading, spacing: Mobile.Space.hair) {
+                        Text("Keep previous lines above in fast dialogue").font(Mobile.TypeScale.headline)
+                        Text("When off, each new line replaces the previous one. Needs TV app 0.9.16 or later.")
+                            .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
+                    }
+                }
+                .tint(Mobile.Palette.accent)
             }
             AreaTile()
             ExtraAreasTile()
