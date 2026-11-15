@@ -76,6 +76,7 @@ public partial class SettingsWindow : Window
         GamePacks.IsChecked = settings.GamePacks;
         SharePool.IsChecked = settings.SharePool;
         AskGame.IsChecked = settings.AskGame;
+        SpeakerNames.IsChecked = settings.ShowSpeakerNames;
         ShowPacks();
         AppearanceChoice.SelectedItem = AppearanceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Appearance.ToString());
         FrameSourceChoice.SelectedItem = FrameSourceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.FrameSource.ToString());
@@ -286,6 +287,8 @@ public partial class SettingsWindow : Window
     private void OnSharePool(object sender, RoutedEventArgs e) => Update(s => s with { SharePool = SharePool.IsChecked == true });
 
     private void OnAskGame(object sender, RoutedEventArgs e) => Update(s => s with { AskGame = AskGame.IsChecked == true });
+
+    private void OnSpeakerNames(object sender, RoutedEventArgs e) => Update(s => s with { ShowSpeakerNames = SpeakerNames.IsChecked == true });
 
     /// <summary>Seçili motor (ayarlarda ücretsiz ise Free).</summary>
     private TranslationEngine SelectedEngine =>

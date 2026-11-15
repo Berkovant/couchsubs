@@ -307,6 +307,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (old.Output != value.Output) OutputChanged();
             if (old.Dubbing != value.Dubbing) DubbingSettingsChanged(old.Dubbing);
             if (old.GamePacks != value.GamePacks && pipeline is not null) ConnectPacks(pipeline);
+            if (pipeline is not null) pipeline.ShowSpeakerNames = value.ShowSpeakerNames;
             if ((old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs) && pipeline is not null) ApplyWaits(pipeline);
             if (old.SharePool != value.SharePool) services.Pool?.SetEnabled(value.SharePool);
             if (old.TranslationDevice != value.TranslationDevice)
@@ -1669,7 +1670,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         activeReader = reader;
         OcrMissing = reader is null || !services.HasOcrLanguage(settings.SourceLanguage);
         if (reader is null) return;
-        var built = new SubtitlePipeline(reader, MakeTranslator(), server, new ReadScheduler());
+        var built = new SubtitlePipeline(reader, MakeTranslator(), server, new ReadScheduler()) { ShowSpeakerNames = settings.ShowSpeakerNames };
         built.MetricsReady += metrics => post(() => MetricsText = metrics.Summary(text));
         built.PairShown += (source, translation) =>
         {
