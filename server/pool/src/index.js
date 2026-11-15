@@ -102,19 +102,23 @@ async function submit(req, env) {
   // Günlükte (wrangler tail) yalnız sayılar ve oyun kimliğinin biçimi: oyun bilgisinin gelip gelmediği görülsün.
   console.log(JSON.stringify(submitSummary(body, lines)));
 
-  // Görülme ve satır upsert'i aynı sıralı D1 batch'indedir. Upsert yeni görülmede çalışır; ayrıca önceki split-batch
-  // hatalarından kalmış yetim satırı ya da düşük installs sayısını onarır. Sağlıklı duplicate satıra dokunmaz.
+  // D1'in günlük yazma kotası için satır başına en çok iki yazma: önce görülme kaydı; bu kurulum satırı zaten
+  // bildirdiyse (changes 0) satıra hiç dokunulmaz. Yeni görülmede sayaç sayılarak değil bir artırılarak güncellenir.
   // Kota satırı istek başına tek yazmadır.
   const now = new Date().toISOString();
   const entries = [...fresh];
+  const seen = entries.length
+    ? await env.DB.batch(entries.map(([k]) =>
+      env.DB.prepare("INSERT OR IGNORE INTO sightings(key,install) VALUES(?,?)").bind(k, install)))
+    : [];
   // Oyun bilgisi satırın ilk bilinen oyunudur: sonra gelen başka oyun üstüne yazmaz (COALESCE), ek yazma da yapmaz.
   const build = (legacy) => {
     const stmts = [];
-    entries.forEach(([k, line]) => {
-      stmts.push(env.DB.prepare("INSERT OR IGNORE INTO sightings(key,install) VALUES(?,?)").bind(k, install));
+    entries.forEach(([k, line], i) => {
+      if (!(seen[i]?.meta?.changes > 0)) return;
       stmts.push(legacy
-        ? env.DB.prepare(LEGACY_UPSERT).bind(k, line.text, k, now, now, k, now, k, k, k)
-        : env.DB.prepare(UPSERT).bind(k, line.text, k, now, now, k, now, line.title, line.game, k, k, k));
+        ? env.DB.prepare(LEGACY_UPSERT).bind(k, line.text, now, now)
+        : env.DB.prepare(UPSERT).bind(k, line.text, now, now, line.title, line.game));
     });
     stmts.push(env.DB.prepare(
       "INSERT INTO quota(install,day,count) VALUES(?,?,?) ON CONFLICT(install,day) DO UPDATE SET count=count+excluded.count"
@@ -122,18 +126,16 @@ async function submit(req, env) {
     return stmts;
   };
   let stmts = build(false);
-  let results;
   try {
-    results = await env.DB.batch(stmts);
+    await env.DB.batch(stmts);
   } catch (e) {
     // Geçiş (migrate-2026-11-14-game.sql) henüz çalışmadıysa oyun sütunları yoktur: eski biçimle yazılır.
     if (!/no such column|has no column/i.test(String(e?.message || e))) throw e;
     stmts = build(true);
-    results = await env.DB.batch(stmts);
+    await env.DB.batch(stmts);
   }
   await vote(env, install, entries);
-  const recorded = entries.filter((_, i) => results[i * 2]?.meta?.changes > 0).length;
-  return json({ accepted: fresh.size, recorded });
+  return json({ accepted: fresh.size, recorded: stmts.length - 1 });
 }
 
 /** Kimliksiz gelen oyun adları: kurulum başına bir oy (istekte birkaç oyun olsa da en çok üç yazma). Tek kişinin
@@ -156,26 +158,12 @@ async function vote(env, install, entries) {
 }
 
 const UPSERT =
-  "INSERT INTO lines(key,text,installs,first_seen,last_seen,title_id,game) " +
-  "SELECT ?,?,(SELECT COUNT(*) FROM sightings WHERE key=?),?, " +
-  "CASE WHEN changes()>0 THEN ? ELSE COALESCE((SELECT last_seen FROM lines WHERE key=?),?) END,?,? " +
-  "WHERE changes()>0 OR NOT EXISTS(SELECT 1 FROM lines WHERE key=?) " +
-  "OR COALESCE((SELECT installs FROM lines WHERE key=?),0)<(SELECT COUNT(*) FROM sightings WHERE key=?) " +
-  "ON CONFLICT(key) DO UPDATE SET installs=CASE WHEN changes()>0 " +
-  "THEN MAX(lines.installs+1,(SELECT COUNT(*) FROM sightings WHERE key=excluded.key)) " +
-  "ELSE MAX(lines.installs,(SELECT COUNT(*) FROM sightings WHERE key=excluded.key)) END, " +
-  "last_seen=excluded.last_seen, " +
+  "INSERT INTO lines(key,text,installs,first_seen,last_seen,title_id,game) VALUES(?,?,1,?,?,?,?) " +
+  "ON CONFLICT(key) DO UPDATE SET installs=installs+1, last_seen=excluded.last_seen, " +
   "title_id=COALESCE(lines.title_id,excluded.title_id), game=COALESCE(lines.game,excluded.game)";
 const LEGACY_UPSERT =
-  "INSERT INTO lines(key,text,installs,first_seen,last_seen) " +
-  "SELECT ?,?,(SELECT COUNT(*) FROM sightings WHERE key=?),?, " +
-  "CASE WHEN changes()>0 THEN ? ELSE COALESCE((SELECT last_seen FROM lines WHERE key=?),?) END " +
-  "WHERE changes()>0 OR NOT EXISTS(SELECT 1 FROM lines WHERE key=?) " +
-  "OR COALESCE((SELECT installs FROM lines WHERE key=?),0)<(SELECT COUNT(*) FROM sightings WHERE key=?) " +
-  "ON CONFLICT(key) DO UPDATE SET installs=CASE WHEN changes()>0 " +
-  "THEN MAX(lines.installs+1,(SELECT COUNT(*) FROM sightings WHERE key=excluded.key)) " +
-  "ELSE MAX(lines.installs,(SELECT COUNT(*) FROM sightings WHERE key=excluded.key)) END, " +
-  "last_seen=excluded.last_seen";
+  "INSERT INTO lines(key,text,installs,first_seen,last_seen) VALUES(?,?,1,?,?) " +
+  "ON CONFLICT(key) DO UPDATE SET installs=installs+1, last_seen=excluded.last_seen";
 
 async function exportLines(url, env) {
   const min = Math.max(1, Number(url.searchParams.get("min") || 2));
