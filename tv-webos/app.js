@@ -268,11 +268,18 @@
     var x = plainText(a);
     var y = plainText(b);
     if (!x || !y) return x === y;
-    return x === y || x.indexOf(y) >= 0 || y.indexOf(x) >= 0;
+    // Boşluklar karşılaştırmaya girmez (OCR boşluğu bazen yutar ya da fazladan koyar). Tek sözcüklük satır ise
+    // ancak öteki satırda tam sözcük olarak geçerse aynıdır: "No!" ve "Not now!" farklı altyazılardır.
+    var cx = x.replace(/ /g, '');
+    var cy = y.replace(/ /g, '');
+    if (cx === cy) return true;
+    if (cx.indexOf(cy) >= 0) return y.indexOf(' ') >= 0 || (' ' + x + ' ').indexOf(' ' + y + ' ') >= 0;
+    if (cy.indexOf(cx) >= 0) return x.indexOf(' ') >= 0 || (' ' + y + ' ').indexOf(' ' + x + ' ') >= 0;
+    return false;
   }
 
   function plainText(text) {
-    return String(text).toLowerCase().replace(/[\s.,!?;:…"'“”‘’«»()\[\]\-–—]+/g, '');
+    return String(text).toLowerCase().replace(/[.,!?;:…"'“”‘’«»()\[\]\-–—]+/g, '').replace(/\s+/g, ' ').trim();
   }
 
   // --- Ekranı çevir ---
