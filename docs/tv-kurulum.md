@@ -232,7 +232,9 @@ Güncellemeler için TV'de hata ayıklamayı açık bırakın: telefon TV'deki s
 **TV uygulamasını güncelle** önerir (TV bir daha onay sormaz).
 
 Telefondaki paket, [Sürümler](https://github.com/yorulmazsinan/couchsubs/releases) sayfasındaki `CouchSubs-androidtv.apk`
-ile aynıdır (telefon uygulaması derlenirken son sürümden alınır). TV'deki CouchSubs Google Play'den kurulduysa imzası
-farklıdır ve bu paket üstüne kurulamaz; telefon bunu söyler ve yalnız siz **TV'deki kopyayı kaldırıp kur**'a basarsanız
-eski kopyayı kaldırır. Kod: `couchsubs-android/.../tv/android/`. Sorun çıkarsa **Kurulum günlüğünü paylaş** ile günlüğü
+ile aynıdır (telefon uygulaması derlenirken son sürümden alınır). CouchSubs TV Google Play'deyse ve TV'de Play Store
+varsa telefon (ve bilgisayar) APK yüklemez, TV'de CouchSubs'ın Play sayfasını açar: kumandayla **Yükle**'ye basın,
+kurulunca uygulama kendiliğinden açılır. Play'den kurulmuş kopyanın güncellemesi de Play'e bırakılır (TV'de Play
+sayfası açılır). Birkaç dakika içinde Play'den kurulmazsa doğrudan APK ile kurulur. Bu kurulum TV'deki kopyanın üstüne
+yapılamazsa telefon bunu söyler ve yalnız siz **TV'deki kopyayı kaldırıp kur**'a basarsanız eski kopyayı kaldırır. Kod: `couchsubs-android/.../tv/android/`. Sorun çıkarsa **Kurulum günlüğünü paylaş** ile günlüğü
 [Issues](https://github.com/yorulmazsinan/couchsubs/issues) sayfasına ekleyin.
