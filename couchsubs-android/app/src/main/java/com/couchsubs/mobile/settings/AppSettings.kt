@@ -22,6 +22,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** Okunan konsol: PlayStation (varsayılan, Remote Play) ya da Xbox (Beta, ev yayını). */
+enum class ConsolePlatform { PLAYSTATION, XBOX }
+
 /** Altyazının gösterileceği yer. */
 enum class SubtitleTarget { TV, PHONE }
 
@@ -155,6 +158,11 @@ class AppSettings(context: Context) {
         get() = enumOr(prefs.getString("tvBackgroundShape", null), com.couchsubs.mobile.core.SubtitleBackgroundShape.FIT)
         set(value) = prefs.edit().putString("tvBackgroundShape", value.name).apply()
 
+    /** Hızlı konuşmada önceki satırları üstte tut: varsayılan açık (Windows, Mac ve iPhone ile aynı). */
+    var stackPrevious: Boolean
+        get() = prefs.getBoolean("stackPrevious", true)
+        set(value) = prefs.edit().putBoolean("stackPrevious", value).apply()
+
     /** TV'deki yazı boyu: 36, 46, 58, 72. */
     var tvFontSize: Int
         get() = prefs.getInt("tvFontSize", 46)
@@ -166,7 +174,7 @@ class AppSettings(context: Context) {
      */
     val style: SubtitleStyle
         get() = SubtitleStyle(fontSize = scaledFontSize(tvFontSize, subtitleScale), placement = SubtitlePlacement.COVER,
-            background = tvBackground, backgroundShape = tvBackgroundShape, textColor = textColor)
+            background = tvBackground, backgroundShape = tvBackgroundShape, textColor = textColor, stackPrevious = stackPrevious)
 
     /** Altyazının arandığı bölge (Ayarlar › Altyazı alanı; iPhone ile aynı hazır seçimler ve Özel). */
     var region: com.couchsubs.mobile.core.CropRegion
@@ -204,11 +212,24 @@ class AppSettings(context: Context) {
         return listener
     }
 
+    /**
+     * Altyazının gideceği yer (TV ya da telefon) değişince çağrılır. Çeviri sürerken Ayarlar'dan TV seçilir ya da
+     * telefondan TV uygulaması kurulursa altyazı hemen TV'ye gider (iPhone: outputChanged ile aynı). Eskiden yeni seçim
+     * ancak çeviri yeniden başlayınca geçerli oluyordu: TV bağlı göründüğü halde altyazı yalnız telefonda kalıyordu.
+     */
+    fun onTargetChanged(action: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "target") action()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
     /** Görünüm ayarı değişince (ölçek, renk) çağrılır; çeviri sürerken TV'ye yeni görünüm gider. */
     fun onStyleChanged(action: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "subtitleScale" || key == "textColor" || key == "tvFontSize" ||
-                key == "tvBackground" || key == "tvBackgroundShape") action()
+                key == "tvBackground" || key == "tvBackgroundShape" || key == "stackPrevious") action()
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         return listener
@@ -244,6 +265,24 @@ class AppSettings(context: Context) {
                 .put("registKey", Base64.encodeToString(it.registKey, Base64.NO_WRAP))
                 .put("morning", Base64.encodeToString(it.morning, Base64.NO_WRAP)).toString()
         })
+
+    /** Konsol türü; seçilmediyse null (kurulumda sorulur). Eski kurulumlar PlayStation sayılır. */
+    var platformChoice: ConsolePlatform?
+        get() = prefs.getString("platform", null)?.let { name -> ConsolePlatform.entries.firstOrNull { it.name == name } }
+        set(value) = prefs.edit().putString("platform", value?.name).apply()
+
+    val platform: ConsolePlatform get() = platformChoice ?: ConsolePlatform.PLAYSTATION
+    val xbox: Boolean get() = platform == ConsolePlatform.XBOX
+
+    /** Microsoft kullanıcı jetonu (Windows'taki userToken JSON'u); Keystore ile şifreli. */
+    var xboxUserToken: String?
+        get() = secrets.get("xboxUserToken")
+        set(value) = secrets.put("xboxUserToken", value)
+
+    /** Seçilen Xbox (kimlik, ad). */
+    var xboxConsole: com.couchsubs.mobile.xbox.XboxConsole?
+        get() = com.couchsubs.mobile.xbox.XboxConsole.fromJson(prefs.getString("xboxConsole", null))
+        set(value) = prefs.edit().putString("xboxConsole", value?.toJson()).apply()
 
     /** İkinci hesabın PS5 giriş şifresi (4 hane, isteğe bağlı); PS5 isterse oturum açılırken gönderilir. */
     var loginPasscode: String?

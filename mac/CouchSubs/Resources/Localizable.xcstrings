@@ -1,12 +1,550 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "CouchSubs translates on this computer, without the internet. The English–Turkish model (about 475 MB) is downloaded once and kept on this computer.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CouchSubs translates on this computer, without the internet. The English–Turkish model (about 475 MB) is downloaded once and kept on this computer."}}, "tr": {"stringUnit": {"state": "translated", "value": "CouchSubs çeviriyi bu bilgisayarda, internetsiz yapar. İngilizce–Türkçe model (yaklaşık 475 MB) bir kez indirilir ve bu bilgisayarda kalır."}}}},
-    "CPU (default)": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CPU (default)"}}, "tr": {"stringUnit": {"state": "translated", "value": "CPU (varsayılan)"}}}},
-    "GPU (Beta) · NVIDIA CUDA": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "GPU (Beta) · NVIDIA CUDA"}}, "tr": {"stringUnit": {"state": "translated", "value": "GPU (Beta) · NVIDIA CUDA"}}}},
-    "Free translation device": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Free translation device"}}, "tr": {"stringUnit": {"state": "translated", "value": "Ücretsiz çeviri aygıtı"}}}},
-    "CPU works on every computer. Try GPU with a compatible NVIDIA card and CUDA for faster translation; if unavailable, CouchSubs uses CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CPU works on every computer. Try GPU with a compatible NVIDIA card and CUDA for faster translation; if unavailable, CouchSubs uses CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "CPU her bilgisayarda çalışır. Uyumlu NVIDIA kartı ve CUDA varsa hız için GPU'yu deneyin; kullanılamazsa CPU'ya geçilir."}}}},
-    "GPU could not be used; free translation is running on CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "GPU could not be used; free translation is running on CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "GPU kullanılamadı; ücretsiz çeviri CPU'da çalışıyor."}}}},
+    "Your console": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your console"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konsolunuz"
+          }
+        }
+      }
+    },
+    "Choose the console whose subtitles you want translated. You can change it later in Settings.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the console whose subtitles you want translated. You can change it later in Settings."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altyazısını çevireceğiniz konsolu seçin. Sonra Ayarlar'dan değiştirebilirsiniz."
+          }
+        }
+      }
+    },
+    "PlayStation 5": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PlayStation 5"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PlayStation 5"
+          }
+        }
+      }
+    },
+    "With Remote Play and a second PSN account.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With Remote Play and a second PSN account."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote Play ile, ikinci bir PSN hesabıyla."
+          }
+        }
+      }
+    },
+    "Xbox": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox"
+          }
+        }
+      }
+    },
+    "With home streaming and your own Microsoft account. No second account needed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With home streaming and your own Microsoft account. No second account needed."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ev yayınıyla, kendi Microsoft hesabınızla. İkinci hesap gerekmez."
+          }
+        }
+      }
+    },
+    "Xbox support is in Beta. If something goes wrong, tell us and we'll fix it as soon as we can.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox support is in Beta. If something goes wrong, tell us and we'll fix it as soon as we can."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox desteği Beta. Sorun olursa bize yazın; ilk fırsatta düzeltiriz."
+          }
+        }
+      }
+    },
+    "Sign in with Microsoft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with Microsoft"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microsoft ile giriş yap"
+          }
+        }
+      }
+    },
+    "Sign in with the Microsoft account you use on your Xbox. The phone watches your Xbox home stream; your game keeps running.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with the Microsoft account you use on your Xbox. The phone watches your Xbox home stream; your game keeps running."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox'ta kullandığınız Microsoft hesabıyla giriş yapın. Telefon Xbox'ın ev yayınını izler; oyununuz kesilmez."
+          }
+        }
+      }
+    },
+    "Enter this code on the Microsoft page:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter this code on the Microsoft page:"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Açılan Microsoft sayfasına bu kodu yazın:"
+          }
+        }
+      }
+    },
+    "Code copied": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code copied"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod kopyalandı"
+          }
+        }
+      }
+    },
+    "Waiting for you to finish signing in…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you to finish signing in…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Girişin tamamlanması bekleniyor…"
+          }
+        }
+      }
+    },
+    "Couldn't sign in: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't sign in: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giriş tamamlanamadı: %@"
+          }
+        }
+      }
+    },
+    "Open the Microsoft page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Microsoft page"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microsoft sayfasını aç"
+          }
+        }
+      }
+    },
+    "Choose your Xbox": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose your Xbox"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox'unuzu seçin"
+          }
+        }
+      }
+    },
+    "The Xboxes on your account. On the Xbox, turn on Settings › Devices & connections › Remote features.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Xboxes on your account. On the Xbox, turn on Settings › Devices & connections › Remote features."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hesabınızdaki Xbox'lar. Xbox'ta Ayarlar › Cihazlar ve bağlantılar › Uzak özellikler'i açın."
+          }
+        }
+      }
+    },
+    "No Xbox found on this account. Sign in on your Xbox with the same account and turn on remote features.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Xbox found on this account. Sign in on your Xbox with the same account and turn on remote features."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu hesapta Xbox bulunamadı. Xbox'ta aynı hesapla oturum açın ve uzak özellikleri açın."
+          }
+        }
+      }
+    },
+    "Remote play on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote play on"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uzaktan oynatma açık"
+          }
+        }
+      }
+    },
+    "Remote play off: turn on Remote features on the Xbox": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote play off: turn on Remote features on the Xbox"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uzaktan oynatma kapalı: Xbox'ta Uzak özellikler'i açın"
+          }
+        }
+      }
+    },
+    "Looking for your Xboxes…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking for your Xboxes…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox'lar aranıyor…"
+          }
+        }
+      }
+    },
+    "Use this Xbox": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use this Xbox"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu Xbox'u kullan"
+          }
+        }
+      }
+    },
+    "Your Microsoft sign-in expired. Sign in again in Settings › Console.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Microsoft sign-in expired. Sign in again in Settings › Console."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microsoft girişinin süresi doldu. Ayarlar › Konsol'dan yeniden giriş yapın."
+          }
+        }
+      }
+    },
+    "The code expired. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code expired. Try again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kodun süresi doldu. Yeniden deneyin."
+          }
+        }
+      }
+    },
+    "This Microsoft account has no Xbox profile. Sign in with the account you use on your Xbox.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Microsoft account has no Xbox profile. Sign in with the account you use on your Xbox."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu Microsoft hesabının Xbox profili yok. Xbox'ta kullandığınız hesapla giriş yapın."
+          }
+        }
+      }
+    },
+    "Couldn't connect to the internet. Check your connection and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't connect to the internet. Check your connection and try again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "İnternete bağlanılamadı. Bağlantınızı kontrol edip yeniden deneyin."
+          }
+        }
+      }
+    },
+    "The Xbox service sent an unexpected reply (%@).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Xbox service sent an unexpected reply (%@)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox hizmeti beklenmedik yanıt verdi (%@)."
+          }
+        }
+      }
+    },
+    "Can't reach your Xbox. Is it on, and is remote play enabled in Settings › Devices & connections › Remote features? Retrying…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach your Xbox. Is it on, and is remote play enabled in Settings › Devices & connections › Remote features? Retrying…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox'a ulaşılamadı. Xbox açık mı ve Ayarlar › Cihazlar ve bağlantılar › Uzak özellikler'de uzaktan oynatma açık mı? Yeniden deneniyor…"
+          }
+        }
+      }
+    },
+    "Your Xbox is in another remote play session. Close it; retrying…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Xbox is in another remote play session. Close it; retrying…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox başka bir uzaktan oynatmada. Onu kapatın; yeniden deneniyor…"
+          }
+        }
+      }
+    },
+    "Your Xbox didn't answer. Retrying…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Xbox didn't answer. Retrying…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox yanıt vermedi. Yeniden deneniyor…"
+          }
+        }
+      }
+    },
+    "The Xbox connection dropped. Reconnecting…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Xbox connection dropped. Reconnecting…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox bağlantısı koptu. Yeniden bağlanılıyor…"
+          }
+        }
+      }
+    },
+    "The Xbox service sent an unexpected reply. Retrying…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Xbox service sent an unexpected reply. Retrying…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox hizmeti beklenmedik yanıt verdi. Yeniden deneniyor…"
+          }
+        }
+      }
+    },
+    "Console": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Console"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konsol"
+          }
+        }
+      }
+    },
+    "Xbox and connection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox and connection"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xbox ve bağlantı"
+          }
+        }
+      }
+    },
+    "Sign out of Microsoft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of Microsoft"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microsoft hesabından çıkış"
+          }
+        }
+      }
+    },
     "%@ was damaged while downloading. Try again.": {
       "localizations": {
         "en": {
@@ -12343,22 +12881,6 @@
         }
       }
     },
-    "CouchSubs on the TV is signed with another key or is newer, so this version cannot be installed over it. The button below removes the TV's copy and installs the new one. The TV app's settings are deleted.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CouchSubs on the TV is signed with another key or is newer, so this version cannot be installed over it. The button below removes the TV's copy and installs the new one. The TV app's settings are deleted."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TV'deki CouchSubs başka bir anahtarla imzalı ya da daha yeni; bu sürüm onun üstüne kurulamıyor. Aşağıdaki düğmeyle TV'deki kopya kaldırılır ve yenisi kurulur. TV uygulamasının ayarları silinir."
-          }
-        }
-      }
-    },
     "Install the TV app from this phone": {
       "localizations": {
         "en": {
@@ -13651,6 +14173,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ bu telefondan silinir. Yeniden kullanmak için dosyayı yeniden içe aktarmanız gerekir."
+          }
+        }
+      }
+    },
+    "CouchSubs TV on the TV is signed with another key (0.9.18 and earlier were signed with an old key) or is newer than this phone's, so this version cannot be installed over it. The button below removes the TV's copy and installs the new one; the TV app's settings are deleted. If that fails, on the TV go to Settings › Apps › CouchSubs TV › Uninstall, then press Install and open here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CouchSubs TV on the TV is signed with another key (0.9.18 and earlier were signed with an old key) or is newer than this phone's, so this version cannot be installed over it. The button below removes the TV's copy and installs the new one; the TV app's settings are deleted. If that fails, on the TV go to Settings › Apps › CouchSubs TV › Uninstall, then press Install and open here."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TV'deki CouchSubs TV başka bir anahtarla imzalı (0.9.18 ve önceki sürümler eski bir anahtarla imzalıydı) ya da bu telefondakinden yeni; bu sürüm onun üstüne kurulamıyor. Aşağıdaki düğme TV'deki kopyayı kaldırıp yenisini kurar; TV uygulamasının ayarları silinir. Olmazsa TV'de Ayarlar › Uygulamalar › CouchSubs TV › Kaldır de, sonra burada Kur ve aç'a bas."
+          }
+        }
+      }
+    },
+    "The old CouchSubs TV could not be removed from the TV, so the new one cannot be installed. Remove it on the TV yourself: Settings › Apps › See all apps › CouchSubs TV › Uninstall. Then press Install and open here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The old CouchSubs TV could not be removed from the TV, so the new one cannot be installed. Remove it on the TV yourself: Settings › Apps › See all apps › CouchSubs TV › Uninstall. Then press Install and open here."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TV'deki eski CouchSubs TV kaldırılamadı, bu yüzden yenisi kurulamıyor. TV'de kendin kaldır: Ayarlar › Uygulamalar › Tüm uygulamalar › CouchSubs TV › Kaldır. Sonra burada Kur ve aç'a bas."
           }
         }
       }
