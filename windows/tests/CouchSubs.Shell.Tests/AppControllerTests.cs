@@ -98,6 +98,9 @@ internal sealed class FakeReader(Reading? lines = null) : ITextReader
 
 internal sealed class FakeServices : IAppServices
 {
+    /// <summary>PS Remote Play / chiaki-ng bu bilgisayarda kurulu mu (Ayarlar'daki indirme satırları, ana ekran uyarısı).</summary>
+    public bool RemotePlayIsInstalled { get; set; } = true;
+    public bool RemotePlayInstalled(RemotePlayApp app) => RemotePlayIsInstalled;
     public List<ConsoleInfo> Consoles { get; } = [new("192.168.1.253", "PS5-789", true)];
     public List<LgTv> Tvs { get; } = [new("LG TV", "192.168.1.153")];
     public RegisteredConsole? Registered { get; private set; }
@@ -823,6 +826,56 @@ public class AppControllerRunTests
         controller.ResetSetup();
         Assert.False(controller.HasLoginPasscode);
         controller.Dispose();
+    }
+
+    /// "İkinci hesap yok mu?": PSN girişi ve PS5 olmadan kurulum biter; görüntü Remote Play penceresinden, altyazı
+    /// bilgisayar ekranında. Yeniden açılınca sihirbaz çıkmaz.
+    [Fact]
+    public void NoSecondAccountReadsRemotePlayWindowAndCompletesSetup()
+    {
+        var store = new MemoryStore();
+        var settings = new MemorySettings();
+        var controller = AppControllerTests.Make(store: store, settings: settings);
+        controller.Advance();
+        Assert.Equal(OnboardingStep.SecondAccount, controller.Step);
+        controller.UseRemotePlayWindow();
+        Assert.Equal(OnboardingStep.Done, controller.Step);
+        Assert.Equal(FrameSource.RemotePlayWindow, controller.Settings.FrameSource);
+        Assert.Equal(SubtitleOutput.Computer, controller.Settings.Output);
+        Assert.False(controller.HasAccount);
+        Assert.True(controller.CanStart);
+        Assert.Equal(OnboardingStep.Done, AppControllerTests.Make(store: store, settings: settings).Step);
+    }
+
+    /// Pencere modunda kurulmuş, sonra Ayarlar'da PS5 seçilmiş: "Hesabı bağla" görünür, sihirbaz ikinci hesap adımından açılır.
+    [Fact]
+    public void LinkAccountOpensWizardAtSecondAccount()
+    {
+        var settings = new MemorySettings();
+        settings.Save(new UserSettings { FrameSource = FrameSource.RemotePlayWindow, Output = SubtitleOutput.Computer });
+        var controller = AppControllerTests.Make(settings: settings);
+        Assert.Equal(OnboardingStep.Done, controller.Step);
+        Assert.False(controller.NeedsPs5Link);
+        controller.Settings = controller.Settings with { FrameSource = FrameSource.Ps5 };
+        Assert.True(controller.NeedsPs5Link);
+        Assert.False(controller.CanStart);
+        controller.LinkPs5Account();
+        Assert.Equal(OnboardingStep.SecondAccount, controller.Step);
+    }
+
+    /// Remote Play uygulaması kurulu değilse ana ekran bunu ve nereden indirileceğini söyler.
+    [Fact]
+    public void MissingRemotePlayAppIsReported()
+    {
+        var settings = new MemorySettings();
+        settings.Save(new UserSettings { FrameSource = FrameSource.RemotePlayWindow, Output = SubtitleOutput.Computer });
+        var services = new FakeServices { RemotePlayIsInstalled = false };
+        var controller = AppControllerTests.Make(services, settings: settings);
+        Assert.True(controller.RemotePlayMissing);
+        Assert.Equal("The Remote Play app isn't installed on this PC. Download it in Settings › Picture source.", controller.Ps5StatusText);
+        services.RemotePlayIsInstalled = true;
+        Assert.False(controller.RemotePlayMissing);
+        Assert.Equal("Reads the Remote Play window on this PC when you start translating.", controller.Ps5StatusText);
     }
 
     /// Remote Play penceresinden okurken PS5 kaydı gerekmez: sihirbaz açılmaz, kurulum kaydı değişmez, çeviri pencere
