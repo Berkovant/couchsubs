@@ -54,11 +54,12 @@ public enum OcrNoise {
         var score = 0
         for token in text.split(whereSeparator: \.isWhitespace).map(String.init) {
             let core = split(token).1
-            let letters = core.filter(\.isLetter).count
-            guard letters > 0 else { continue }
+            let letters = String(core.filter(\.isLetter))
+            guard !letters.isEmpty else { continue }
             // Sözcük ortasındaki parantez ("the[lil") de okuma karışıklığıdır.
             let clean = cleanCore(core) == core && normalCase(core) && !core.contains(where: { "[]()".contains($0) })
-            score += clean ? letters : -2 * letters
+                && !vowelless(letters)
+            score += clean ? letters.count : -2 * letters.count
         }
         return score
     }
@@ -83,6 +84,16 @@ public enum OcrNoise {
     private static func vowelless(_ letters: String) -> Bool {
         letters.count >= 3 && !letters.allSatisfy(\.isUppercase)
             && !letters.lowercased().contains(where: { "aeiouyäöüıàáâèéêìíîòóôùúû".contains($0) })
+            && !interjections.contains(collapsed(letters.lowercased()))
+    }
+
+    /// Ünlüsüz ama gerçek ünlemler ("Hmm", "Shh", "Brr", "Grr", "Psst", "Pfft", "Mmm", "Zzz", "Tsk"); art arda tekrarlar tek harf sayılır.
+    private static let interjections: Set<String> = ["hm", "m", "sh", "br", "gr", "pst", "pft", "tsk", "hrm", "z", "pht"]
+
+    private static func collapsed(_ text: String) -> String {
+        var result = ""
+        for character in text where character != result.last { result.append(character) }
+        return result
     }
 
     /// "word", "WORD", "Word", "McDonald", "don't": büyük harf yalnız başta ya da baştan bir dizi.
