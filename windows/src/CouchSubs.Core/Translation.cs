@@ -48,7 +48,7 @@ public enum TranslatorStatus
     /// <summary>Bu dil çifti desteklenmiyor.</summary>
     Unsupported,
     /// <summary>
-    /// Model kurulu ama cihaz üstü çeviri motoru bu bilgisayarda açılamadı (ör. ONNX Runtime'ın yerel DLL'i
+    /// Model kurulu ama cihaz üstü çeviri motoru bu bilgisayarda açılamadı (ör. CTranslate2 çalışma zamanı
     /// yüklenemedi). Kullanıcı çevrimiçi bir motor seçebilir; oyun paketleri çalışmayı sürdürür.
     /// </summary>
     EngineFailed,

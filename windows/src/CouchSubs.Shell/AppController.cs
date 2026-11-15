@@ -122,6 +122,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         tv = store.Load<LgTv>(StoreKeys.Tv);
         var loaded = settingsStore.Load();
         settings = loaded.WithCuratedModels();
+        services.Translation.SelectDevice(settings.TranslationDevice);
         // Listede olmayan model varsayılana döndüyse ayar hemen kaydedilir.
         if (settings != loaded) settingsStore.Save(settings);
         var paired = tv is not null && store.Load<string>(StoreKeys.TvKey) is not null;
@@ -134,6 +135,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         AttachServer();
         StartPacksAndPool();
         services.Translation.EngineFailure += OnEngineFailure;
+        services.Translation.GpuFallback += OnGpuFallback;
         history = services.HistoryFile is { } file ? SubtitleHistory.Load(file) : new SubtitleHistory();
     }
 
@@ -153,6 +155,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
 
     /// <summary>Ücretsiz çeviri motoru açılamadı (arka planda, ısınma sırasında da olabilir): ana ekran uyarısı çıksın.</summary>
     private void OnEngineFailure() => post(RefreshTranslatorStatus);
+
+    private void OnGpuFallback() => post(() => GpuFallbackWarning = true);
 
     /// <summary>Sunucunun TV sayısını, altyazı yerini ve bilgisayar ekranına giden olayları bağlar (sunucu yeniden kurulunca da).</summary>
     private void AttachServer()
@@ -269,6 +273,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// <summary>Çevrilen satırlar, en yenisi başta (bu ve önceki oturumlar). Değişince bu özellik bildirilir.</summary>
     public IReadOnlyList<SubtitleHistory.Entry> History => [.. history.Entries];
     public TranslatorStatus TranslatorStatus { get => translatorStatus; private set => Set(ref translatorStatus, value); }
+    private bool gpuFallbackWarning;
+    /// <summary>CUDA kullanılamadığı için ücretsiz çeviri CPU'da çalışıyor.</summary>
+    public bool GpuFallbackWarning { get => gpuFallbackWarning; private set => Set(ref gpuFallbackWarning, value); }
     /// <summary>Çevrimiçi çeviri (DeepL ya da yapay zekâ) şu an çeviremiyor; o satırlar cihaz üstü modelle çevriliyor.</summary>
     public OnlineKeyState? OnlineIssue { get => onlineIssue; private set => Set(ref onlineIssue, value); }
     /// <summary>Bilgisayarda yazı tanıma dili yok; ayarlardan eklenmesi gerekir.</summary>
@@ -302,6 +309,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (old.GamePacks != value.GamePacks && pipeline is not null) ConnectPacks(pipeline);
             if ((old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs) && pipeline is not null) ApplyWaits(pipeline);
             if (old.SharePool != value.SharePool) services.Pool?.SetEnabled(value.SharePool);
+            if (old.TranslationDevice != value.TranslationDevice)
+            {
+                GpuFallbackWarning = false;
+                services.Translation.SelectDevice(value.TranslationDevice);
+            }
             UpdateRegionWatcher();
             if (old.FrameSource != value.FrameSource) Changed(nameof(CanStart), nameof(Ps5StatusText));
             var windowAppChanged = value.FrameSource == FrameSource.RemotePlayWindow && old.RemotePlayApp != value.RemotePlayApp;
@@ -315,7 +327,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             var translationChanged = old.OnlineTranslation != value.OnlineTranslation || old.OnlineEngine != value.OnlineEngine
                                      || old.GeminiModel != value.GeminiModel || old.OpenAiModel != value.OpenAiModel
                                      || old.ClaudeModel != value.ClaudeModel
-                                     || old.LocalAiBaseUrl != value.LocalAiBaseUrl || old.LocalAiModel != value.LocalAiModel;
+                                     || old.LocalAiBaseUrl != value.LocalAiBaseUrl || old.LocalAiModel != value.LocalAiModel
+                                     || old.TranslationDevice != value.TranslationDevice;
             if (translationChanged && !isRunning) RefreshTranslatorStatus();
             if (isRunning && (old.SourceLanguage != value.SourceLanguage || old.TargetLanguage != value.TargetLanguage || translationChanged))
             {
@@ -1415,6 +1428,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         services.Translation.EngineFailure -= OnEngineFailure;
+        services.Translation.GpuFallback -= OnGpuFallback;
         if (services.Xbox is { } xbox) xbox.TokenUpdated -= OnXboxTokenUpdated;
         Stop();
         if (services.Xbox is IDisposable disposableXbox) disposableXbox.Dispose();

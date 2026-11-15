@@ -1,6 +1,12 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "CouchSubs translates on this computer, without the internet. The English–Turkish model (about 475 MB) is downloaded once and kept on this computer.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CouchSubs translates on this computer, without the internet. The English–Turkish model (about 475 MB) is downloaded once and kept on this computer."}}, "tr": {"stringUnit": {"state": "translated", "value": "CouchSubs çeviriyi bu bilgisayarda, internetsiz yapar. İngilizce–Türkçe model (yaklaşık 475 MB) bir kez indirilir ve bu bilgisayarda kalır."}}}},
+    "CPU (default)": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CPU (default)"}}, "tr": {"stringUnit": {"state": "translated", "value": "CPU (varsayılan)"}}}},
+    "GPU (Beta) · NVIDIA CUDA": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "GPU (Beta) · NVIDIA CUDA"}}, "tr": {"stringUnit": {"state": "translated", "value": "GPU (Beta) · NVIDIA CUDA"}}}},
+    "Free translation device": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Free translation device"}}, "tr": {"stringUnit": {"state": "translated", "value": "Ücretsiz çeviri aygıtı"}}}},
+    "CPU works on every computer. Try GPU with a compatible NVIDIA card and CUDA for faster translation; if unavailable, CouchSubs uses CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CPU works on every computer. Try GPU with a compatible NVIDIA card and CUDA for faster translation; if unavailable, CouchSubs uses CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "CPU her bilgisayarda çalışır. Uyumlu NVIDIA kartı ve CUDA varsa hız için GPU'yu deneyin; kullanılamazsa CPU'ya geçilir."}}}},
+    "GPU could not be used; free translation is running on CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "GPU could not be used; free translation is running on CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "GPU kullanılamadı; ücretsiz çeviri CPU'da çalışıyor."}}}},
     "%@ was damaged while downloading. Try again.": {
       "localizations": {
         "en": {
