@@ -81,7 +81,10 @@ a trademark of Marvel and Sony Interactive Entertainment LLC.
 |---|---|---|
 | FFmpeg 7.1.2 (`libavcodec` H.264 decoder, `libswscale`; statically linked) | LGPL-2.1-or-later | https://ffmpeg.org |
 | .NET runtime and WPF | MIT | https://github.com/dotnet |
-| ONNX Runtime | MIT | https://github.com/microsoft/onnxruntime |
+| CTranslate2 4.9.0 (Windows CPU and NVIDIA CUDA inference) | MIT | https://github.com/OpenNMT/CTranslate2 |
+| Python 3.12 embedded runtime | Python Software Foundation License | https://www.python.org/downloads/release/python-31210/ |
+| NumPy (CTranslate2 wheel dependency) | BSD-3-Clause | https://github.com/numpy/numpy |
+| PyYAML (CTranslate2 wheel dependency) | MIT | https://github.com/yaml/pyyaml |
 | Microsoft.ML.Tokenizers | MIT | https://github.com/dotnet/machinelearning |
 | System.Security.Cryptography.ProtectedData | MIT | https://github.com/dotnet/runtime |
 | Microsoft WebView2 SDK | BSD-3-Clause | https://www.nuget.org/packages/Microsoft.Web.WebView2 |
@@ -98,7 +101,7 @@ a trademark of Marvel and Sony Interactive Entertainment LLC.
 | SSH.NET (LG TV connection) | MIT | https://github.com/sshnet/SSH.NET |
 | BouncyCastle.Cryptography (used by SSH.NET) | MIT | https://github.com/bcgit/bc-csharp |
 | Microsoft.Extensions.Logging.Abstractions (used by SSH.NET) | MIT | https://github.com/dotnet/runtime |
-| Microsoft Visual C++ 2015–2022 runtime (`vcruntime140*.dll`, `msvcp140*.dll`, `concrt140.dll`; needed by ONNX Runtime) | Microsoft Visual Studio license terms, "Distributable Code" (redist.txt) | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
+| Microsoft Visual C++ 2015–2022 runtime (`vcruntime140*.dll`, `msvcp140*.dll`, `concrt140.dll`; needed by CTranslate2) | Microsoft Visual Studio license terms, "Distributable Code" (redist.txt) | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
 
 The full copyright and license notices for Greenlight, the Xbox helper's bundled libraries, and the bundled Node.js
 runtime are in `windows/xbox-bridge/licenses/` in the source tree and `xbox-bridge/licenses/` in the Windows package.
@@ -116,9 +119,9 @@ FFmpeg is built from the unmodified upstream release with the configuration in
 
 | Component | License | Source |
 |---|---|---|
-| OPUS-MT English→Turkish translation model (`opus-mt-tc-big-en-tr`, ONNX export) | CC BY 4.0 | Language Technology Research Group, University of Helsinki — https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr, ONNX conversion https://huggingface.co/onnx-community/opus-mt-tc-big-en-tr |
+| OPUS-MT English→Turkish translation model (`opus-mt-tc-big-en-tr`, CTranslate2 conversion) | CC BY 4.0 | Language Technology Research Group, University of Helsinki — https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr, conversion https://huggingface.co/Unbakedcookie/live-translator-models |
 
-The model is used unmodified (int8 quantised ONNX files as published by onnx-community).
+The model is downloaded as a SHA-256-verified CTranslate2 float16 conversion from the pinned source above. CouchSubs uses int8 computation on CPU and float16 on a compatible NVIDIA CUDA GPU.
 
 ## Downloaded on first use of Turkish dubbing (Mac)
 

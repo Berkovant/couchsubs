@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+"""Persistent, local CTranslate2 worker; protocol is one JSON object per line."""
+
+import json
+import sys
+
+
+def reply(value):
+    print(json.dumps(value, ensure_ascii=False), flush=True)
+
+
+try:
+    import ctranslate2
+
+    device = sys.argv[2]
+    translator = ctranslate2.Translator(
+        sys.argv[1], device=device,
+        compute_type="float16" if device == "cuda" else "int8",
+        inter_threads=1,
+        intra_threads=2,
+    )
+    # Model yüklemesi başarılı olsa da CUDA bağımlılığı ilk çıkarımda hata verebilir.
+    translator.translate_batch([["▁Hello", ".", "</s>"]], beam_size=1)
+    reply({"ready": True})
+except Exception as error:
+    reply({"ready": False, "error": str(error)})
+    sys.exit(1)
+
+for line in sys.stdin:
+    try:
+        request = json.loads(line)
+        result = translator.translate_batch(
+            [request["tokens"]],
+            beam_size=request["beams"],
+            max_decoding_length=request["max_output"],
+        )
+        reply({"tokens": result[0].hypotheses[0]})
+    except Exception as error:
+        reply({"error": str(error)})

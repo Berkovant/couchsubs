@@ -92,6 +92,10 @@ public sealed record OverlayBounds(double Left, double Top, double Width);
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<TranslationEngine>))]
 public enum TranslationEngine { Free, DeepL, Gemini, OpenAi, Claude, Local }
 
+/// <summary>Windows'taki ücretsiz OPUS-MT çevirisinin çalışacağı aygıt.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<TranslationDevice>))]
+public enum TranslationDevice { Cpu, Gpu }
+
 public static class TranslationEngines
 {
     public static AiProvider? Provider(this TranslationEngine engine) => engine switch
@@ -215,6 +219,8 @@ public sealed record UserSettings
     public int PartialWaitMs { get; init; } = SubtitlePipeline.CleanWaitMs;
     public string SourceLanguage { get; init; } = "en";
     public string TargetLanguage { get; init; } = "tr";
+    /// <summary>Eski ayar dosyalarında bulunmaz; varsayılan CPU'dur. GPU yalnız NVIDIA CUDA içindir.</summary>
+    public TranslationDevice TranslationDevice { get; init; } = TranslationDevice.Cpu;
     public DubbingSettings Dubbing { get; init; } = new();
     /// <summary>
     /// Açıksa çeviri <see cref="OnlineEngine"/> ile yapılır (anahtarı kayıtlıysa); kapalıysa ya da hizmete ulaşılamazsa
@@ -392,7 +398,13 @@ public interface ITranslationModel
     Task DownloadAsync(string source, string target, IProgress<double> progress, CancellationToken cancellationToken);
     ITextTranslator Create(string source, string target);
 
-    /// <summary>Model kurulu ama çeviri motoru bu bilgisayarda açılamadı (ör. ONNX Runtime yüklenemedi).</summary>
+    /// <summary>İstenen GPU kullanılamayınca CPU'ya geçildiğinde bildirilir.</summary>
+    event Action? GpuFallback { add { } remove { } }
+
+    /// <summary>Yeni çevirmen oluşturulurken kullanılacak aygıt.</summary>
+    void SelectDevice(TranslationDevice device) { }
+
+    /// <summary>Model kurulu ama çeviri motoru bu bilgisayarda açılamadı (ör. CTranslate2 çalışma zamanı eksik).</summary>
     bool EngineFailed => false;
 
     /// <summary><see cref="EngineFailed"/> true olunca bir kez, herhangi bir iş parçacığından çağrılır.</summary>

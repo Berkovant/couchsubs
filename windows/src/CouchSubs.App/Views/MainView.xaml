@@ -187,7 +187,11 @@
                         </StackPanel>
                     </c:Card>
 
-                    <!-- Ücretsiz çeviri motoru (ONNX Runtime) bu bilgisayarda açılamadı: çevrimiçi motor önerilir -->
+                    <c:Card Margin="0,16,0,0" Visibility="{Binding GpuFallbackWarning, Converter={StaticResource VisibleIf}}">
+                        <TextBlock Foreground="{DynamicResource warningBrush}" TextWrapping="Wrap"
+                                   Text="{t:T 'GPU could not be used; free translation is running on CPU.'}" />
+                    </c:Card>
+                    <!-- Ücretsiz çeviri motoru bu bilgisayarda açılamadı: çevrimiçi motor önerilir -->
                     <c:Card x:Name="EngineCard" Margin="0,16,0,0" Visibility="Collapsed">
                         <StackPanel>
                             <TextBlock Text="{t:T 'The free translation engine could not start on this computer.'}" FontWeight="SemiBold"

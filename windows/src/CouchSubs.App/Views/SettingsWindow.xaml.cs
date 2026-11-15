@@ -32,6 +32,7 @@ public partial class SettingsWindow : Window
         this.controller = controller;
         InitializeComponent();
         var settings = controller.Settings;
+        DataContext = controller;
         TextSize.Value = Math.Clamp(settings.Style.FontSize, TextSize.Minimum, TextSize.Maximum);
         TextSizeValue.Text = ((int)TextSize.Value).ToString();
         Position.Value = settings.Style.BottomPercent;
@@ -69,6 +70,8 @@ public partial class SettingsWindow : Window
         controller.PropertyChanged += OnControllerChanged;
         Closed += (_, _) => controller.PropertyChanged -= OnControllerChanged;
         Engine.SelectedItem = Engine.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Engine.ToString());
+        TranslationDeviceChoice.SelectedItem = TranslationDeviceChoice.Items.Cast<ComboBoxItem>()
+            .First(item => (string)item.Tag == settings.TranslationDevice.ToString());
         ShowEngine();
         GamePacks.IsChecked = settings.GamePacks;
         SharePool.IsChecked = settings.SharePool;
@@ -418,6 +421,12 @@ public partial class SettingsWindow : Window
         if (loading) return;
         Update(s => s.WithEngine(SelectedEngine));
         ShowEngine();
+    }
+
+    private void OnTranslationDevice(object sender, SelectionChangedEventArgs e)
+    {
+        if (TranslationDeviceChoice.SelectedItem is ComboBoxItem { Tag: string tag })
+            Update(s => s with { TranslationDevice = Enum.Parse<TranslationDevice>(tag) });
     }
 
     private async void OnKeySave(object sender, RoutedEventArgs e)

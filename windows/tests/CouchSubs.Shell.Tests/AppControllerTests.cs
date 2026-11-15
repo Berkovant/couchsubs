@@ -57,6 +57,10 @@ internal sealed class FakeKeeper : IKeeper
 
 internal sealed class FakeTranslation : ITranslationModel
 {
+    public TranslationDevice SelectedDevice { get; private set; } = TranslationDevice.Cpu;
+    public event Action? GpuFallback;
+    public void SelectDevice(TranslationDevice device) => SelectedDevice = device;
+    public void FallBackToCpu() => GpuFallback?.Invoke();
     public bool Installed { get; set; } = true;
     public int Downloads { get; private set; }
     public TaskCompletionSource? DownloadGate { get; set; }
@@ -70,7 +74,7 @@ internal sealed class FakeTranslation : ITranslationModel
         Installed = true;
         progress.Report(1);
     }
-    /// <summary>Verilirse Create bunu fırlatır (ör. onnxruntime.dll yüklenemedi).</summary>
+    /// <summary>Verilirse Create bunu fırlatır (ör. CTranslate2 çalışma zamanı eksik).</summary>
     public Exception? CreateError { get; set; }
     public ITextTranslator Create(string source, string target) => CreateError is { } error ? throw error : new EchoTranslator();
 
@@ -837,6 +841,23 @@ public class AppControllerRunTests
         return (AppControllerTests.Make(services, store, sleep: sleep), services, sleep);
     }
 
+    [Fact]
+    public void FreeTranslationDeviceDefaultsToCpuAndReportsGpuFallback()
+    {
+        var (controller, services, _) = Ready();
+        Assert.Equal(TranslationDevice.Cpu, controller.Settings.TranslationDevice);
+        Assert.Equal(TranslationDevice.Cpu, services.Translation.SelectedDevice);
+
+        controller.Settings = controller.Settings with { TranslationDevice = TranslationDevice.Gpu };
+        Assert.Equal(TranslationDevice.Gpu, services.Translation.SelectedDevice);
+        services.Translation.FallBackToCpu();
+        Assert.True(controller.GpuFallbackWarning);
+
+        controller.Settings = controller.Settings with { TranslationDevice = TranslationDevice.Cpu };
+        Assert.False(controller.GpuFallbackWarning);
+        controller.Dispose();
+    }
+
     /// <summary>Ayarlar'daki PS5 giriş şifresi oturuma verilir; yalnız 4 hane kaydedilir, kurulum sıfırlanınca silinir.</summary>
     [Fact]
     public async Task LoginPasscodeIsSavedAndPassedToTheSession()
@@ -1098,13 +1119,12 @@ public class AppControllerRunTests
         controller.Dispose();
     }
 
-    /// Ücretsiz motor açılamazsa (onnxruntime.dll yüklenemedi) çeviri yine başlar ve ana ekranda uyarı çıkar.
+    /// Ücretsiz motor açılamazsa çeviri yine başlar ve ana ekranda uyarı çıkar.
     [Fact]
     public async Task StartSurvivesFreeEngineThatCannotBeCreated()
     {
         var services = new FakeServices();
-        services.Translation.CreateError = new TypeInitializationException("Microsoft.ML.OnnxRuntime.NativeMethods",
-            new DllNotFoundException("Unable to load DLL 'onnxruntime'"));
+        services.Translation.CreateError = new FileNotFoundException("CTranslate2 runtime is missing");
         var (controller, _, _) = Ready(services);
 
         await controller.StartAsync();
