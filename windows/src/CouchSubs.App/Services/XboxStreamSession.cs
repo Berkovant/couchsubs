@@ -16,6 +16,8 @@ namespace CouchSubs.App.Services;
 /// <summary>Receives Xbox WebRTC video in an off-screen WebView2 and passes decoded frames to the normal OCR pipeline.</summary>
 internal sealed class XboxStreamSession(XboxBridge bridge, XboxConsole console, string token, Action<string> tokenUpdated) : IStreamSession
 {
+    // Oynatıcı sayfası yalnız WebRTC el sıkışma komutlarını çağırabilir; giriş ve token dönen komutlar ona kapalı.
+    private static readonly HashSet<string> PlayerCommands = ["sdp", "chatSdp", "ice", "keepalive"];
     private readonly CancellationTokenSource cancel = new();
     private string currentToken = token;
     private Window? window;
@@ -148,6 +150,11 @@ internal sealed class XboxStreamSession(XboxBridge bridge, XboxConsole console, 
                 case "rpc":
                     var id = message.GetProperty("id").GetInt32();
                     var command = message.GetProperty("command").GetString()!;
+                    if (!PlayerCommands.Contains(command))
+                    {
+                        browser?.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { kind = "reply", id, error = "Komut izinli değil." }));
+                        break;
+                    }
                     var args = message.TryGetProperty("args", out var parameters) ? (object)parameters.Clone() : null;
                     try
                     {

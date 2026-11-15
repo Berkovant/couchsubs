@@ -26,7 +26,9 @@
             <Hyperlink NavigateUri="https://github.com/unknownskl/greenlight" RequestNavigate="OnLink">Greenlight</Hyperlink>
         </TextBlock>
         <TextBlock Style="{StaticResource CaptionText}" TextAlignment="Center" Margin="0,16,0,0"
-                   Text="CouchSubs, Sony veya Microsoft ile bağlantılı değildir. PlayStation, PS5 ve Xbox ilgili sahiplerinin ticari markalarıdır." />
+                   Text="{t:T 'CouchSubs is not affiliated with Sony Interactive Entertainment. PlayStation and PS5 are trademarks of Sony Interactive Entertainment Inc.'}" />
+        <TextBlock Style="{StaticResource CaptionText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="CouchSubs, Microsoft ile bağlantılı değildir. Xbox, Microsoft Corporation'ın ticari markasıdır." />
         <Button Content="{t:T 'Close'}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Margin="0,20,0,0" IsDefault="True" IsCancel="True" Click="OnClose" />
     </StackPanel>
 </Window>
