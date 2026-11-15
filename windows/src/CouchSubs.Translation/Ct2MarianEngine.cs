@@ -107,8 +107,10 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
         worker.StandardInput.Flush();
         var line = worker.StandardOutput.ReadLine() ?? throw new IOException("CTranslate2 worker exited during translation");
         using var response = JsonDocument.Parse(line);
+        // Tek satırın hatası (süreç ayakta): yalnız o satır çevrilemez, motor kapatılmaz. IOException yalnız
+        // sürecin kapandığını bildirir; MarianTranslator onu kalıcı motor hatası sayar.
         if (response.RootElement.TryGetProperty("error", out var error))
-            throw new IOException(error.GetString());
+            throw new InvalidOperationException("CTranslate2: " + error.GetString());
         var output = response.RootElement.GetProperty("tokens").EnumerateArray().Select(value => value.GetString() ?? "");
         cancellationToken.ThrowIfCancellationRequested();
         return tokenizer.DecodeTokens(output);

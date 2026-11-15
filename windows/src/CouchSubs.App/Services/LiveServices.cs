@@ -391,8 +391,20 @@ public sealed class LiveServices : IAppServices
 
         public bool IsInstalled(string source, string target) => IsSupported(source, target) && englishTurkish.IsInstalled;
 
-        public Task DownloadAsync(string source, string target, IProgress<double> progress, CancellationToken cancellationToken) =>
-            englishTurkish.DownloadAsync(progress, cancellationToken);
+        public async Task DownloadAsync(string source, string target, IProgress<double> progress, CancellationToken cancellationToken)
+        {
+            await englishTurkish.DownloadAsync(progress, cancellationToken);
+            // Önceki sürümlerin ONNX modeli (yaklaşık 530 MB) artık kullanılmaz; yeni model kurulunca silinir.
+            try
+            {
+                var old = Path.Combine(AppPaths.Models, "en-tr");
+                if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                StartupGuard.Log("Eski ONNX çeviri modeli silinemedi", error);
+            }
+        }
 
         // Model belleğe bir kez yüklenir; dil değişse de aynı çevirmen kullanılır. Yükleme 1–3 sn sürdüğü
         // için hemen arka planda başlar; ilk altyazı beklemez.
