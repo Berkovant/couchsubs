@@ -252,9 +252,13 @@ jobs:
           if (-not $dumpbin) { throw "dumpbin bulunamadı" }
           $vcRuntime = '^(vcruntime|msvcp|concrt|vccorlib|vcomp)\d+.*\.dll$'
           $deps = { param($file) & $dumpbin.FullName /nologo /dependents $file | ForEach-Object { $_.Trim() } | Where-Object { $_ -match $vcRuntime } }
+          # Python tekerlekleri (ör. NumPy) kendi adı özetli Visual C++ kopyasını <paket>.libs klasöründe taşır.
+          $vendored = @(Get-ChildItem (Join-Path $dir 'ct2/Lib/site-packages') -Directory -Filter '*.libs' |
+            Get-ChildItem -Filter *.dll | ForEach-Object Name)
           $missing = foreach ($bin in Get-ChildItem $dir -Recurse -Include *.dll, *.exe, *.pyd) {
             foreach ($dep in & $deps $bin.FullName) {
-              if (-not (Test-Path (Join-Path $bin.DirectoryName $dep)) -and
+              if ($vendored -notcontains $dep -and
+                  -not (Test-Path (Join-Path $bin.DirectoryName $dep)) -and
                   -not (Test-Path (Join-Path $dir $dep)) -and
                   -not (Test-Path (Join-Path $dir "ct2/$dep"))) { "$($bin.FullName.Substring($dir.Path.Length + 1)) -> $dep" }
             }
