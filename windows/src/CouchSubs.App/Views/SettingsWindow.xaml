@@ -488,7 +488,7 @@
                 </StackPanel>
             </TabItem>
             <!-- İkinci hesabın PS5 giriş şifresi (isteğe bağlı, 4 hane, şifreli depoda). PS5 isterse oturum açılırken gönderilir. -->
-            <TabItem Header="{t:T 'PS5 login passcode'}">
+            <TabItem x:Name="PasscodeTab" Header="{t:T 'PS5 login passcode'}">
                 <StackPanel>
                     <TextBlock Text="{t:T 'PS5 login passcode'}" Style="{StaticResource DisplayText}" Margin="0,0,0,16" />
                     <c:Card>

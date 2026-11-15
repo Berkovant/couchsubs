@@ -141,6 +141,17 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+
+      - name: Xbox görüntü bileşenini paketle
+        shell: pwsh
+        run: |
+          npm ci --prefix windows/xbox-bridge
+          npm run build --prefix windows/xbox-bridge
+          Copy-Item -LiteralPath (Get-Command node).Source -Destination windows/xbox-bridge/dist/node.exe
+
       - uses: actions/download-artifact@v4
         with:
           name: couchsubs-native

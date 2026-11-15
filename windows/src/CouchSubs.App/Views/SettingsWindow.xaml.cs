@@ -78,6 +78,7 @@ public partial class SettingsWindow : Window
         FrameSourceChoice.SelectedItem = FrameSourceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.FrameSource.ToString());
         RemotePlayAppChoice.SelectedItem = RemotePlayAppChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.RemotePlayApp.ToString());
         ShowFrameSource();
+        PasscodeTab.Visibility = controller.IsXbox ? Visibility.Collapsed : Visibility.Visible;
         ShowPasscode();
         loading = false;
     }

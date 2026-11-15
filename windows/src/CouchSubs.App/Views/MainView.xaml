@@ -101,7 +101,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </c:Card.Style>
-                            <c:StatusRow Title="PS5" Glyph="{x:Static c:Glyphs.Controller}" Value="{Binding Ps5StatusText}" Tone="{Binding Ps5Tone}" />
+                            <c:StatusRow Title="{Binding ConsoleTitle}" Glyph="{x:Static c:Glyphs.Controller}" Value="{Binding Ps5StatusText}" Tone="{Binding Ps5Tone}" />
                         </c:Card>
 
                         <!-- Altyazı yalnız bilgisayar ekranındaysa TV durumu gösterilmez. -->

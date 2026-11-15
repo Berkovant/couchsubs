@@ -8,6 +8,10 @@ namespace CouchSubs.Shell;
 
 public static class StoreKeys
 {
+    public const string ConsoleKind = "consoleKind";
+    public const string ConsoleKindLocked = "consoleKindLocked";
+    public const string XboxToken = "xboxToken";
+    public const string XboxConsole = "xboxConsole";
     public const string AccountId = "accountId";
     public const string Console = "console";
     public const string Tv = "tv";
@@ -364,6 +368,22 @@ public interface IKeeper
     void Reconnect();
 }
 
+public enum GameConsoleKind { PlayStation, Xbox }
+
+public sealed record XboxConsole(string Id, string Name, string Model, bool StreamingEnabled);
+public sealed record XboxLoginChallenge(string Code, Uri Url, int ExpiresIn);
+
+/// <summary>Windows Xbox home streaming backend. Other platforms can supply their own implementation.</summary>
+public interface IXboxService
+{
+    event Action<string>? TokenUpdated;
+    void Clear();
+    Task<XboxLoginChallenge> BeginLoginAsync();
+    Task<string> CompleteLoginAsync();
+    Task<IReadOnlyList<XboxConsole>> DiscoverAsync(string token);
+    IStreamSession MakeStream(XboxConsole console, string token);
+}
+
 /// <summary>Cihaz üstü çeviri modeli: kurulu mu, indir, çevirmen oluştur.</summary>
 public interface ITranslationModel
 {
@@ -382,6 +402,7 @@ public interface ITranslationModel
 /// <summary>Dış dünyayla (PS5, PSN, TV, OCR, çeviri) konuşan her şey; testlerde sahtesi kullanılır.</summary>
 public interface IAppServices
 {
+    IXboxService? Xbox => null;
     Task<IReadOnlyList<ConsoleInfo>> DiscoverConsolesAsync();
     Task<byte[]> AccountIdFromRedirectAsync(Uri redirect);
     Task<RegisteredConsole> RegisterAsync(string host, byte[] accountId, uint pin);
