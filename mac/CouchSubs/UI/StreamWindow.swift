@@ -67,6 +67,11 @@ struct StreamWindowView: View {
         GeometryReader { proxy in
             let scale = max(0.2, proxy.size.height / 1080)
             VStack(spacing: 14 * scale) {
+                // Sürekli okunan ek alanların çevirisi saydam penceredeki gibi üstte, alanın yanına yaslı.
+                VStack(spacing: 10 * scale) {
+                    ForEach(model.overlayRegions) { regionBox($0, scale: scale) }
+                }
+                .padding(.top, 16 * scale)
                 Spacer(minLength: 0)
                 ForEach(model.overlayLines) { line(line: $0, scale: scale) }
             }
@@ -82,10 +87,32 @@ struct StreamWindowView: View {
         return Color(.sRGB, red: Double(rgb.red) / 255, green: Double(rgb.green) / 255, blue: Double(rgb.blue) / 255)
     }
 
+    /// Ek alanın çevirisi: altyazıdan küçük, tam koyu kutu (düz zeminde chroma key bozulmasın).
+    private func regionBox(_ region: OverlayRegion, scale: CGFloat) -> some View {
+        let style = model.settings.style
+        let size = max(12, CGFloat(style.fontSize) * scale * 0.55)
+        let alignment: Alignment = switch region.side {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
+        }
+        return Text(verbatim: region.text)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(SubtitleOverlayView.color(style.textColor))
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 6 * scale)
+            .padding(.horizontal, 14 * scale)
+            .background(Color.black, in: RoundedRectangle(cornerRadius: 8 * scale))
+            .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
     private func line(line: SubtitleStack.Line, scale: CGFloat) -> some View {
         let style = model.settings.style
         let current = line.role == .current
-        let size = CGFloat(style.fontSize) * scale * (current ? 1 : 0.8)
+        // Uzun çeviri en çok 3 satıra dengeli bölünür; 3 satıra sığmazsa yazı biraz küçülür (bkz. SubtitleWrap).
+        let wrapped = line.wrapped
+        let size = CGFloat(style.fontSize) * scale * (current ? 1 : 0.8) * CGFloat(wrapped.scale)
         // Düz zeminde yarı saydam kutu zeminle karışır, chroma key'i bozar; kutu tam koyu (ya da hiç yok).
         let alpha = StreamBackground.boxOpacity(background: style.background)
         let opacity: Double = switch line.role {
@@ -102,7 +129,7 @@ struct StreamWindowView: View {
         let textOpacity: Double = alpha > 0 ? opacity : 1
         let shadowRadius: CGFloat = alpha > 0 ? 0 : 2 * scale
         let shown: Double = line.fading ? 0 : 1
-        let text = Text(verbatim: line.text)
+        let text = Text(verbatim: wrapped.text)
             .font(.system(size: size, weight: weight))
             .foregroundStyle(SubtitleOverlayView.color(style.textColor).opacity(textOpacity))
         return text

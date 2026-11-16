@@ -50,6 +50,8 @@ public sealed class MarianTranslator : ITextTranslator, IDisposable
         Task? cudaReady = null, string? cudaDirectory = null)
         : this(() => new Ct2MarianEngine(modelDirectory, maxOutputTokens, beams, useGpu, onGpuFallback,
                 cudaReady, cudaDirectory),
+        TranslationCache? cache = null, GlossaryStore? glossary = null, bool useGpu = false, Action? onGpuFallback = null)
+        : this(() => new Ct2MarianEngine(modelDirectory, maxOutputTokens, beams, useGpu, onGpuFallback),
             () => IsInstalledIn(modelDirectory), cache,
             glossary ?? new GlossaryStore(GlossaryStore.UserDirectory)) { }
 

@@ -12,6 +12,8 @@ if cuda_dir:
     import ctypes
     ctypes.windll.kernel32.SetDllDirectoryW(cuda_dir)
 
+import sys
+
 
 def reply(value):
     print(json.dumps(value, ensure_ascii=False), flush=True)

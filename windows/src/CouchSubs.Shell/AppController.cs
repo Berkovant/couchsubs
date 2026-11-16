@@ -307,6 +307,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (old.Output != value.Output) OutputChanged();
             if (old.Dubbing != value.Dubbing) DubbingSettingsChanged(old.Dubbing);
             if (old.GamePacks != value.GamePacks && pipeline is not null) ConnectPacks(pipeline);
+            if (pipeline is not null) pipeline.ShowSpeakerNames = value.ShowSpeakerNames;
             if ((old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs) && pipeline is not null) ApplyWaits(pipeline);
             if (old.SharePool != value.SharePool) services.Pool?.SetEnabled(value.SharePool);
             if (old.TranslationDevice != value.TranslationDevice)
@@ -1669,7 +1670,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         activeReader = reader;
         OcrMissing = reader is null || !services.HasOcrLanguage(settings.SourceLanguage);
         if (reader is null) return;
-        var built = new SubtitlePipeline(reader, MakeTranslator(), server, new ReadScheduler());
+        var built = new SubtitlePipeline(reader, MakeTranslator(), server, new ReadScheduler()) { ShowSpeakerNames = settings.ShowSpeakerNames };
         built.MetricsReady += metrics => post(() => MetricsText = metrics.Summary(text));
         built.PairShown += (source, translation) =>
         {
@@ -2117,11 +2118,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         FirewallPrompt = await HasFirewallRuleAsync(firewall) ? FirewallPrompt.None : FirewallPrompt.Offer;
     }
 
-    /// <summary>Kurallar arka planda taranır; okunamazsa kural var sayılır (yersiz öneri yapılmaz).</summary>
+    /// <summary>Kurallar arka planda taranır; okunamayan izin verilmiş gibi gösterilmez.</summary>
     private static async Task<bool> HasFirewallRuleAsync(IFirewall firewall)
     {
         try { return await Task.Run(firewall.HasRule); }
-        catch (Exception) { return true; }
+        catch (Exception) { return false; }
     }
 
     private void ClearFirewallPrompt()

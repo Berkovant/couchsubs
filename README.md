@@ -105,7 +105,7 @@ yalnız altyazıyı okumak için kullanır. Siz oyunu HDMI'dan, gecikmesiz oynam
 - Bilgisayar, şunlardan biri:
   - **Mac:** macOS 13 Ventura veya üstü, Apple Silicon (M1 ve sonrası) ya da Intel. Apple'ın ücretsiz çevirisi
     macOS 26 ister; daha eski macOS'ta oyun paketleri, Gemini (ücretsiz anahtar), DeepL ya da yapay zekâ çevirisi kullanılır
-  - **Windows:** Windows 10 (2004) veya 11, 64 bit; ilk açılışta çeviri modeli için yaklaşık 475 MB indirme. NVIDIA GPU seçilirse CUDA 12.8 çalışma dosyaları ayrıca ve yalnız bir kez arka planda indirilir (yaklaşık 567 MB).
+  - **Windows:** Windows 10 (2004) veya 11, 64 bit; ilk açılışta çeviri modeli için yaklaşık 475 MB indirme
 
 ## Kurulum
 
@@ -200,6 +200,17 @@ npm install -g @webos-tools/cli
 Mac ve Windows paketleri bu dosyayı içerir, bu yüzden Mac paketinden önce de bu araç kurulu olmalıdır.
 
 Sürümler `v*` etiketiyle `.github/workflows/release.yml` tarafından derlenip yayınlanır.
+
+**PR kontrolleri**
+
+`.github/workflows/pr-tests.yml`, dış katkılar dahil pull request'lerde, yalnız ilgili klasör değiştiyse, üç ayrı kontrol çalıştırır:
+Windows'ta .NET test projeleri, macOS'ta `core/` için `swift test`, Android telefonda JVM birim testleri.
+Native kütüphane derlemez, çeviri/TTS modeli veya TV kurulum paketi indirmez; paketleme, imzalama ve yayın yapmaz.
+Native/model dosyası ya da özel benchmark girdisi isteyen testler, Android TV paket testiyle birlikte,
+bağımlılıkları yoksa atlanmış olarak raporlanır. Sonuçlar Actions kayıtlarında ve 7 gün saklanan
+`pr-*-test-results` çıktılarındadır (Windows TRX, Swift test kaydı, Android JUnit XML/HTML).
+Bu kontroller gerçek TV/PS5 bağlantısı, model kalitesi veya uçtan uca gecikme testinin yerine geçmez;
+mevcut paketleme ve sürüm iş akışları ayrıca çalışmaya devam eder.
 
 ## Klasörler
 
