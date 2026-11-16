@@ -72,6 +72,12 @@ public partial class SettingsWindow : Window
         Engine.SelectedItem = Engine.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Engine.ToString());
         TranslationDeviceChoice.SelectedItem = TranslationDeviceChoice.Items.Cast<ComboBoxItem>()
             .First(item => (string)item.Tag == settings.TranslationDevice.ToString());
+        foreach (var count in CpuThreadOptions.Available(Environment.ProcessorCount))
+            CpuThreadChoice.Items.Add(new ComboBoxItem { Content = count.ToString(), Tag = count });
+        CpuThreadChoice.SelectedItem = CpuThreadChoice.Items.Cast<ComboBoxItem>()
+            .First(item => (int)item.Tag == CpuThreadOptions.Normalize(settings.CpuTranslationThreads, Environment.ProcessorCount));
+        FastSubtitleDetection.IsChecked = settings.FastSubtitleDetection;
+        ShowCpuThreads();
         ShowEngine();
         GamePacks.IsChecked = settings.GamePacks;
         SharePool.IsChecked = settings.SharePool;
@@ -469,9 +475,30 @@ public partial class SettingsWindow : Window
 
     private void OnTranslationDevice(object sender, SelectionChangedEventArgs e)
     {
+        ShowCpuThreads();
         if (TranslationDeviceChoice.SelectedItem is ComboBoxItem { Tag: string tag })
             Update(s => s with { TranslationDevice = Enum.Parse<TranslationDevice>(tag) });
     }
+
+    private void OnCpuThreads(object sender, SelectionChangedEventArgs e)
+    {
+        ShowCpuThreads();
+        if (CpuThreadChoice.SelectedItem is ComboBoxItem { Tag: int count })
+            Update(s => s with { CpuTranslationThreads = count });
+    }
+
+    private void ShowCpuThreads()
+    {
+        if (CpuThreadPanel is null || CpuThreadWarning is null) return;
+        CpuThreadPanel.Visibility = TranslationDeviceChoice.SelectedItem is ComboBoxItem { Tag: "Cpu" }
+            ? Visibility.Visible : Visibility.Collapsed;
+        CpuThreadWarning.Visibility = CpuThreadChoice?.SelectedItem is ComboBoxItem { Tag: int count }
+                                      && CpuThreadOptions.NearCapacity(count, Environment.ProcessorCount)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnFastSubtitleDetection(object sender, RoutedEventArgs e) =>
+        Update(s => s with { FastSubtitleDetection = FastSubtitleDetection.IsChecked == true });
 
     private async void OnKeySave(object sender, RoutedEventArgs e)
     {

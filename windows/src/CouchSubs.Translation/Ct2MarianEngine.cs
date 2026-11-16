@@ -19,6 +19,7 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
     private readonly Action? onGpuFallback;
     private readonly Task? cudaReady;
     private readonly string? cudaDirectory;
+    private readonly int cpuThreads;
     private Process worker;
     private bool gpuActive;
     private bool gpuAttempted;
@@ -27,7 +28,7 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
     internal bool GpuActive => gpuActive;
 
     public Ct2MarianEngine(string modelDirectory, int maxOutputTokens, int beams, bool useGpu, Action? onGpuFallback,
-        Task? cudaReady = null, string? cudaDirectory = null)
+        Task? cudaReady = null, string? cudaDirectory = null, int cpuThreads = 2)
     {
         this.modelDirectory = modelDirectory;
         this.maxOutputTokens = maxOutputTokens;
@@ -35,6 +36,7 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
         this.onGpuFallback = onGpuFallback;
         this.cudaReady = useGpu ? cudaReady : null;
         this.cudaDirectory = cudaDirectory;
+        this.cpuThreads = Math.Clamp(cpuThreads, 1, Math.Max(1, Environment.ProcessorCount));
         tokenizer = MarianTokenizer.Load(Path.Combine(modelDirectory, ModelStore.SourceSpmFile),
             Path.Combine(modelDirectory, ModelStore.VocabFile));
         if (useGpu && (cudaReady is null || cudaReady.IsCompletedSuccessfully))
@@ -80,6 +82,7 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
         info.ArgumentList.Add(script);
         info.ArgumentList.Add(modelDirectory);
         info.ArgumentList.Add(device);
+        info.ArgumentList.Add((device == "cpu" ? cpuThreads : 2).ToString(System.Globalization.CultureInfo.InvariantCulture));
         var process = Process.Start(info) ?? throw new IOException("CTranslate2 worker did not start");
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) Debug.WriteLine("CTranslate2: " + e.Data); };
         process.BeginErrorReadLine();

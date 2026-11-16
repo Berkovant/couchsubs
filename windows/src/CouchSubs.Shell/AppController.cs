@@ -122,7 +122,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         xboxConsole = store.Load<XboxConsole>(StoreKeys.XboxConsole);
         tv = store.Load<LgTv>(StoreKeys.Tv);
         var loaded = settingsStore.Load();
-        settings = loaded.WithCuratedModels();
+        settings = loaded.WithCuratedModels() with
+        {
+            CpuTranslationThreads = CpuThreadOptions.Normalize(loaded.CpuTranslationThreads, Environment.ProcessorCount),
+        };
+        services.Translation.SelectCpuThreads(settings.CpuTranslationThreads);
         services.Translation.SelectDevice(settings.TranslationDevice);
         // Listede olmayan model varsayılana döndüyse ayar hemen kaydedilir.
         if (settings != loaded) settingsStore.Save(settings);
@@ -338,6 +342,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         get => settings;
         set
         {
+            value = value with { CpuTranslationThreads = CpuThreadOptions.Normalize(value.CpuTranslationThreads, Environment.ProcessorCount) };
             var old = settings;
             if (!Set(ref settings, value, [nameof(UsesFreeGemini)])) return;
             settingsStore.Save(value);
@@ -353,6 +358,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 GpuFallbackWarning = false;
                 services.Translation.SelectDevice(value.TranslationDevice);
             }
+            if (old.CpuTranslationThreads != value.CpuTranslationThreads)
+                services.Translation.SelectCpuThreads(value.CpuTranslationThreads);
             UpdateRegionWatcher();
             if (old.FrameSource != value.FrameSource || old.CaptureWindow != value.CaptureWindow)
                 Changed(nameof(CanStart), nameof(Ps5StatusText), nameof(ConsoleTitle));
@@ -369,9 +376,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                                      || old.GeminiModel != value.GeminiModel || old.OpenAiModel != value.OpenAiModel
                                      || old.ClaudeModel != value.ClaudeModel
                                      || old.LocalAiBaseUrl != value.LocalAiBaseUrl || old.LocalAiModel != value.LocalAiModel
-                                     || old.TranslationDevice != value.TranslationDevice;
+                                     || old.TranslationDevice != value.TranslationDevice
+                                     || old.CpuTranslationThreads != value.CpuTranslationThreads;
             if (translationChanged && !isRunning) RefreshTranslatorStatus();
-            if (isRunning && (old.SourceLanguage != value.SourceLanguage || old.TargetLanguage != value.TargetLanguage || translationChanged))
+            if (isRunning && (old.SourceLanguage != value.SourceLanguage || old.TargetLanguage != value.TargetLanguage
+                              || translationChanged || old.FastSubtitleDetection != value.FastSubtitleDetection))
             {
                 RefreshTranslatorStatus();
                 MakePipeline();
@@ -1752,7 +1761,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         activeReader = reader;
         OcrMissing = reader is null || !services.HasOcrLanguage(settings.SourceLanguage);
         if (reader is null) return;
-        var built = new SubtitlePipeline(reader, MakeTranslator(), server, new ReadScheduler()) { ShowSpeakerNames = settings.ShowSpeakerNames };
+        var scheduler = new ReadScheduler(maxReuse: settings.FastSubtitleDetection
+            ? ReadScheduler.FastMaxReuse : ReadScheduler.DefaultMaxReuse);
+        var built = new SubtitlePipeline(reader, MakeTranslator(), server, scheduler) { ShowSpeakerNames = settings.ShowSpeakerNames };
         built.MetricsReady += metrics => post(() => MetricsText = metrics.Summary(text));
         built.PairShown += (source, translation) =>
         {

@@ -47,9 +47,9 @@ public sealed class MarianTranslator : ITextTranslator, IDisposable
     /// <param name="glossary">Terim sözlüğü; verilmezse genel sözlük ve %LOCALAPPDATA%\CouchSubs\glossary\*.json.</param>
     public MarianTranslator(string modelDirectory, int maxOutputTokens = 128, int beams = 4,
         TranslationCache? cache = null, GlossaryStore? glossary = null, bool useGpu = false, Action? onGpuFallback = null,
-        Task? cudaReady = null, string? cudaDirectory = null)
+        Task? cudaReady = null, string? cudaDirectory = null, int cpuThreads = 2)
         : this(() => new Ct2MarianEngine(modelDirectory, maxOutputTokens, beams, useGpu, onGpuFallback,
-                cudaReady, cudaDirectory),
+                cudaReady, cudaDirectory, cpuThreads),
             () => IsInstalledIn(modelDirectory), cache,
             glossary ?? new GlossaryStore(GlossaryStore.UserDirectory)) { }
 

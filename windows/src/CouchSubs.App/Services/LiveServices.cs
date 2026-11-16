@@ -361,6 +361,7 @@ public sealed class LiveServices : IAppServices
         private MarianTranslator? translator;
         private Task? cudaDownload;
         private TranslationDevice device = TranslationDevice.Cpu;
+        private int cpuThreads = CpuThreadOptions.Default;
         private int failed;
 
         public event Action? EngineFailure;
@@ -378,6 +379,16 @@ public sealed class LiveServices : IAppServices
                     StartupGuard.Log("CUDA çalışma zamanı indirilemedi", task.Exception!),
                     CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             }
+            translator?.Dispose();
+            translator = null;
+            Interlocked.Exchange(ref failed, 0);
+        }
+
+        public void SelectCpuThreads(int selected)
+        {
+            selected = CpuThreadOptions.Normalize(selected, Environment.ProcessorCount);
+            if (cpuThreads == selected) return;
+            cpuThreads = selected;
             translator?.Dispose();
             translator = null;
             Interlocked.Exchange(ref failed, 0);
@@ -426,7 +437,8 @@ public sealed class LiveServices : IAppServices
                 created = new MarianTranslator(englishTurkish.InstallDirectory,
                     cache: TranslationCache.Shared(AppPaths.Translations, MarianTranslator.EngineId, "en", "tr"),
                     useGpu: device == TranslationDevice.Gpu, onGpuFallback: () => GpuFallback?.Invoke(),
-                    cudaReady: cudaDownload, cudaDirectory: cuda.InstallDirectory);
+                    cudaReady: cudaDownload, cudaDirectory: cuda.InstallDirectory,
+                    cpuThreads: cpuThreads);
             }
             catch (Exception error)
             {

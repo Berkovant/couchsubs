@@ -227,6 +227,10 @@ public sealed record UserSettings
     public string TargetLanguage { get; init; } = "tr";
     /// <summary>Eski ayar dosyalarında bulunmaz; varsayılan CPU'dur. GPU yalnız NVIDIA CUDA içindir.</summary>
     public TranslationDevice TranslationDevice { get; init; } = TranslationDevice.Cpu;
+    /// <summary>Windows CTranslate2 CPU iç işlemlerinin iş parçacığı sayısı; eski ayarlarda 2.</summary>
+    public int CpuTranslationThreads { get; init; } = CpuThreadOptions.Default;
+    /// <summary>Değişmeyen altyazı bölgesinde tam OCR okumasını en fazla iki kare yeniden kullan.</summary>
+    public bool FastSubtitleDetection { get; init; }
     public DubbingSettings Dubbing { get; init; } = new();
     /// <summary>
     /// Açıksa çeviri <see cref="OnlineEngine"/> ile yapılır (anahtarı kayıtlıysa); kapalıysa ya da hizmete ulaşılamazsa
@@ -418,6 +422,7 @@ public interface ITranslationModel
 
     /// <summary>Yeni çevirmen oluşturulurken kullanılacak aygıt.</summary>
     void SelectDevice(TranslationDevice device) { }
+    void SelectCpuThreads(int threads) { }
 
     /// <summary>Model kurulu ama çeviri motoru bu bilgisayarda açılamadı (ör. CTranslate2 çalışma zamanı eksik).</summary>
     bool EngineFailed => false;
