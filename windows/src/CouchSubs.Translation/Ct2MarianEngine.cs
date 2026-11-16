@@ -28,11 +28,6 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
 
     public Ct2MarianEngine(string modelDirectory, int maxOutputTokens, int beams, bool useGpu, Action? onGpuFallback,
         Task? cudaReady = null, string? cudaDirectory = null)
-    private Process worker;
-    private bool gpuActive;
-    private bool disposed;
-
-    public Ct2MarianEngine(string modelDirectory, int maxOutputTokens, int beams, bool useGpu, Action? onGpuFallback)
     {
         this.modelDirectory = modelDirectory;
         this.maxOutputTokens = maxOutputTokens;
@@ -45,10 +40,6 @@ internal sealed class Ct2MarianEngine : ISentenceEngine
         if (useGpu && (cudaReady is null || cudaReady.IsCompletedSuccessfully))
         {
             gpuAttempted = true;
-        tokenizer = MarianTokenizer.Load(Path.Combine(modelDirectory, ModelStore.SourceSpmFile),
-            Path.Combine(modelDirectory, ModelStore.VocabFile));
-        if (useGpu)
-        {
             try { worker = Start("cuda"); gpuActive = true; return; }
             catch (Exception error)
             {

@@ -361,7 +361,6 @@ public sealed class LiveServices : IAppServices
         private readonly CudaRuntimeStore cuda = new(Path.Combine(AppPaths.Data, "cuda-12.8"));
         private MarianTranslator? translator;
         private Task? cudaDownload;
-        private MarianTranslator? translator;
         private TranslationDevice device = TranslationDevice.Cpu;
         private int failed;
 
@@ -428,7 +427,6 @@ public sealed class LiveServices : IAppServices
                     cache: TranslationCache.Shared(AppPaths.Translations, MarianTranslator.EngineId, "en", "tr"),
                     useGpu: device == TranslationDevice.Gpu, onGpuFallback: () => GpuFallback?.Invoke(),
                     cudaReady: cudaDownload, cudaDirectory: cuda.InstallDirectory);
-                    useGpu: device == TranslationDevice.Gpu, onGpuFallback: () => GpuFallback?.Invoke());
             }
             catch (Exception error)
             {
