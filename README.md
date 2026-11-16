@@ -105,7 +105,7 @@ yalnız altyazıyı okumak için kullanır. Siz oyunu HDMI'dan, gecikmesiz oynam
 - Bilgisayar, şunlardan biri:
   - **Mac:** macOS 13 Ventura veya üstü, Apple Silicon (M1 ve sonrası) ya da Intel. Apple'ın ücretsiz çevirisi
     macOS 26 ister; daha eski macOS'ta oyun paketleri, Gemini (ücretsiz anahtar), DeepL ya da yapay zekâ çevirisi kullanılır
-  - **Windows:** Windows 10 (2004) veya 11, 64 bit; ilk açılışta çeviri modeli için yaklaşık 475 MB indirme
+  - **Windows:** Windows 10 (2004) veya 11, 64 bit; ilk açılışta çeviri modeli için yaklaşık 475 MB indirme. NVIDIA GPU seçilirse CUDA 12.8 çalışma dosyaları ayrıca ve yalnız bir kez arka planda indirilir (yaklaşık 567 MB).
 
 ## Kurulum
 
