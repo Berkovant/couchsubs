@@ -139,6 +139,8 @@ public struct UserSettings: Codable, Equatable {
     public var askGame = true
     /// Altyazıdaki konuşan adı ("ARTHUR: …") çeviride gösterilir; kapalıysa yalnız Türkçe cümle görünür.
     public var showSpeakerNames = true
+    /// Mac'te değişmeyen altyazı bölgesini en fazla iki kare yeniden kullan; varsayılan kapalı.
+    public var fastSubtitleDetection = false
     /// Koyu, açık ya da sistemle aynı. Eski kayıtlarda yoktur; onlar da koyu açılır.
     public var appearance = AppAppearance.dark
     /// Görüntü PS5 bağlantısından mı, bu bilgisayardaki PS Remote Play penceresinden mi okunur.
@@ -174,6 +176,7 @@ public struct UserSettings: Codable, Equatable {
         sharePool = try values.decodeIfPresent(Bool.self, forKey: .sharePool) ?? defaults.sharePool
         askGame = try values.decodeIfPresent(Bool.self, forKey: .askGame) ?? defaults.askGame
         showSpeakerNames = try values.decodeIfPresent(Bool.self, forKey: .showSpeakerNames) ?? defaults.showSpeakerNames
+        fastSubtitleDetection = try values.decodeIfPresent(Bool.self, forKey: .fastSubtitleDetection) ?? defaults.fastSubtitleDetection
         appearance = (try? values.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? defaults.appearance
         frameSource = (try? values.decodeIfPresent(FrameSource.self, forKey: .frameSource)) ?? defaults.frameSource
         remotePlayApp = (try? values.decodeIfPresent(RemotePlayApp.self, forKey: .remotePlayApp)) ?? defaults.remotePlayApp

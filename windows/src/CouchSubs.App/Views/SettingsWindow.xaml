@@ -141,6 +141,13 @@
                                 <ComboBoxItem Content="{t:T 'CPU (default)'}" Tag="Cpu" />
                                 <ComboBoxItem Content="{t:T 'GPU (Beta) · NVIDIA CUDA'}" Tag="Gpu" />
                             </ComboBox>
+                            <StackPanel x:Name="CpuThreadPanel" Margin="0,12,0,0" Visibility="Collapsed">
+                                <TextBlock Text="{t:T 'CPU translation threads'}" Margin="0,0,0,8" />
+                                <ComboBox x:Name="CpuThreadChoice" SelectionChanged="OnCpuThreads" Width="120" HorizontalAlignment="Left" />
+                                <TextBlock x:Name="CpuThreadWarning" Foreground="{DynamicResource warningBrush}"
+                                           Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                                           Text="{t:T 'This uses most of your CPU threads and may slow down the game.'}" />
+                            </StackPanel>
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,8,0,0"
                                        Text="{t:T 'CPU works on every computer. GPU needs a compatible NVIDIA card; the first time you choose it, CouchSubs downloads about 565 MB of CUDA files from NVIDIA (about 790 MB on disk). If unavailable, CouchSubs uses CPU.'}" />
                             <TextBlock Foreground="{DynamicResource warningBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
@@ -216,6 +223,10 @@
                     <!-- Gelişmiş: kötü okunan satırların bekleme süreleri (SubtitlePipeline.PackWait / CleanWait). -->
                     <c:Card Title="{t:T 'Advanced'}" Margin="0,16,0,0">
                         <StackPanel>
+                            <CheckBox x:Name="FastSubtitleDetection" Content="{t:T 'Check unchanged subtitle areas more often'}"
+                                      Checked="OnFastSubtitleDetection" Unchecked="OnFastSubtitleDetection" />
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"
+                                       Text="{t:T 'When the subtitle area looks unchanged, read it again after 2 frames instead of 20. Uses more CPU.'}" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,16"
                                        Text="{t:T 'These waits only delay lines that were read badly; most lines are shown without waiting. A shorter wait shows those lines sooner but lets more wrong translations through.'}" />
                             <TextBlock Text="{t:T 'Wait for a misread line'}" Margin="0,0,0,8" />

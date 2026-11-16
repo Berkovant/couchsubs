@@ -455,9 +455,10 @@ final class AppModel: ObservableObject {
                 || settings.openAIModel != oldValue.openAIModel || settings.claudeModel != oldValue.claudeModel
                 || settings.localAIBaseURL != oldValue.localAIBaseURL || settings.localAIModel != oldValue.localAIModel
             if translationChanged { Task { await refreshTranslatorStatus() } }
-            if isRunning, settings.sourceLanguage != oldValue.sourceLanguage || settings.targetLanguage != oldValue.targetLanguage
-                || translationChanged {
-                Task { await refreshTranslatorStatus() }
+            let languageChanged = settings.sourceLanguage != oldValue.sourceLanguage
+                || settings.targetLanguage != oldValue.targetLanguage
+            if isRunning, languageChanged || translationChanged || settings.fastSubtitleDetection != oldValue.fastSubtitleDetection {
+                if languageChanged { Task { await refreshTranslatorStatus() } }
                 makePipeline()
             }
         }
@@ -1414,9 +1415,11 @@ final class AppModel: ObservableObject {
         pipeline?.reset()
         // Eski hatta süren okuma beklenmez; yeni hat ilk karesini hemen alır.
         frameGate.reset()
+        let scheduler = ReadScheduler(maxReuse: settings.fastSubtitleDetection
+            ? ReadScheduler.fastMaxReuse : ReadScheduler.defaultMaxReuse)
         let pipeline = SubtitlePipeline(reader: VisionReader(language: settings.sourceLanguage),
                                         translator: makeTranslator(),
-                                        server: server, scheduler: ReadScheduler())
+                                        server: server, scheduler: scheduler)
         pipeline.showSpeakerNames = settings.showSpeakerNames
         pipeline.onPair = { [weak self, weak pipeline] source, translation in
             self?.lastSource = source

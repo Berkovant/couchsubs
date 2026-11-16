@@ -27,7 +27,7 @@ try:
         sys.argv[1], device=device,
         compute_type="float16" if device == "cuda" else "int8",
         inter_threads=1,
-        intra_threads=2,
+        intra_threads=int(sys.argv[3]),
     )
     # Model yüklemesi başarılı olsa da CUDA bağımlılığı ilk çıkarımda hata verebilir.
     translator.translate_batch([["▁Hello", ".", "</s>"]], beam_size=1)
