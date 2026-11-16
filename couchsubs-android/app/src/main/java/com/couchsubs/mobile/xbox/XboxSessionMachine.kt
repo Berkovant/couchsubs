@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package com.couchsubs.mobile.xbox
 
+import java.util.concurrent.atomic.AtomicLong
+
 /**
  * Ev yayını oturumunun durum makinesi (ağdan bağımsız; birim testli). Windows'taki XboxStreamSession.RunAsync ile aynı
  * kurallar: `/state` saniyede bir, en çok 90 kez sorulur; `ReadyToConnect` görülünce aktarım jetonu gönderilir,
@@ -108,6 +110,50 @@ class XboxSessionMachine(val maxPolls: Int = 90, val pollIntervalMs: Long = 1000
                     text.contains("PowerOff", true) || text.contains("StreamingDisabled", true) -> XboxError.CONSOLE_UNAVAILABLE
                 else -> XboxError.CONSOLE_UNAVAILABLE
             }
+        }
+    }
+}
+
+/** Ömür boyu tanı sayacını korurken her yeni WebRTC bağlantısının ilk karesini ayrı tanır. */
+internal class XboxFrameCounter {
+    private val total = AtomicLong()
+    private val lock = Any()
+    private var currentSession: Session? = null
+    private var currentSessionFrames = 0L
+
+    class Session internal constructor()
+
+    val totalFrames: Long get() = total.get()
+
+    fun beginSession(): Session = synchronized(lock) {
+        Session().also {
+            currentSession = it
+            currentSessionFrames = 0
+        }
+    }
+
+    fun endSession(session: Session) {
+        synchronized(lock) {
+            if (currentSession === session) {
+                currentSession = null
+                currentSessionFrames = 0
+            }
+        }
+    }
+
+    fun recordFrame(session: Session): Long? = synchronized(lock) {
+        if (currentSession !== session) return null
+        total.incrementAndGet()
+        ++currentSessionFrames
+    }
+
+    fun framesInSession(session: Session): Long = synchronized(lock) {
+        if (currentSession === session) currentSessionFrames else 0
+    }
+
+    fun runIfCurrent(session: Session, action: () -> Unit) {
+        synchronized(lock) {
+            if (currentSession === session) action()
         }
     }
 }
