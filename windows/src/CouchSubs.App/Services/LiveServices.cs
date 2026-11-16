@@ -371,7 +371,8 @@ public sealed class LiveServices : IAppServices
         {
             if (device == selected) return;
             device = selected;
-            if (selected == TranslationDevice.Gpu)
+            // NVIDIA sürücüsü (nvcuda.dll) yoksa ~565 MB indirme boşa gider; doğrudan CPU'ya düşülür.
+            if (selected == TranslationDevice.Gpu && File.Exists(Path.Combine(Environment.SystemDirectory, "nvcuda.dll")))
             {
                 cudaDownload = cuda.StartDownload();
                 _ = cudaDownload.ContinueWith(task =>
