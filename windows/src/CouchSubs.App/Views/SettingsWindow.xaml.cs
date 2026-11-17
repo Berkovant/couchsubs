@@ -87,6 +87,9 @@ public partial class SettingsWindow : Window
         AppearanceChoice.SelectedItem = AppearanceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Appearance.ToString());
         FrameSourceChoice.SelectedItem = FrameSourceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.FrameSource.ToString());
         RemotePlayAppChoice.SelectedItem = RemotePlayAppChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.RemotePlayApp.ToString());
+        XboxLegacyFrameRate.IsChecked = settings.XboxLegacyFrameRate;
+        PlayStationPictureSourceCard.Visibility = controller.IsXbox ? Visibility.Collapsed : Visibility.Visible;
+        XboxPictureSourceCard.Visibility = controller.IsXbox ? Visibility.Visible : Visibility.Collapsed;
         ShowFrameSource();
         PasscodeTab.Visibility = controller.IsXbox ? Visibility.Collapsed : Visibility.Visible;
         ShowPasscode();
@@ -118,6 +121,7 @@ public partial class SettingsWindow : Window
     /// <summary>Remote Play uygulaması seçimi ve ipuçları yalnız seçili görüntü kaynağına göre görünür.</summary>
     private void ShowFrameSource()
     {
+        if (controller.IsXbox) return;
         var window = controller.Settings.FrameSource == FrameSource.RemotePlayWindow;
         var capture = controller.Settings.FrameSource == FrameSource.CaptureWindow;
         RemotePlayAppPanel.Visibility = window ? Visibility.Visible : Visibility.Collapsed;
@@ -152,6 +156,9 @@ public partial class SettingsWindow : Window
         Update(s => s with { FrameSource = Enum.Parse<FrameSource>(tag) });
         ShowFrameSource();
     }
+
+    private void OnXboxLegacyFrameRate(object sender, RoutedEventArgs e) =>
+        Update(s => s with { XboxLegacyFrameRate = XboxLegacyFrameRate.IsChecked == true });
 
     private void OnRemotePlayApp(object sender, SelectionChangedEventArgs e)
     {

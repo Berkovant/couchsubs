@@ -14,7 +14,7 @@ using Microsoft.Web.WebView2.Wpf;
 namespace CouchSubs.App.Services;
 
 /// <summary>Receives Xbox WebRTC video in an off-screen WebView2 and passes decoded frames to the normal OCR pipeline.</summary>
-internal sealed class XboxStreamSession(XboxBridge bridge, XboxConsole console, string token, Action<string> tokenUpdated) : IStreamSession
+internal sealed class XboxStreamSession(XboxBridge bridge, XboxConsole console, string token, Action<string> tokenUpdated, bool legacyFrameRate) : IStreamSession
 {
     // Oynatıcı sayfası yalnız WebRTC el sıkışma komutlarını çağırabilir; giriş ve token dönen komutlar ona kapalı.
     private static readonly HashSet<string> PlayerCommands = ["sdp", "chatSdp", "ice", "keepalive"];
@@ -165,7 +165,7 @@ internal sealed class XboxStreamSession(XboxBridge bridge, XboxConsole console, 
         {
             try
             {
-                if (result.IsSuccess) browser?.CoreWebView2?.PostWebMessageAsJson("{\"kind\":\"start\"}");
+                if (result.IsSuccess) browser?.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { kind = "start", legacyFrameRate }));
                 else browserEnded?.TrySetResult(true);
             }
             catch { browserEnded?.TrySetResult(true); }
