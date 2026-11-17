@@ -254,7 +254,7 @@ public class RegionWatcherTests
     }
 
     [Fact]
-    public async Task RemovedAreaAndResetClearOnlyTheirOwnBoxes()
+    public async Task RemovedAreaLosesItsBoxAndResetClearsAll()
     {
         var (reader, server) = (new Reader(), new Server());
         var watcher = new RegionWatcher(reader, new Translator(), server);
@@ -265,11 +265,9 @@ public class RegionWatcherTests
         await watcher.PassAsync(Shade(10), [Quest]);
         Assert.Equal(("p", ""), (server.Sent[^1].Id, server.Sent[^1].Text));
         watcher.Reset();
-        Assert.Equal(("q", ""), (server.Sent[^1].Id, server.Sent[^1].Text));
-        var count = server.Sent.Count;
+        Assert.Equal(1, server.Clears);
         watcher.Reset();
-        Assert.Equal(count, server.Sent.Count);
-        Assert.Equal(0, server.Clears);
+        Assert.Equal(1, server.Clears);
     }
 
     [Fact]

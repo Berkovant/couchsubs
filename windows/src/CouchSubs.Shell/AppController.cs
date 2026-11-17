@@ -66,7 +66,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private IStreamSession? session;
     private IKeeper? keeper;
     private SubtitlePipeline? pipeline;
-    private readonly List<SubtitlePipeline> subtitleAreaPipelines = [];
     /// <summary>Hattın yazı okuyucusu; ek bölgelerin tek seferlik okuması da bunu kullanır.</summary>
     private ITextReader? activeReader;
     private int extraBusy;
@@ -126,7 +125,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         settings = loaded.WithCuratedModels() with
         {
             CpuTranslationThreads = CpuThreadOptions.Normalize(loaded.CpuTranslationThreads, Environment.ProcessorCount),
-            SubtitleAreas = loaded.SubtitleAreas is { Count: <= 3 } ? loaded.SubtitleAreas : (loaded.SubtitleAreas ?? []).Take(3).ToList(),
         };
         services.Translation.SelectCpuThreads(settings.CpuTranslationThreads);
         services.Translation.SelectDevice(settings.TranslationDevice);
@@ -344,11 +342,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         get => settings;
         set
         {
-            value = value with
-            {
-                CpuTranslationThreads = CpuThreadOptions.Normalize(value.CpuTranslationThreads, Environment.ProcessorCount),
-                SubtitleAreas = value.SubtitleAreas is { Count: <= 3 } ? value.SubtitleAreas : (value.SubtitleAreas ?? []).Take(3).ToList(),
-            };
+            value = value with { CpuTranslationThreads = CpuThreadOptions.Normalize(value.CpuTranslationThreads, Environment.ProcessorCount) };
             var old = settings;
             if (!Set(ref settings, value, [nameof(UsesFreeGemini)])) return;
             settingsStore.Save(value);
@@ -356,12 +350,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (old.Output != value.Output) OutputChanged();
             if (old.Dubbing != value.Dubbing) DubbingSettingsChanged(old.Dubbing);
             if (old.GamePacks != value.GamePacks && pipeline is not null) ConnectPacks(pipeline);
-            if (old.GamePacks != value.GamePacks) foreach (var extra in subtitleAreaPipelines) ConnectPacks(extra);
             if (pipeline is not null) pipeline.ShowSpeakerNames = value.ShowSpeakerNames;
-            foreach (var extra in subtitleAreaPipelines) extra.ShowSpeakerNames = value.ShowSpeakerNames;
             if ((old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs) && pipeline is not null) ApplyWaits(pipeline);
-            if (old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs)
-                foreach (var extra in subtitleAreaPipelines) ApplyWaits(extra);
             if (old.SharePool != value.SharePool) services.Pool?.SetEnabled(value.SharePool);
             if (old.TranslationDevice != value.TranslationDevice)
             {
@@ -371,7 +361,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (old.CpuTranslationThreads != value.CpuTranslationThreads)
                 services.Translation.SelectCpuThreads(value.CpuTranslationThreads);
             UpdateRegionWatcher();
-            if (old.ActiveSubtitleAreas.Count != value.ActiveSubtitleAreas.Count && pipeline is not null) MakePipeline();
             if (old.FrameSource != value.FrameSource || old.CaptureWindow != value.CaptureWindow)
                 Changed(nameof(CanStart), nameof(Ps5StatusText), nameof(ConsoleTitle));
             var windowAppChanged = value.FrameSource == FrameSource.RemotePlayWindow && old.RemotePlayApp != value.RemotePlayApp;
@@ -1016,7 +1005,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         if (pause)
         {
             pipeline?.Reset();
-            foreach (var extra in subtitleAreaPipelines) extra.Reset();
             server.Clear();
         }
         // Duraklatınca ek bölgeler de okunmaz, kutuları kalkar.
@@ -1437,8 +1425,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         keeper?.Stop();
         keeper = null;
         pipeline?.Reset();
-        foreach (var extra in subtitleAreaPipelines) extra.Reset();
-        subtitleAreaPipelines.Clear();
         if (pipeline is not null) SubtitleLog.Write("oturum bitti");
         pipeline = null;
         UpdateRegionWatcher();
@@ -1773,8 +1759,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         pipeline?.Reset();
         pipeline = null;
-        foreach (var extra in subtitleAreaPipelines) extra.Reset();
-        subtitleAreaPipelines.Clear();
         // Ek bölge okuyucusu da yeni dil ve motorla yeniden kurulur.
         regionWatcher?.Reset();
         regionWatcher = null;
@@ -1819,30 +1803,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         ApplyWaits(built);
         OnlineIssue = null;
         pipeline = built;
-        for (var index = 0; index < settings.ActiveSubtitleAreas.Count; index++)
-        {
-            var extraReader = services.MakeReader(settings.SourceLanguage);
-            if (extraReader is null) break;
-            var extra = new SubtitlePipeline(extraReader, MakeTranslator(),
-                new SubtitleAreaSender(server, index + 2),
-                new ReadScheduler(maxReuse: settings.FastSubtitleDetection
-                    ? ReadScheduler.FastMaxReuse : ReadScheduler.DefaultMaxReuse))
-            { ShowSpeakerNames = settings.ShowSpeakerNames };
-            extra.PairShown += (source, translation) => post(() =>
-            {
-                LastSource = source;
-                LastTranslation = translation;
-                AddToHistory(source, translation, extra.LastOrigin == "paket" ? LineOrigin.Pack : LineOrigin.Engine);
-            });
-            extra.TranslationResult += error => post(() => TranslatorStatus = error ?? TranslatorStatus.Ready);
-            extra.SpeechReady += lines => post(() => Speak(lines));
-            extra.PackMissed += OfferToPool;
-            extra.Log = SubtitleLog.Write;
-            extra.PackName = () => services.GamePacks?.SearchScope;
-            ConnectPacks(extra);
-            ApplyWaits(extra);
-            subtitleAreaPipelines.Add(extra);
-        }
         UpdateRegionWatcher();
     }
 
@@ -2093,7 +2053,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         if (state.Phase == SessionPhase.Disconnected)
         {
             pipeline?.Reset();
-            foreach (var extra in subtitleAreaPipelines) extra.Reset();
             regionWatcher?.Reset();
             server.Clear();
             dubber?.Stop();
@@ -2130,9 +2089,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             try
             {
                 await current.ProcessAsync(frame, settings.Region, arrived);
-                var regions = settings.ActiveSubtitleAreas;
-                for (var i = 0; i < Math.Min(regions.Count, subtitleAreaPipelines.Count); i++)
-                    await subtitleAreaPipelines[i].ProcessAsync(frame, regions[i].Region, arrived);
             }
             finally
             {

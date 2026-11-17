@@ -6,23 +6,6 @@ import Darwin
 import Combine
 import RemotePlay
 
-/// Ek altyazı bölgesini ana satırdan bağımsız bir TV kutusuna iletir.
-private final class SubtitleAreaSender: SubtitleSending {
-    private let server: SubtitleServer
-    private let id: String
-
-    init(server: SubtitleServer, number: Int) {
-        self.server = server
-        id = "subtitle-area-\(number)"
-    }
-
-    func sendSubtitle(_ text: String, durationMs: Int, box: TextBox?, replaces: Bool) {
-        server.sendRegion(id: id, text: text, box: box)
-    }
-
-    func clear() { server.sendRegion(id: id, text: "", box: nil) }
-}
-
 /// Dış dünyayla (PS5, PSN, TV) konuşan her şey; testlerde sahtesi kullanılır.
 extension AppServices {
     /// DeepL anahtarını dener (ayarlardaki "Kaydet ve dene").
@@ -455,9 +438,7 @@ final class AppModel: ObservableObject {
             if settings.output != oldValue.output { outputChanged() }
             if settings.dubbing != oldValue.dubbing { dubbingSettingsChanged(from: oldValue.dubbing) }
             if settings.gamePacks != oldValue.gamePacks, let pipeline { connectPacks(to: pipeline) }
-            if settings.gamePacks != oldValue.gamePacks { subtitleAreaPipelines.forEach { connectPacks(to: $0) } }
             pipeline?.showSpeakerNames = settings.showSpeakerNames
-            subtitleAreaPipelines.forEach { $0.showSpeakerNames = settings.showSpeakerNames }
             if settings.appearance != oldValue.appearance { settings.appearance.apply() }
             let windowAppChanged = settings.frameSource == .remotePlayWindow && settings.remotePlayApp != oldValue.remotePlayApp
             if settings.frameSource != oldValue.frameSource || windowAppChanged, isRunning {
@@ -476,8 +457,7 @@ final class AppModel: ObservableObject {
             if translationChanged { Task { await refreshTranslatorStatus() } }
             let languageChanged = settings.sourceLanguage != oldValue.sourceLanguage
                 || settings.targetLanguage != oldValue.targetLanguage
-            if isRunning, languageChanged || translationChanged || settings.fastSubtitleDetection != oldValue.fastSubtitleDetection
-                || settings.activeSubtitleAreas.count != oldValue.activeSubtitleAreas.count {
+            if isRunning, languageChanged || translationChanged || settings.fastSubtitleDetection != oldValue.fastSubtitleDetection {
                 if languageChanged { Task { await refreshTranslatorStatus() } }
                 makePipeline()
             }
@@ -534,7 +514,6 @@ final class AppModel: ObservableObject {
     private var keeper: KeeperControlling?
     @Published private var sleepActivity: NSObjectProtocol?
     private var pipeline: SubtitlePipeline?
-    private var subtitleAreaPipelines: [SubtitlePipeline] = []
     /// Ek alanları (görev, telefon, bildirim) okuyup çeviren; çeviri sürerken var.
     private var regionWatcher: RegionWatcher?
     /// Oyundaki altyazının son görüldüğü yer; deneme altyazısı TV'de oraya yerleşir.
@@ -1434,8 +1413,6 @@ final class AppModel: ObservableObject {
     /// Okuma hattını güncel dillerle (yeniden) kurar.
     private func makePipeline() {
         pipeline?.reset()
-        subtitleAreaPipelines.forEach { $0.reset() }
-        subtitleAreaPipelines.removeAll()
         // Eski hatta süren okuma beklenmez; yeni hat ilk karesini hemen alır.
         frameGate.reset()
         let scheduler = ReadScheduler(maxReuse: settings.fastSubtitleDetection
@@ -1466,28 +1443,6 @@ final class AppModel: ObservableObject {
         regionWatcher?.reset()
         regionWatcher = nil
         connectPacks(to: pipeline)
-        for (index, _) in settings.activeSubtitleAreas.enumerated() {
-            let extra = SubtitlePipeline(reader: VisionReader(language: settings.sourceLanguage),
-                                         translator: makeTranslator(),
-                                         server: SubtitleAreaSender(server: server, number: index + 2),
-                                         scheduler: ReadScheduler(maxReuse: settings.fastSubtitleDetection
-                                            ? ReadScheduler.fastMaxReuse : ReadScheduler.defaultMaxReuse))
-            extra.showSpeakerNames = settings.showSpeakerNames
-            extra.onPair = { [weak self, weak extra] source, translation in
-                self?.lastSource = source
-                self?.lastTranslation = translation
-                self?.addToHistory(source: source, translation: translation, origin: extra?.lastOrigin == "paket" ? .pack : .engine)
-            }
-            extra.onTranslationResult = { [weak self] error in
-                self?.translatorStatus = Self.translatorStatus(after: error)
-            }
-            extra.onReadResult = { [weak self] error in self?.noteRead(error) }
-            extra.onSpeech = { [weak self] lines in self?.speak(lines) }
-            extra.onLog = { SubtitleLog.write($0) }
-            extra.warmUp()
-            connectPacks(to: extra)
-            subtitleAreaPipelines.append(extra)
-        }
         activeLanguages = (settings.sourceLanguage, settings.targetLanguage)
     }
 
@@ -1680,8 +1635,6 @@ final class AppModel: ObservableObject {
         pipeline?.reset()
         if pipeline != nil { SubtitleLog.write("oturum bitti") }
         pipeline = nil
-        subtitleAreaPipelines.forEach { $0.reset() }
-        subtitleAreaPipelines.removeAll()
         regionWatcher?.reset()
         regionWatcher = nil
         // Yeni "Başlat" eski oturumdan kalan (belki takılmış) okumayı beklemeden temiz başlar.
@@ -1721,7 +1674,6 @@ final class AppModel: ObservableObject {
         // Bağlantı koptuysa TV'de eski altyazı kalmasın.
         if case .disconnected = state {
             pipeline?.reset()
-            subtitleAreaPipelines.forEach { $0.reset() }
             regionWatcher?.reset()
             server.clear()
             dubber?.stop()
@@ -1852,9 +1804,6 @@ final class AppModel: ObservableObject {
         }
         guard case .enter(let token) = entry, let pipeline else { return }
         await pipeline.process(frame, region: settings.region, capturedAt: capturedAt)
-        for (index, area) in settings.activeSubtitleAreas.enumerated() where index < subtitleAreaPipelines.count {
-            await subtitleAreaPipelines[index].process(frame, region: area.region, capturedAt: capturedAt)
-        }
         frameGate.leave(token)
     }
 

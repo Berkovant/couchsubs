@@ -104,22 +104,10 @@ public enum AppAppearance: String, Codable, CaseIterable {
 }
 
 /// Kalıcı ayarlar (Anahtarlık değil, sıradan tercihler).
-public struct SubtitleArea: Codable, Equatable {
-    public var region: CropRegion
-    public var preset: AreaPreset
-
-    public init(region: CropRegion, preset: AreaPreset) {
-        self.region = region
-        self.preset = preset
-    }
-}
-
 public struct UserSettings: Codable, Equatable {
     public var region = CropRegion()
     /// Bölgenin hazır seçimi (Alt bölge, Üst bölge, Tam ekran, Özel). Eski kayıtlarda yoktur; bölgeden çıkarılır.
     public var areaPreset = AreaPreset.bottom
-    /// Yalnız örtme yerleşiminde okunan ek altyazı bölgeleri (ana bölgeyle toplam en çok dört).
-    public var subtitleAreas: [SubtitleArea] = []
     /// Altyazının yanında sürekli okunan ek alanlar (görev, bildirim, telefon). Varsayılan: hiç yok.
     public var extraAreas: [ExtraArea] = []
     public var style = SubtitleStyle()
@@ -171,7 +159,6 @@ public struct UserSettings: Codable, Equatable {
         let defaults = UserSettings()
         region = try values.decodeIfPresent(CropRegion.self, forKey: .region) ?? defaults.region
         areaPreset = (try? values.decodeIfPresent(AreaPreset.self, forKey: .areaPreset)) ?? AreaPreset.matching(region)
-        subtitleAreas = Array(((try? values.decodeIfPresent([SubtitleArea].self, forKey: .subtitleAreas)) ?? []).prefix(3))
         extraAreas = Array(((try? values.decodeIfPresent([ExtraArea].self, forKey: .extraAreas)) ?? defaults.extraAreas)
             .prefix(ExtraArea.maxCount))
         style = try values.decodeIfPresent(SubtitleStyle.self, forKey: .style) ?? defaults.style
@@ -209,41 +196,6 @@ public struct UserSettings: Codable, Equatable {
     public mutating func setCustomRegion(_ region: CropRegion) {
         self.region = region
         areaPreset = .custom
-    }
-
-    public var activeSubtitleAreas: [SubtitleArea] { style.placement == .cover ? Array(subtitleAreas.prefix(3)) : [] }
-
-    public mutating func addSubtitleArea() {
-        guard subtitleAreas.count < 3 else { return }
-        subtitleAreas.append(SubtitleArea(region: AreaPreset.top.region!, preset: .top))
-    }
-
-    public mutating func removeSubtitleArea(at index: Int) {
-        guard subtitleAreas.indices.contains(index) else { return }
-        subtitleAreas.remove(at: index)
-    }
-
-    public mutating func removeSubtitleRegion(at index: Int) {
-        guard !subtitleAreas.isEmpty else { return }
-        if index == 0 {
-            let promoted = subtitleAreas.removeFirst()
-            region = promoted.region
-            areaPreset = promoted.preset
-        } else {
-            removeSubtitleArea(at: index - 1)
-        }
-    }
-
-    public mutating func selectAreaPreset(_ preset: AreaPreset, at index: Int) {
-        guard subtitleAreas.indices.contains(index) else { return }
-        subtitleAreas[index].preset = preset
-        if let region = preset.region { subtitleAreas[index].region = region }
-    }
-
-    public mutating func setCustomRegion(_ region: CropRegion, at index: Int) {
-        guard subtitleAreas.indices.contains(index) else { return }
-        subtitleAreas[index].region = region
-        subtitleAreas[index].preset = .custom
     }
 
     /// Listede olmayan kayıtlı modeller (eski ayar ya da listeden çıkarılan model) varsayılana döner.

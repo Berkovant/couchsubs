@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Runtime.InteropServices;
-using System.Windows.Input;
 using System.Windows.Interop;
 using CouchSubs.Shell;
 
 namespace CouchSubs.App.Services;
 
 /// <summary>
-/// Ctrl+Shift+rakam genel kısayolları arka planda çalışır. Num tuşları yalnız CouchSubs penceresi odaktayken
-/// işlenir; başka uygulamalar sayı takımını normal kullanır.
+/// Genel kısayollar (Num 0, 1, 2, 3, 5, 7, 8, 9 ve aynı işler için Ctrl+Shift+rakam, bkz. <see cref="HotkeyTable"/>):
+/// kullanıcı kumandayla oynarken bilgisayardaki pencere arka planda olsa da çalışır.
 /// Kısayollar yalnız <see cref="Enabled"/> iken tutulur; böylece çeviri kapalıyken sayı tuşları diğer uygulamalarda
 /// (Excel gibi) normal çalışır. Tuş başka bir uygulamada kullanılıyorsa sessizce atlanır.
 /// </summary>
@@ -45,7 +44,6 @@ public sealed partial class GlobalHotkeys : IDisposable
         this.pressed = pressed;
         source = HwndSource.FromHwnd(window);
         source?.AddHook(Hook);
-        InputManager.Current.PreProcessInput += OnLocalKey;
     }
 
     /// <summary>Kısayollar tutuluyor mu.</summary>
@@ -68,7 +66,6 @@ public sealed partial class GlobalHotkeys : IDisposable
         {
             var id = FirstId + index;
             var key = Keys[index];
-            if (key.Modifiers == HotkeyModifiers.None) continue;
             if (RegisterHotKey(window, id, ModNoRepeat | (uint)key.Modifiers, key.VirtualKey)) registered.Add(id);
             else if (key.Modifiers != HotkeyModifiers.None) failed.Add(key.Label);
         }
@@ -78,18 +75,6 @@ public sealed partial class GlobalHotkeys : IDisposable
             comboFailureLogged = true;
             StartupGuard.Log($"Kısayol alınamadı, başka bir uygulama kullanıyor: {string.Join(", ", failed)} (Num tuşları çalışır)", null);
         }
-    }
-
-    private void OnLocalKey(object sender, PreProcessInputEventArgs e)
-    {
-        if (!enabled || e.StagingItem.Input is not KeyEventArgs { RoutedEvent: var routed } key
-            || (routed != Keyboard.KeyDownEvent && routed != Keyboard.PreviewKeyDownEvent)
-            || key.IsRepeat || Keyboard.Modifiers != ModifierKeys.None) return;
-        var virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key.Key);
-        var binding = Keys.FirstOrDefault(item => item.Modifiers == HotkeyModifiers.None && item.VirtualKey == virtualKey);
-        if (binding is null) return;
-        key.Handled = true;
-        pressed(binding.Action);
     }
 
     private void Unregister()
@@ -110,7 +95,6 @@ public sealed partial class GlobalHotkeys : IDisposable
 
     public void Dispose()
     {
-        InputManager.Current.PreProcessInput -= OnLocalKey;
         source?.RemoveHook(Hook);
         Unregister();
         enabled = false;
