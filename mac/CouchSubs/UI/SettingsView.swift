@@ -249,25 +249,59 @@ private struct LanguageCard: View {
 private struct LiveRegionPreview: View {
     @Binding var settings: UserSettings
     @ObservedObject var preview: FramePreview
+    var index = 0
 
     var body: some View {
-        RegionPreview(region: settings.region, frame: preview.image) { settings.setCustomRegion($0) }
+        let region = index == 0 ? settings.region : settings.subtitleAreas[index - 1].region
+        RegionPreview(region: region, frame: preview.image) {
+            if index == 0 { settings.setCustomRegion($0) }
+            else { settings.setCustomRegion($0, at: index - 1) }
+        }
     }
 }
 
 /// Altyazı bölgesi (hazır seçimler, canlı önizleme, Özel'de kaydırıcılar) ve ekranı çevirme kısayolu.
 private struct AreaCards: View {
     @EnvironmentObject private var model: AppModel
+    @State private var selectedRegion = 0
 
     var body: some View {
         Card {
-            Picker("Area preset", selection: Binding(get: { model.settings.areaPreset }, set: { model.settings.selectAreaPreset($0) })) {
-                ForEach(AreaPreset.allCases, id: \.self) { preset in Text(preset.title).tag(preset) }
+            if model.settings.style.placement == .cover, !model.settings.subtitleAreas.isEmpty {
+                HStack {
+                    Picker("Subtitle region", selection: $selectedRegion) {
+                        ForEach(0...model.settings.subtitleAreas.count, id: \.self) { index in
+                            Text(String(format: String(localized: "Region %lld"), index + 1)).tag(index)
+                        }
+                    }
+                    Button("Remove region") {
+                        model.settings.removeSubtitleRegion(at: selectedRegion)
+                        selectedRegion = min(selectedRegion, model.settings.subtitleAreas.count)
+                    }.buttonStyle(.secondary)
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            LiveRegionPreview(settings: $model.settings, preview: model.framePreview)
-            if model.settings.areaPreset == .custom { CustomAreaSliders(settings: $model.settings) }
+            HStack {
+                Picker("Area preset", selection: Binding(get: {
+                    selectedRegion == 0 ? model.settings.areaPreset : model.settings.subtitleAreas[selectedRegion - 1].preset
+                }, set: {
+                    if selectedRegion == 0 { model.settings.selectAreaPreset($0) }
+                    else { model.settings.selectAreaPreset($0, at: selectedRegion - 1) }
+                })) {
+                    ForEach(AreaPreset.allCases, id: \.self) { preset in Text(preset.title).tag(preset) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if model.settings.style.placement == .cover, model.settings.subtitleAreas.count < 3 {
+                    Button("Add region") {
+                        model.settings.addSubtitleArea()
+                        selectedRegion = model.settings.subtitleAreas.count
+                    }.buttonStyle(.secondary)
+                }
+            }
+            LiveRegionPreview(settings: $model.settings, preview: model.framePreview, index: selectedRegion)
+            if (selectedRegion == 0 ? model.settings.areaPreset : model.settings.subtitleAreas[selectedRegion - 1].preset) == .custom {
+                CustomAreaSliders(settings: $model.settings, index: selectedRegion)
+            }
             HintText(text: "Adjust the frame so it covers where the game shows its subtitles.")
             HintText(text: "Drag the frame to move it, or drag its corner to resize it.")
         }
@@ -1223,14 +1257,16 @@ private struct LocalAISection: View {
 /// Özel bölgenin dikey konumu ve yüksekliği (yüzde).
 private struct CustomAreaSliders: View {
     @Binding var settings: UserSettings
+    var index = 0
 
     var body: some View {
-        let percent = settings.region.verticalPercent
+        let region = index == 0 ? settings.region : settings.subtitleAreas[index - 1].region
+        let percent = region.verticalPercent
         Grid(alignment: .leading, verticalSpacing: Theme.space("m")) {
             GridRow {
                 Text("Vertical position")
                 Slider(value: Binding(get: { percent.position },
-                                      set: { settings.setCustomRegion(settings.region.withVertical(position: $0, height: percent.height)) }),
+                                      set: { setRegion(region.withVertical(position: $0, height: percent.height)) }),
                        in: 0...max(1, 100 - percent.height))
                 Text(verbatim: percentText(percent.position)).font(.csCallout.monospacedDigit()).foregroundStyle(Color.csSecondary)
                     .frame(minWidth: 44, alignment: .trailing)
@@ -1238,12 +1274,20 @@ private struct CustomAreaSliders: View {
             GridRow {
                 Text("Height")
                 Slider(value: Binding(get: { percent.height },
-                                      set: { settings.setCustomRegion(settings.region.withVertical(position: percent.position, height: $0)) }),
+                                      set: { setRegion(region.withVertical(position: percent.position, height: $0)) }),
                        in: CropRegion.minimumSize * 100...100)
                 Text(verbatim: percentText(percent.height)).font(.csCallout.monospacedDigit()).foregroundStyle(Color.csSecondary)
                     .frame(minWidth: 44, alignment: .trailing)
             }
         }
-        Button("Reset area") { settings.selectAreaPreset(.bottom) }.buttonStyle(.secondary)
+        Button("Reset area") {
+            if index == 0 { settings.selectAreaPreset(.bottom) }
+            else { settings.selectAreaPreset(.bottom, at: index - 1) }
+        }.buttonStyle(.secondary)
+    }
+
+    private func setRegion(_ region: CropRegion) {
+        if index == 0 { settings.setCustomRegion(region) }
+        else { settings.setCustomRegion(region, at: index - 1) }
     }
 }

@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
     private bool loading = true;
     /// <summary>Çerçevesi düzenlenen bölge: 0 altyazı, 1, 2 ve 3 ek bölgeler.</summary>
     private int area;
+    private int subtitleAreaIndex;
     /// <summary>Önizlemenin oyun görüntüsüyle son yenilendiği an (ms).</summary>
     private long lastPreview;
 
@@ -636,6 +637,7 @@ public partial class SettingsWindow : Window
         var placement = Enum.Parse<SubtitlePlacement>(tag);
         ShowPlacement(placement);
         Update(s => s with { Style = s.Style with { Placement = placement } });
+        if (!loading && area == 0) ShowArea(0);
     }
 
     /// <summary>Elle ayarlanan yükseklik yalnız sabit yerleşimde anlamlıdır.</summary>
@@ -712,7 +714,9 @@ public partial class SettingsWindow : Window
     private void OnRegion(object? sender, CropRegion region)
     {
         var slot = area;
-        Update(s => slot == 0 ? s with { Region = region, AreaPreset = AreaPresets.Matching(region) } : s.WithExtraRegion(slot, region));
+        Update(s => slot != 0 ? s.WithExtraRegion(slot, region)
+            : subtitleAreaIndex == 0 ? s with { Region = region, AreaPreset = AreaPresets.Matching(region) }
+            : s.SetSubtitleArea(subtitleAreaIndex - 1, new SubtitleArea(region, AreaPresets.Matching(region))));
         if (slot == 0) ShowPreset();
     }
 
@@ -722,15 +726,17 @@ public partial class SettingsWindow : Window
         var wasLoading = loading;
         loading = true;
         var settings = controller.Settings;
-        (settings.AreaPreset switch
+        var selected = subtitleAreaIndex == 0 ? new SubtitleArea(settings.Region, settings.AreaPreset)
+            : settings.SubtitleAreas[subtitleAreaIndex - 1];
+        (selected.Preset switch
         {
             AreaPreset.Top => PresetTop,
             AreaPreset.Full => PresetFull,
             AreaPreset.Custom => PresetCustom,
             _ => PresetBottom,
         }).IsChecked = true;
-        CustomPanel.Visibility = settings.AreaPreset == AreaPreset.Custom ? Visibility.Visible : Visibility.Collapsed;
-        var (position, height) = settings.Region.VerticalPercent();
+        CustomPanel.Visibility = selected.Preset == AreaPreset.Custom ? Visibility.Visible : Visibility.Collapsed;
+        var (position, height) = selected.Region.VerticalPercent();
         VerticalPosition.Value = Math.Clamp(Math.Round(position), VerticalPosition.Minimum, VerticalPosition.Maximum);
         AreaHeight.Value = Math.Clamp(Math.Round(height), AreaHeight.Minimum, AreaHeight.Maximum);
         ShowVerticalValues();
@@ -749,8 +755,10 @@ public partial class SettingsWindow : Window
     {
         if (loading || area != 0 || sender is not RadioButton { Tag: string tag }) return;
         var preset = Enum.Parse<AreaPreset>(tag);
-        Update(s => s.WithAreaPreset(preset));
-        Region.ShowRegion(controller.Settings.Region);
+        Update(s => subtitleAreaIndex == 0 ? s.WithAreaPreset(preset)
+            : s.SetSubtitleArea(subtitleAreaIndex - 1,
+                new SubtitleArea(preset.Region() ?? s.SubtitleAreas[subtitleAreaIndex - 1].Region, preset)));
+        Region.ShowRegion(SelectedSubtitleArea().Region);
         ShowPreset();
     }
 
@@ -759,14 +767,64 @@ public partial class SettingsWindow : Window
     {
         if (loading || area != 0) return;
         ShowVerticalValues();
-        var region = controller.Settings.Region.WithVertical(Math.Round(VerticalPosition.Value), Math.Round(AreaHeight.Value));
-        Update(s => s.WithCustomRegion(region));
+        var region = SelectedSubtitleArea().Region.WithVertical(Math.Round(VerticalPosition.Value), Math.Round(AreaHeight.Value));
+        Update(s => subtitleAreaIndex == 0 ? s.WithCustomRegion(region)
+            : s.SetSubtitleArea(subtitleAreaIndex - 1, new SubtitleArea(region, AreaPreset.Custom)));
         Region.ShowRegion(region);
     }
 
     private void OnArea(object sender, RoutedEventArgs e)
     {
         if (!loading && sender is RadioButton { Tag: string tag }) ShowArea(int.Parse(tag));
+    }
+
+    private SubtitleArea SelectedSubtitleArea()
+    {
+        var settings = controller.Settings;
+        return subtitleAreaIndex == 0 || subtitleAreaIndex > settings.SubtitleAreas.Count
+            ? new SubtitleArea(settings.Region, settings.AreaPreset)
+            : settings.SubtitleAreas[subtitleAreaIndex - 1];
+    }
+
+    private void RefreshSubtitleAreaSelector()
+    {
+        var settings = controller.Settings;
+        var enabled = settings.Style.Placement == SubtitlePlacement.Cover;
+        subtitleAreaIndex = Math.Clamp(subtitleAreaIndex, 0, settings.SubtitleAreas.Count);
+        SubtitleAreaChoice.Items.Clear();
+        for (var i = 0; i <= settings.SubtitleAreas.Count; i++)
+            SubtitleAreaChoice.Items.Add(new ComboBoxItem
+            {
+                Content = Localizer.Current.Format("Region %lld", i + 1), Tag = i
+            });
+        SubtitleAreaChoice.SelectedIndex = subtitleAreaIndex;
+        SubtitleAreaSelector.Visibility = enabled && settings.SubtitleAreas.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AddSubtitleArea.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        AddSubtitleArea.IsEnabled = settings.SubtitleAreas.Count < 3;
+        RemoveSubtitleArea.IsEnabled = settings.SubtitleAreas.Count > 0;
+    }
+
+    private void OnSubtitleAreaChoice(object sender, SelectionChangedEventArgs e)
+    {
+        if (loading || SubtitleAreaChoice.SelectedIndex < 0) return;
+        subtitleAreaIndex = SubtitleAreaChoice.SelectedIndex;
+        ShowArea(0);
+    }
+
+    private void OnAddSubtitleArea(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        Update(s => s.AddSubtitleArea());
+        subtitleAreaIndex = controller.Settings.SubtitleAreas.Count;
+        ShowArea(0);
+    }
+
+    private void OnRemoveSubtitleArea(object sender, RoutedEventArgs e)
+    {
+        if (loading || controller.Settings.SubtitleAreas.Count == 0) return;
+        Update(s => s.RemoveSubtitleRegion(subtitleAreaIndex));
+        subtitleAreaIndex = Math.Min(subtitleAreaIndex, controller.Settings.SubtitleAreas.Count);
+        ShowArea(0);
     }
 
     /// <summary>Seçilen bölgenin çerçevesini gösterir; ek bölge kapalıysa çerçeve düzenlenemez.</summary>
@@ -779,6 +837,7 @@ public partial class SettingsWindow : Window
         var settings = controller.Settings;
         if (slot == 0)
         {
+            RefreshSubtitleAreaSelector();
             UseArea.Visibility = Visibility.Collapsed;
             ExtraTargetPanel.Visibility = Visibility.Collapsed;
             ExtraLivePanel.Visibility = Visibility.Collapsed;
@@ -786,7 +845,7 @@ public partial class SettingsWindow : Window
             ShowPreset();
             Region.IsEnabled = true;
             Region.DefaultRegion = new CropRegion();
-            Region.ShowRegion(settings.Region);
+            Region.ShowRegion(SelectedSubtitleArea().Region);
             AreaHint.Text = text["Drag on the picture to draw the area where the game shows its subtitles. Drag the edges to resize it, or the inside to move it."];
         }
         else

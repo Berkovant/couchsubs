@@ -269,8 +269,8 @@ public final class RegionWatcher {
         running?.cancel()
         running = nil
         lastPass = nil
-        let anyShown = states.values.contains { !$0.shown.isEmpty }
+        let shown = states.filter { !$0.value.shown.isEmpty }.map(\.key)
         states.removeAll()
-        if anyShown { server.clearRegions() }
+        for id in shown { server.sendRegion(id: id, text: "", box: nil, lineHeight: nil) }
     }
 }

@@ -73,7 +73,35 @@ public class ExtraRegionTests
         Assert.Equal("area1", region.Id);
         Assert.NotEqual("", region.Text);
         controller.Stop();
-        lock (received) Assert.Contains(received, e => e.Kind == SubtitleEventKind.RegionClear);
+        lock (received) Assert.Contains(received, e => e.Kind == SubtitleEventKind.Region && e.Id == "area1" && e.Text == "");
+    }
+
+    [Fact]
+    public async Task TwoSubtitleRegionsSendIndependentEvents()
+    {
+        var (controller, services) = Ready();
+        services.ReaderLines = new Reading([new TextLine("Open the door", new TextBox(0.1, 0.2, 0.6, 0.7))]);
+        controller.Settings = controller.Settings with { Output = SubtitleOutput.Computer };
+        controller.Settings = controller.Settings.AddSubtitleArea();
+        var received = new List<SubtitleEvent>();
+        controller.OverlayEvent += e => { lock (received) received.Add(e); };
+        await controller.StartAsync();
+        Assert.Equal(2, services.ReaderLanguages.Count);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            services.Streams[0].Emit(Frame.Blank(64, 64));
+            await Task.Delay(100);
+            lock (received)
+                if (received.Any(e => e.Kind == SubtitleEventKind.Subtitle)
+                    && received.Any(e => e.Kind == SubtitleEventKind.Region && e.Id == "subtitle-area-2")) break;
+        }
+        lock (received)
+        {
+            Assert.Contains(received, e => e.Kind == SubtitleEventKind.Subtitle);
+            Assert.Contains(received, e => e.Kind == SubtitleEventKind.Region && e.Id == "subtitle-area-2" && e.Text.Length > 0);
+        }
+        controller.Stop();
     }
 
     [Fact]

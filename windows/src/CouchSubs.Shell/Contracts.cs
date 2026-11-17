@@ -187,6 +187,8 @@ public sealed record WindowCaptureTarget(string ProcessName, string Title);
 public enum RemotePlayApp { Automatic, Sony, Chiaki }
 
 /// <summary>Kalıcı ayarlar (şifreli depo değil, sıradan ayar dosyası).</summary>
+public sealed record SubtitleArea(CropRegion Region, AreaPreset Preset);
+
 public sealed record UserSettings
 {
     public CropRegion Region { get; init; } = new();
@@ -196,6 +198,8 @@ public sealed record UserSettings
     /// <see cref="Region"/>'dan çıkarılır.
     /// </summary>
     public AreaPreset AreaPreset { get => areaPreset ?? AreaPresets.Matching(Region); init => areaPreset = value; }
+    /// <summary>Örtme yerleşiminde ana altyazıyla birlikte ayrı ayrı okunan en çok üç ek altyazı bölgesi.</summary>
+    public List<SubtitleArea> SubtitleAreas { get; init; } = [];
     /// <summary>Ek bölge 1 (ör. sağ üstteki görev paneli); null ise kapalı. Num 1 tuşuyla bir kez okunup çevrilir.</summary>
     public CropRegion? ExtraRegion1 { get; init; }
     /// <summary>Ek bölge 2 (ör. sağ alttaki bilgi kutusu); null ise kapalı. Num 2 tuşuyla bir kez okunup çevrilir.</summary>
@@ -311,6 +315,37 @@ public sealed record UserSettings
 
     /// <summary>Bölge elle değişti (kaydırıcı ya da çerçeve): seçim Özel olur.</summary>
     public UserSettings WithCustomRegion(CropRegion region) => this with { AreaPreset = AreaPreset.Custom, Region = region };
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<SubtitleArea> ActiveSubtitleAreas =>
+        Style.Placement == SubtitlePlacement.Cover ? (SubtitleAreas ?? []).Take(3).ToArray() : [];
+
+    public UserSettings AddSubtitleArea() => this with
+    {
+        SubtitleAreas = (SubtitleAreas ?? []).Count >= 3 ? SubtitleAreas ?? [] : [.. (SubtitleAreas ?? []), new SubtitleArea(AreaPreset.Top.Region()!, AreaPreset.Top)]
+    };
+
+    public UserSettings SetSubtitleArea(int index, SubtitleArea area) => this with
+    {
+        SubtitleAreas = (SubtitleAreas ?? []).Select((item, i) => i == index ? area : item).Take(3).ToList()
+    };
+
+    public UserSettings RemoveSubtitleArea(int index) => this with
+    {
+        SubtitleAreas = (SubtitleAreas ?? []).Where((_, i) => i != index).Take(3).ToList()
+    };
+
+    public UserSettings RemoveSubtitleRegion(int index)
+    {
+        if (index != 0) return RemoveSubtitleArea(index - 1);
+        if (SubtitleAreas is not { Count: > 0 }) return this;
+        return this with
+        {
+            Region = SubtitleAreas[0].Region,
+            AreaPreset = SubtitleAreas[0].Preset,
+            SubtitleAreas = SubtitleAreas.Skip(1).Take(3).ToList(),
+        };
+    }
 
     /// <summary>Ek bölgenin sayısı; <see cref="ExtraRegion"/> 1..ExtraRegionCount arasında çalışır.</summary>
     public const int ExtraRegionCount = 3;

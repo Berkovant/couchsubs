@@ -566,10 +566,11 @@
     if (!id) return;
     var box = validBox(data.box);
     if (!data.text || !box) return hideRegion(id);
+    var subtitleArea = id.indexOf('subtitle-area-') === 0;
     var el = regionBoxes[id];
     if (!el) {
       el = document.createElement('div');
-      el.className = 'region';
+      el.className = subtitleArea ? 'region subtitle-region' : 'region';
       $('regions').appendChild(el);
       regionBoxes[id] = el;
     }
@@ -578,6 +579,15 @@
     var height = window.innerHeight || 1080;
     el.textContent = data.text;
     el.style.left = el.style.right = el.style.top = el.style.bottom = '';
+    if (subtitleArea) {
+      el.style.left = ((box.left + box.right) * 50) + '%';
+      el.style.top = ((box.top + box.bottom) * 50) + '%';
+      el.style.minWidth = Math.round(Math.min(width * 0.84, (box.right - box.left + 0.024) * width)) + 'px';
+      el.style.maxWidth = Math.round(width * 0.84) + 'px';
+      el.style.fontSize = fontBase + 'px';
+      el.style.color = $('subtitle-text').style.color || '#fff';
+      return;
+    }
     if ((box.left + box.right) / 2 > 0.5) {
       el.style.right = (Math.max(0, 1 - box.right - REGION_PAD) * 100) + '%';
     } else {

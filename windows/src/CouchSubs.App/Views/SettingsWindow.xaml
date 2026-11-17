@@ -345,7 +345,12 @@
                             </Border>
                             <!-- Altyazı bölgesinin hazır seçimleri; Özel'de dikey konum ve yükseklik kaydırıcıları -->
                             <StackPanel x:Name="PresetPanel" Margin="0,0,0,12">
+                                <StackPanel x:Name="SubtitleAreaSelector" Orientation="Horizontal" Margin="0,0,0,10" Visibility="Collapsed">
+                                    <ComboBox x:Name="SubtitleAreaChoice" Width="150" SelectionChanged="OnSubtitleAreaChoice" />
+                                    <Button x:Name="RemoveSubtitleArea" Content="{t:T 'Remove region'}" Click="OnRemoveSubtitleArea" Margin="8,0,0,0" />
+                                </StackPanel>
                                 <TextBlock Text="{t:T 'Area preset'}" Margin="0,0,0,8" />
+                                <StackPanel Orientation="Horizontal">
                                 <Border Style="{StaticResource SegmentGroup}" HorizontalAlignment="Left">
                                     <StackPanel Orientation="Horizontal">
                                         <RadioButton x:Name="PresetBottom" Content="{t:T 'Bottom area'}" GroupName="preset" Style="{StaticResource SegmentButton}" Checked="OnPreset" Tag="Bottom" />
@@ -354,6 +359,8 @@
                                         <RadioButton x:Name="PresetCustom" Content="{t:T 'Custom'}" GroupName="preset" Style="{StaticResource SegmentButton}" Checked="OnPreset" Tag="Custom" />
                                     </StackPanel>
                                 </Border>
+                                <Button x:Name="AddSubtitleArea" Content="{t:T 'Add region'}" Click="OnAddSubtitleArea" Margin="8,0,0,0" />
+                                </StackPanel>
                                 <Grid x:Name="CustomPanel" Margin="0,12,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -425,7 +432,7 @@
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8"
                                        Text="{t:T 'Num 0 or Ctrl+Shift+0 pauses or resumes the live subtitle translation, which helps when you translate areas.'}" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
-                                       Text="{t:T 'The shortcuts work only while translating, so the number keys stay free in other apps. Keep Num Lock on for the Num keys. No numeric keypad? Hold Ctrl+Shift and press the number keys above the letters.'}" />
+                                           Text="{t:T 'Num shortcuts work while CouchSubs is in front. Ctrl+Shift+number also works in other apps while translating. Keep Num Lock on for Num keys.'}" />
                         </StackPanel>
                     </c:Card>
                 </StackPanel>

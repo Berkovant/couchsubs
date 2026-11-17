@@ -34,6 +34,27 @@ final class AreaPresetTests: XCTestCase {
         XCTAssertEqual(decoded.region, AreaPreset.top.region)
     }
 
+    func testAdditionalSubtitleRegionsStayIndependentAndCoverOnly() throws {
+        var settings = UserSettings()
+        for _ in 0..<5 { settings.addSubtitleArea() }
+        XCTAssertEqual(settings.subtitleAreas.count, 3)
+        let custom = CropRegion(top: 0.2, bottom: 0.4, left: 0.1, right: 0.9)
+        settings.setCustomRegion(custom, at: 1)
+        XCTAssertEqual(settings.activeSubtitleAreas[1].region, custom)
+        settings.style.placement = .above
+        XCTAssertTrue(settings.activeSubtitleAreas.isEmpty)
+        let decoded = try JSONDecoder().decode(UserSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(decoded.subtitleAreas[1].region, custom)
+        settings.style.placement = .cover
+        settings.removeSubtitleArea(at: 1)
+        XCTAssertEqual(settings.activeSubtitleAreas.count, 2)
+        let promoted = settings.activeSubtitleAreas[0]
+        settings.removeSubtitleRegion(at: 0)
+        XCTAssertEqual(settings.region, promoted.region)
+        XCTAssertEqual(settings.areaPreset, promoted.preset)
+        XCTAssertEqual(settings.activeSubtitleAreas.count, 1)
+    }
+
     func testCustomKeepsTheRegionAndManualEditsBecomeCustom() {
         var settings = UserSettings()
         settings.selectAreaPreset(.full)

@@ -1,6 +1,11 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Num shortcuts work while CouchSubs is in front. Ctrl+Shift+number also works in other apps while translating. Keep Num Lock on for Num keys.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Num shortcuts work while CouchSubs is in front. Ctrl+Shift+number also works in other apps while translating. Keep Num Lock on for Num keys."}}, "tr": {"stringUnit": {"state": "translated", "value": "Num kısayolları CouchSubs öndeyken çalışır. Ctrl+Shift+rakam çeviri sürerken diğer uygulamalarda da çalışır. Num tuşları için Num Lock açık olmalı."}}}},
+    "Add region": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Add region"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bölge ekle"}}}},
+    "Remove region": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Remove region"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bölgeyi kaldır"}}}},
+    "Subtitle region": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Subtitle region"}}, "tr": {"stringUnit": {"state": "translated", "value": "Altyazı bölgesi"}}}},
+    "Region %lld": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Region %lld"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bölge %lld"}}}},
     "Tap the button to get a code. The Microsoft sign-in page doesn't open inside the app: you enter the code at microsoft.com/link in your browser.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Tap the button to get a code. The Microsoft sign-in page doesn't open inside the app: you enter the code at microsoft.com/link in your browser."}}, "tr": {"stringUnit": {"state": "translated", "value": "Düğmeye basınca bir kod alırsınız. Microsoft giriş sayfası uygulamada açılmaz: kodu tarayıcıda microsoft.com/link sayfasına yazarsınız."}}}},
     "Your code (tap to copy):": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Your code (tap to copy):"}}, "tr": {"stringUnit": {"state": "translated", "value": "Kodunuz (dokunursanız kopyalanır):"}}}},
     "Copy the code": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Copy the code"}}, "tr": {"stringUnit": {"state": "translated", "value": "Kodu kopyala"}}}},

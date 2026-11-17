@@ -95,6 +95,16 @@ html, body {
   word-wrap: break-word;
 }
 
+/* Ek altyazı bölgeleri aynı anda, kaynak yazının tam üstünde görünür. */
+#regions .subtitle-region {
+  transform: translate(-50%, -50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.97);
+  text-align: center;
+  font-weight: 700;
+}
+
 /* Hızlı konuşmada önceki satır kısa süre yeni satırın üstünde, daha küçük ve soluk durur; sonra solarak kalkar.
    Aradaki boşluk iki kutunun üst üste binmiş gibi görünmesini önler. Solma yalnız bu satırdadır; #subtitle'ın
    kendi katmanı ve görünürlüğü değişmez. */

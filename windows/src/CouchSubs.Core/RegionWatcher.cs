@@ -262,9 +262,11 @@ public sealed class RegionWatcher
     public void Reset()
     {
         Interlocked.Increment(ref session);
-        var anyShown = AnyShown();
+        var map = states;
+        List<string> shown;
+        lock (map) shown = [.. map.Where(pair => pair.Value.Shown.Length > 0).Select(pair => pair.Key)];
         states = [];
         lastPass = null;
-        if (anyShown) server.ClearRegions();
+        foreach (var id in shown) server.SendRegion(id, "", null);
     }
 }

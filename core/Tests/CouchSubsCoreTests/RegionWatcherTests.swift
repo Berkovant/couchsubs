@@ -229,7 +229,7 @@ final class RegionWatcherTests: XCTestCase {
         XCTAssertEqual(translator.calls, ["Call me when you get this."])
     }
 
-    func testRemovedAreaLosesItsBoxAndResetClearsAll() async {
+    func testRemovedAreaAndResetClearOnlyTheirOwnBoxes() async {
         let reader = Reader(), server = Server()
         let watcher = RegionWatcher(reader: reader, translator: Translator(), server: server)
         let phone = ExtraArea(id: "p", name: "Phone", region: ExtraAreaPreset.phone.region)
@@ -241,9 +241,12 @@ final class RegionWatcherTests: XCTestCase {
         XCTAssertEqual(server.sent.last?.id, "p")
         XCTAssertEqual(server.sent.last?.text, "")
         watcher.reset()
-        XCTAssertEqual(server.clears, 1)
+        XCTAssertEqual(server.sent.last?.id, "q")
+        XCTAssertEqual(server.sent.last?.text, "")
+        let count = server.sent.count
         watcher.reset()
-        XCTAssertEqual(server.clears, 1, "gösterilen kutu yoksa temizleme gönderilmez")
+        XCTAssertEqual(server.sent.count, count, "gösterilen kutu yoksa temizleme gönderilmez")
+        XCTAssertEqual(server.clears, 0)
     }
 
     func testOfferRunsAtMostOncePerInterval() async {
