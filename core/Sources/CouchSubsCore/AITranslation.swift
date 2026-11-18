@@ -581,6 +581,7 @@ public final class AITranslationCore: @unchecked Sendable {
     private var speech: [String: [SpokenLine]] = [:]
     /// Son gösterilen satırlar, eskiden yeniye.
     private var recent: [AIContextLine] = []
+    private var recentGame: String?
     private var pausedUntil = Date.distantPast
     /// Bekleme hizmetin 429 yanıtından mı (dakikalık sınır); öyleyse yerel çeviri olmasa da istek gönderilmez.
     private var pauseRateLimited = false
@@ -655,9 +656,8 @@ public final class AITranslationCore: @unchecked Sendable {
         // Arama, HTTP isteği ve kayıt aynı oyunla yapılmalı; callback işlem sırasında değişebilir.
         let game = self.game?()?.trimmingCharacters(in: .whitespacesAndNewlines)
         // Bağlam, bu satırdan önce gösterilenlerdir; satırın kendisi bağlama girmez.
-        let context = lock.withLock { recent }
-        shown(text)
-        if let cached = cache.value(for: self.cacheKey(text, game: game)) { return remember(cached, for: text) }
+        let context = contextBeforeShowing(text, game: game)
+        if let cached = cache.value(for: self.cacheKey(text, game: game)) { return remember(cached, for: text, game: game) }
         let pieces = SubtitleSegmenter.split(text)
         names.learn(from: pieces)
         // Önbellekte duran cümleler yeniden gönderilmez.
@@ -668,15 +668,15 @@ public final class AITranslationCore: @unchecked Sendable {
         // beklemede yerel çeviri yoksa (indirilmemiş, açılamadı) satır düşmesin: hizmet yine denenir. 429 beklemesi kalır.
         let (paused, pausedForLimit) = lock.withLock { (Date() < pausedUntil, pauseRateLimited) }
         if !sources.isEmpty, paused {
-            if pausedForLimit { return remember(try await fallback(text), for: text) }
-            if let local = try await Self.tryFallback(text, fallback: fallback) { return remember(local, for: text) }
+            if pausedForLimit { return remember(try await fallback(text), for: text, game: game) }
+            if let local = try await Self.tryFallback(text, fallback: fallback) { return remember(local, for: text, game: game) }
         }
         // Dakikalık hak bittiyse satır sessizce yerel çeviriyle çevrilir (hata değildir). Hak uygulamanın temkinli
         // tahminidir; yerel çeviri yoksa satır denenmeden düşmesin, istek yine gönderilir.
         let allowed = sources.isEmpty || budget?.take() != false
         lock.withLock { rateLimited = !allowed }
         if !allowed {
-            if let local = try await Self.tryFallback(text, fallback: fallback) { return remember(local, for: text) }
+            if let local = try await Self.tryFallback(text, fallback: fallback) { return remember(local, for: text, game: game) }
             lock.withLock { rateLimited = false }
         }
         let translated: [String]
@@ -697,14 +697,14 @@ public final class AITranslationCore: @unchecked Sendable {
                 pausedUntil = Date().addingTimeInterval(pause)
                 pauseRateLimited = true
             }
-            return remember(try await fallback(text), for: text)
+            return remember(try await fallback(text), for: text, game: game)
         } catch {
             setFailure(error as? AIFailure ?? .unreachable)
             lock.withLock {
                 pausedUntil = Date().addingTimeInterval(Self.retryAfter)
                 pauseRateLimited = false
             }
-            return remember(try await fallback(text), for: text)
+            return remember(try await fallback(text), for: text, game: game)
         }
         var local = false
         for (index, sentence) in zip(missing, translated) {
@@ -725,7 +725,7 @@ public final class AITranslationCore: @unchecked Sendable {
             speech[self.cacheKey(text, game: game)] = SpeechScript.lines(pieces: pieces, translations: translations)
         }
         if !local { cache.store(result, for: self.cacheKey(text, game: game)) }
-        return remember(result, for: text)
+        return remember(result, for: text, game: game)
     }
 
     /// Model cümleyi çevirmeden geri verdi mi (hattın "zaten hedef dilde" eşiğiyle aynı). Küçük yerel modeller İngilizce
@@ -820,18 +820,26 @@ public final class AITranslationCore: @unchecked Sendable {
         return "i:" + instructionTag + "\u{001f}" + key
     }
 
-    private func shown(_ text: String) {
+    private func contextBeforeShowing(_ text: String, game: String?) -> [AIContextLine] {
         lock.withLock {
+            if recentGame != game {
+                recent.removeAll(keepingCapacity: true)
+                recentGame = game
+            }
+            let context = recent
             // Aynı satır yeniden okunduysa bağlam tekrarla dolmasın.
-            guard recent.last?.source != text else { return }
-            recent.append(AIContextLine(source: text))
-            if recent.count > Self.contextLines { recent.removeFirst() }
+            if recent.last?.source != text {
+                recent.append(AIContextLine(source: text))
+                if recent.count > Self.contextLines { recent.removeFirst() }
+            }
+            return context
         }
     }
 
     /// Gösterilen satırın çevirisi sonraki satırların bağlamına girer.
-    private func remember(_ translation: String, for text: String) -> String {
+    private func remember(_ translation: String, for text: String, game: String?) -> String {
         lock.withLock {
+            guard recentGame == game else { return }
             if let index = recent.lastIndex(where: { $0.source == text }) { recent[index].translation = translation }
         }
         return translation

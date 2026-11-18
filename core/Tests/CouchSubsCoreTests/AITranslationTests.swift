@@ -700,6 +700,22 @@ final class AITranslationTests: XCTestCase {
         XCTAssertFalse(user(4).contains("English: Five."))
     }
 
+    func testContextDoesNotCrossGameChanges() async throws {
+        let game = GameBox()
+        game.value = "First game"
+        let translator = withGame(TranslationCache(), game: { game.value })
+
+        _ = try await translator.translate("This belongs to the first game.", fallback: local)
+        game.value = "Second game"
+        let secondTranslation = try await translator.translate("This belongs to the second game.", fallback: local)
+
+        XCTAssertTrue(user(1).hasPrefix("Game: Second game\n"))
+        XCTAssertFalse(user(1).contains("English: This belongs to the first game."))
+
+        _ = try await translator.translate("Another line here.", fallback: local)
+        XCTAssertTrue(user(2).contains("English: This belongs to the second game.\nTurkish: \(secondTranslation)"))
+    }
+
     func testSeveralSentencesGoAsOneArray() async throws {
         let translator = make(.gemini)
         let result = try await translator.translate("We go now. Stay close.\nATREUS: Yes, father.", fallback: local)

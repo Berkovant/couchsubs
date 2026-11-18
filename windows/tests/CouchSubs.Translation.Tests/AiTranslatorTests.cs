@@ -721,6 +721,24 @@ public class AiTranslatorTests
     }
 
     [Fact]
+    public async Task ContextDoesNotCrossGameChanges()
+    {
+        string? game = "First game";
+        var fake = new FakeAi();
+        var translator = WithGame(fake, new TranslationCache(), () => game);
+
+        await translator.TranslateAsync("This belongs to the first game.");
+        game = "Second game";
+        var secondTranslation = await translator.TranslateAsync("This belongs to the second game.");
+
+        Assert.StartsWith("Game: Second game\n", User(fake, 1));
+        Assert.DoesNotContain("English: This belongs to the first game.", User(fake, 1));
+
+        await translator.TranslateAsync("Another line here.");
+        Assert.Contains($"English: This belongs to the second game.\nTurkish: {secondTranslation}", User(fake, 2));
+    }
+
+    [Fact]
     public async Task SeveralSentencesGoAsOneArray()
     {
         var fake = new FakeAi();
