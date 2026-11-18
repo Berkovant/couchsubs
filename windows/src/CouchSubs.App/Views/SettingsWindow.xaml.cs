@@ -274,12 +274,17 @@ public partial class SettingsWindow : Window
             controller.DeleteAreaProfile();
     }
 
-    /// <summary>Alan sekmesi açıkken önizleme oyunun görüntüsüyle saniyede bir yenilenir (çerçeve sürüklenirken beklenir).</summary>
+    /// <summary>
+    /// Alan sekmesi açıkken önizleme oyunun görüntüsüyle saniyede dört kez yenilenir (çerçeve sürüklenirken beklenir); çerçeve
+    /// akan görüntüde yerleştirilir. Yalnız bu sekme açıkken; okuma hattına iş eklemez.
+    /// </summary>
+    private const int PreviewIntervalMs = 250;
+
     private void ShowLiveFrame()
     {
         if (!AreaTab.IsSelected || Region.IsDragging || controller.LastFrame is not { } frame) return;
         var now = Environment.TickCount64;
-        if (now - lastPreview < 1000) return;
+        if (now - lastPreview < PreviewIntervalMs) return;
         lastPreview = now;
         Region.Frame = frame;
     }
@@ -851,7 +856,6 @@ public partial class SettingsWindow : Window
         area = slot;
         var wasLoading = loading;
         loading = true;
-        var text = Localizer.Current;
         var settings = controller.Settings;
         if (slot == 0)
         {
@@ -862,8 +866,10 @@ public partial class SettingsWindow : Window
             ShowPreset();
             Region.IsEnabled = true;
             Region.DefaultRegion = new CropRegion();
+            KeepCentered.IsChecked = settings.KeepAreaCentered;
+            Region.Centered = settings.KeepAreaCentered;
             Region.ShowRegion(settings.Region);
-            AreaHint.Text = text["Drag on the picture to draw the area where the game shows its subtitles. Drag the edges to resize it, or the inside to move it."];
+            ShowSubtitleAreaHint();
         }
         else
         {
@@ -877,10 +883,27 @@ public partial class SettingsWindow : Window
             (settings.ExtraTarget(slot) switch { ResultTarget.Pc => ExtraPc, ResultTarget.Both => ExtraBoth, _ => ExtraTv }).IsChecked = true;
             Region.IsEnabled = extra is not null;
             Region.DefaultRegion = ExtraDefaults[slot - 1];
+            Region.Centered = false;
             Region.ShowRegion(extra ?? ExtraDefaults[slot - 1]);
             ShowAreaHint();
         }
         loading = wasLoading;
+    }
+
+    /// <summary>Altyazı alanının ipucu: "ortalı kalır" yalnız Ortada tut açıkken yazılır.</summary>
+    private void ShowSubtitleAreaHint() =>
+        AreaHint.Text = Localizer.Current[controller.Settings.KeepAreaCentered
+            ? "Drag on the picture to draw the area where the game shows its subtitles. Drag an edge or corner to resize it; it stays centered. Drag the inside to move it."
+            : "Drag on the picture to draw the area where the game shows its subtitles. Drag an edge or corner to resize it, or the inside to move it."];
+
+    /// <summary>Ortada tut: açıkken altyazı alanı ortadan boyutlanır; kapalıyken yalnız tutulan kenar oynar.</summary>
+    private void OnKeepCentered(object sender, RoutedEventArgs e)
+    {
+        if (loading || area != 0) return;
+        var on = KeepCentered.IsChecked == true;
+        Update(s => s with { KeepAreaCentered = on });
+        Region.Centered = on;
+        ShowSubtitleAreaHint();
     }
 
     private void OnExtraTarget(object sender, RoutedEventArgs e)

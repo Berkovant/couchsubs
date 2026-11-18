@@ -258,7 +258,7 @@ private struct LiveRegionPreview: View {
     @ObservedObject var preview: FramePreview
 
     var body: some View {
-        RegionPreview(region: settings.region, frame: preview.image) { settings.setCustomRegion($0) }
+        RegionPreview(region: settings.region, frame: preview.image, centered: settings.keepAreaCentered) { settings.setCustomRegion($0) }
     }
 }
 
@@ -276,8 +276,14 @@ private struct AreaCards: View {
             .labelsHidden()
             LiveRegionPreview(settings: $model.settings, preview: model.framePreview)
             if model.settings.areaPreset == .custom { CustomAreaSliders(settings: $model.settings) }
+            SwitchRow(title: "Keep centered", isOn: $model.settings.keepAreaCentered)
             HintText(text: "Adjust the frame so it covers where the game shows its subtitles.")
-            HintText(text: "Drag the frame to move it, or drag its corner to resize it.")
+            // "Ortalı kalır" yalnız Ortada tut açıkken yazılır.
+            if model.settings.keepAreaCentered {
+                HintText(text: "Drag the frame to move it, or drag an edge or corner to resize it; the subtitle area stays centered.")
+            } else {
+                HintText(text: "Drag the frame to move it, or drag an edge or corner to resize it.")
+            }
         }
         ExtraAreasCard()
         Card(title: "Translate the screen (⌥⌘T)") {
