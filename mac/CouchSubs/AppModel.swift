@@ -543,7 +543,8 @@ final class AppModel: ObservableObject {
             if translationChanged { Task { await refreshTranslatorStatus() } }
             let languageChanged = settings.sourceLanguage != oldValue.sourceLanguage
                 || settings.targetLanguage != oldValue.targetLanguage
-            if isRunning, languageChanged || translationChanged || settings.fastSubtitleDetection != oldValue.fastSubtitleDetection {
+            if isRunning, languageChanged || translationChanged || settings.fastSubtitleDetection != oldValue.fastSubtitleDetection
+                || settings.watchSubtitleBackground != oldValue.watchSubtitleBackground {
                 if languageChanged { Task { await refreshTranslatorStatus() } }
                 makePipeline()
             }
@@ -1649,6 +1650,7 @@ final class AppModel: ObservableObject {
                                         server: server, scheduler: scheduler)
         pipeline.showSpeakerNames = settings.showSpeakerNames
         pipeline.skipsTurkish = settings.targetLanguage == "tr"
+        pipeline.watchSubtitleBackground = settings.watchSubtitleBackground
         pipeline.onPair = { [weak self, weak pipeline] source, translation in
             self?.lastSource = source
             self?.lastTranslation = translation
