@@ -393,7 +393,7 @@ class TranslationService : Service() {
             // Ek alanlar saniyede bir, kendi iş parçacığında okunur; altyazı okumasını beklemez, onu bekletmez.
             regionWatcher?.offer(extraAreas, { r ->
                 SubtitleReader.copyRegion(frame, r)?.let {
-                    com.couchsubs.mobile.core.RegionWatcher.Crop(it, com.couchsubs.mobile.core.RegionSignature.of(it.nv21, it.width, it.height))
+                    com.couchsubs.mobile.core.RegionWatcher.Crop(it, com.couchsubs.mobile.core.RegionSignature.of(it.nv21, it.width, it.height), it.gray)
                 }
             }) { task -> runCatching { regionWork.execute(task) } }
             FramePreview.offer(frame, now)
@@ -523,7 +523,8 @@ class TranslationService : Service() {
                 val reading = reader.read(pixels)
                 // Yapay zekâda ekranın bütün yazıları tek istekte gider (bkz. AiTranslator.translateAll).
                 val translator = engineTranslator(free.separate())
-                val items = ScreenTranslation.translate(reading, translator, { screenGeneration.get() != generation }) { shown ->
+                // Yazıların içindeki kumanda simgeleri okunan kareden kesilir (ButtonIcons).
+                val items = ScreenTranslation.translate(reading, translator, { screenGeneration.get() != generation }, pixels.gray) { shown ->
                     if (screenGeneration.get() != generation) return@translate
                     val milliseconds = ScreenTranslation.displayMilliseconds(shown)
                     server.sendScreen(shown, milliseconds)
@@ -633,7 +634,12 @@ class TranslationService : Service() {
             DisconnectKind.NETWORK -> getString(R.string.phase_network)
             DisconnectKind.REGISTRATION_INVALID -> getString(R.string.phase_registration_invalid)
             // Eskiden "Bağlantı koptu, yeniden bağlanılıyor…" görünüyordu, neden anlaşılmıyordu (GitHub #33, #202).
-            DisconnectKind.REJECTED -> state.detail?.let { getString(R.string.phase_rejected_code, it) } ?: getString(R.string.phase_rejected)
+            // 0x80108b12: PS5'te Uzaktan Oynatma kapalı (GitHub #9); genel "başka Remote Play açık olabilir" metni yanıltıyordu.
+            DisconnectKind.REJECTED -> when (state.detail) {
+                DisconnectKind.REMOTE_PLAY_DISABLED -> getString(R.string.phase_remote_play_disabled, state.detail)
+                null -> getString(R.string.phase_rejected)
+                else -> getString(R.string.phase_rejected_code, state.detail)
+            }
             DisconnectKind.NO_PICTURE -> getString(R.string.phase_no_picture)
             DisconnectKind.CONSOLE_ASLEEP -> getString(R.string.phase_asleep)
             DisconnectKind.LOGIN_PASSCODE -> getString(R.string.phase_passcode)

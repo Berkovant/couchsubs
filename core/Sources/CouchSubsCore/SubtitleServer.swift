@@ -231,6 +231,10 @@ public final class SubtitleServer: @unchecked Sendable {
         return ["left": round(box.left), "top": round(box.top), "right": round(box.right), "bottom": round(box.bottom)]
     }
 
+    static func json(_ icons: [IconPlacement]) -> [[String: Any]] {
+        icons.map { icon -> [String: Any] in ["at": icon.at, "src": icon.image] }
+    }
+
     public func clear() {
         broadcast(event: "clear", json: [:])
         onEvent?(.clear)
@@ -258,12 +262,15 @@ public final class SubtitleServer: @unchecked Sendable {
     }
 
     /// "Ekranı çevir" sonuçları: `screen` olayı her çeviriyi yazının yeri (`box`), tipik satır yüksekliği (`line`,
-    /// ekrana oranla) ve çok parçalıysa `paragraphs` ile taşır. TV öncekinin yerine bunları koyar.
+    /// ekrana oranla) ve çok parçalıysa `paragraphs` ile taşır. TV öncekinin yerine bunları koyar. Çevirinin içinde
+    /// kumanda simgeleri varsa `icons` her simgenin düz metindeki yerini (`at`) ve PNG'sini (`src`) taşır; eski TV
+    /// uygulamaları alanı yok sayıp düz metni gösterir (Windows ile aynı).
     public func sendScreen(_ items: [ScreenTranslation.Item], durationMs: Int) {
         let round = { (value: Double) in Decimal(Int((max(0, min(1, value)) * 10000).rounded())) / 10000 }
         let list: [[String: Any]] = items.map { item in
             var json: [String: Any] = ["box": Self.json(item.box), "line": round(item.lineHeight), "text": item.translation]
             if item.paragraphs { json["paragraphs"] = true }
+            if let icons = item.icons, !icons.isEmpty { json["icons"] = Self.json(icons) }
             return json
         }
         broadcast(event: "screen", json: ["duration": durationMs, "items": list])
@@ -276,7 +283,14 @@ public final class SubtitleServer: @unchecked Sendable {
     /// yerini (`box`) ve satır yüksekliğini (`line`, ekrana oranla) taşır. TV çeviriyi o yerde küçük bir kutuda gösterir;
     /// ana altyazıya dokunmaz. Olayı tanımayan eski TV uygulamaları yok sayar.
     public func sendRegion(id: String, text: String, box: TextBox?, lineHeight: Double? = nil) {
+        sendRegion(id: id, text: text, box: box, lineHeight: lineHeight, icons: nil)
+    }
+
+    /// `icons`: çevirinin içindeki kumanda simgeleri; `icons` alanı her simgenin düz metindeki yerini (`at`) ve PNG'sini
+    /// (`src`) taşır. Eski TV uygulamaları alanı yok sayıp düz metni gösterir.
+    public func sendRegion(id: String, text: String, box: TextBox?, lineHeight: Double?, icons: [IconPlacement]?) {
         var json: [String: Any] = ["id": id, "text": text]
+        if let icons, !icons.isEmpty { json["icons"] = Self.json(icons) }
         if let box { json["box"] = Self.json(box) }
         if let lineHeight { json["line"] = Decimal(Int((max(0, min(1, lineHeight)) * 10000).rounded())) / 10000 }
         broadcast(event: "region", json: json)
@@ -353,7 +367,9 @@ public final class SubtitleServer: @unchecked Sendable {
         let method = parts.first.map(String.init) ?? ""
 
         if method == "OPTIONS" {
-            respondAndClose(connection, status: "204 No Content")
+            // Chromium'un yerel ağ erişimi denetimi (Private Network Access) ön istekte bu başlıkları ister; yeni
+            // tarayıcılı TV'ler (Tizen 9.0 ve sonrası) başlık olmadan bilgisayara bağlanmayabilir. Eski TV'ler yok sayar.
+            respondAndClose(connection, status: "204 No Content", data: Data(), type: nil, extraHeaders: Self.preflightHeaders)
         } else if method == "GET" && path == "/events" {
             openStream(connection, viewer: target.contains("viewer=obs"))
         } else if method == "GET" && path == "/obs" {
@@ -372,8 +388,11 @@ public final class SubtitleServer: @unchecked Sendable {
         respondAndClose(connection, status: status, data: Data(body.utf8), type: nil)
     }
 
-    private func respondAndClose(_ connection: NWConnection, status: String, data: Data, type: String?) {
-        var head = "HTTP/1.1 \(status)\r\nAccess-Control-Allow-Origin: *\r\n"
+    static let preflightHeaders = "Access-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\n"
+        + "Access-Control-Allow-Private-Network: true\r\nAccess-Control-Max-Age: 600\r\n"
+
+    private func respondAndClose(_ connection: NWConnection, status: String, data: Data, type: String?, extraHeaders: String = "") {
+        var head = "HTTP/1.1 \(status)\r\nAccess-Control-Allow-Origin: *\r\n" + extraHeaders
         if let type { head += "Content-Type: \(type)\r\nCache-Control: no-cache\r\n" }
         head += "Content-Length: \(data.count)\r\nConnection: close\r\n\r\n"
         connection.send(content: Data(head.utf8) + data, completion: .contentProcessed { _ in connection.cancel() })
