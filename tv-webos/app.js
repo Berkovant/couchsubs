@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.25';
+  var APP_VERSION = '0.9.26';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -979,6 +979,11 @@
   }
 
   function connect(address) {
+    // Arka plandayken bağlanılmaz; adres akılda tutulur, uygulama öne gelince bağlanır (bkz. dropWhileHidden).
+    if (pausedByHidden) {
+      server = address;
+      return;
+    }
     if (demoRunning()) stopDemo();
     if (eventSource) eventSource.close();
     if (address !== server) failures = 0;
@@ -1512,8 +1517,42 @@
     $('source-tip').className = 'hidden';
   }
 
+  // --- Arka plandayken bağlantıyı bırakma (Samsung) ---
+  // Samsung uygulamayı arka plana atınca (Anynet+, Otomatik Kaynak Değiştirme, Home tuşu) sayfa duraklar ama bağlantı
+  // açık kalır. Bilgisayar TV uygulamasının bağlı olduğunu sanıp onu yeniden açmıyordu; altyazı ekrana gelmiyordu.
+  // Bağlantı bırakılınca bilgisayar uygulamayı birkaç saniye içinde yeniden öne getirir (TvKeeper). Yalnız bu davranışı
+  // isteyen platformda (platform.closeWhenHidden) çalışır.
+  var pausedByHidden = false;
+
+  function dropWhileHidden() {
+    if (!platform.closeWhenHidden || leaving || pausedByHidden || !eventSource) return;
+    pausedByHidden = true;
+    eventSource.close();
+    eventSource = null;
+    clearTimeout(dropTimer);
+    dropTimer = null;
+    cancelScan();
+    // Öne gelince eski altyazı ekranda asılı kalmasın.
+    hideSubtitle('hidden');
+    hideScreen();
+    hideRegions();
+    setStatus('st-conn', t('reconnecting'), 'bad');
+  }
+
+  function resumeAfterHidden() {
+    if (!pausedByHidden) return;
+    pausedByHidden = false;
+    if (server) connect(server);
+  }
+
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) noteHidden(); else noteVisible();
+    if (document.hidden) {
+      noteHidden();
+      dropWhileHidden();
+    } else {
+      resumeAfterHidden();
+      noteVisible();
+    }
   });
 
   // --- Panel ve kumanda ---
