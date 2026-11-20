@@ -2260,11 +2260,17 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// <summary>Ekran yazılarını kendiliğinden bulan (ayar açık ve çeviri sürerken var) ve bulduğu geçici alanlar.</summary>
     private ScreenTextDetector? screenText;
     private IReadOnlyList<WatchedArea> autoAreas = [];
+    /// <summary>Oynanan oyunun hazır ek alanları (bkz. <see cref="UserSettings.PresetAreas"/>); çeviri sürmezken boş.</summary>
+    private IReadOnlyList<WatchedArea> presetAreas = [];
+    private bool presetRunning;
     private int screenTextBusy;
 
     // regionGate altında: kullanıcının ek alanları, otomatik bulunan ekran yazıları ve açık telefon.
-    private void ComposeWatchedAreas() =>
-        watchedAreas = [.. savedWatchedAreas, .. autoAreas, .. phoneArea is null ? [] : new[] { phoneArea }];
+    private void ComposeWatchedAreas()
+    {
+        presetAreas = presetRunning ? settings.PresetAreas(gameSense.Current?.Name, phoneArea is not null) : [];
+        watchedAreas = [.. savedWatchedAreas, .. presetAreas, .. autoAreas, .. phoneArea is null ? [] : new[] { phoneArea }];
+    }
 
     /// <summary>
     /// Ek bölge okuyucusu gerekiyorsa kurulur, gerekmiyorsa kaldırılır (kutuları TV'den kalkar). Kendi yazı tanıma motoru
@@ -2292,6 +2298,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 autoAreas = [];
             }
             savedWatchedAreas = running ? settings.WatchedAreas() : [];
+            presetRunning = running;
             ComposeWatchedAreas();
             if (watchedAreas.Count == 0)
             {
@@ -2380,6 +2387,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             {
                 // Karo örneği kare iş parçacığını tutmaz: arka planda, tek uçuşta (sürerken gelen kare atlanır).
                 IReadOnlyList<CropRegion> excluded = [settings.Region, .. savedWatchedAreas.Select(item => item.Region),
+                                                      .. presetAreas.Select(item => item.Region),
                                                       .. phoneArea is null ? [] : new[] { phoneArea.Region }];
                 _ = Task.Run(() => SampleScreenText(detector, frame, arrived, excluded));
             }
