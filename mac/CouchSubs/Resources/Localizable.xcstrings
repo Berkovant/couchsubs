@@ -1,6 +1,182 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "The TV app has not connected. Open CouchSubs on the TV and keep the phone and the TV on the same Wi-Fi. If it still waits, check that CouchSubs is allowed in Settings › Privacy & Security › Local Network on this iPhone, then stop and start translating again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The TV app has not connected. Open CouchSubs on the TV and keep the phone and the TV on the same Wi-Fi. If it still waits, check that CouchSubs is allowed in Settings › Privacy & Security › Local Network on this iPhone, then stop and start translating again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TV uygulaması bağlanmadı. TV'de CouchSubs'ı açın; telefon ve TV aynı Wi-Fi'da olsun. Yine bekliyorsa bu iPhone'da Ayarlar › Gizlilik ve Güvenlik › Yerel Ağ'da CouchSubs'a izin verildiğini kontrol edin, sonra çeviriyi durdurup yeniden başlatın."
+          }
+        }
+      }
+    },
+    "Sign out of PSN and reset the account": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of PSN and reset the account"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSN'den çıkış yap ve hesabı sıfırla"
+          }
+        }
+      }
+    },
+    "Sign out of PSN?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of PSN?"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSN'den çıkış yapılsın mı?"
+          }
+        }
+      }
+    },
+    "Sign out": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Çıkış yap"
+          }
+        }
+      }
+    },
+    "The second PSN account and the PS5 pairing are removed from this phone. To translate again, sign in with Sony and pair the PS5 again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The second PSN account and the PS5 pairing are removed from this phone. To translate again, sign in with Sony and pair the PS5 again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "İkinci PSN hesabı ve PS5 eşleşmesi bu telefondan silinir. Yeniden çeviri yapmak için Sony ile giriş yapıp PS5'i yeniden eşleyin."
+          }
+        }
+      }
+    },
+    "Sony's sign-in page could not be opened (%@). Check the phone's internet connection and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sony's sign-in page could not be opened (%@). Check the phone's internet connection and try again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sony'nin giriş sayfası açılamadı (%@). Telefonun internet bağlantısını kontrol edip yeniden deneyin."
+          }
+        }
+      }
+    },
+    "Reload": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yeniden yükle"
+          }
+        }
+      }
+    },
+    "The language pack could not be downloaded (%@). Try again, or download it in Settings › Apps › Translate.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The language pack could not be downloaded (%@). Try again, or download it in Settings › Apps › Translate."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dil paketi indirilemedi (%@). Yeniden deneyin ya da Ayarlar › Uygulamalar › Çeviri'den indirin."
+          }
+        }
+      }
+    },
+    "Samsung TVs and smart monitors (2016 and later; 2016–2018 models are experimental).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Samsung TVs and smart monitors (2016 and later; 2016–2018 models are experimental)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Samsung TV'ler ve akıllı monitörler (2016 ve sonrası; 2016–2018 modelleri deneysel)."
+          }
+        }
+      }
+    },
+    "This Samsung TV is too old for the CouchSubs TV app (2016 models and later are supported).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Samsung TV is too old for the CouchSubs TV app (2016 models and later are supported)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu Samsung TV, CouchSubs TV uygulaması için çok eski (2016 ve sonraki modeller destekleniyor)."
+          }
+        }
+      }
+    },
+    "CouchSubs opens its waiting screen on the TV. Even if it mentions a computer, that is not an error: the TV is waiting for the phone. Now tap Start translating on the home screen; the TV finds this phone by itself.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CouchSubs opens its waiting screen on the TV. Even if it mentions a computer, that is not an error: the TV is waiting for the phone. Now tap Start translating on the home screen; the TV finds this phone by itself."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TV'de CouchSubs'ın bekleme ekranı açılır. Bilgisayardan söz etse bile bu bir hata değil: TV telefonu bekliyor. Şimdi ana ekranda Çeviriyi başlat'a dokunun; TV bu telefonu kendisi bulur."
+          }
+        }
+      }
+    },
     "I use a paid Gemini API key": {
       "localizations": {
         "en": {
@@ -12148,22 +12324,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "CouchSubs TV uygulamasını Samsung TV'nize bilgisayar olmadan, bu telefondan kurar. Telefon ve TV aynı Wi-Fi'da olmalı."
-          }
-        }
-      }
-    },
-    "Samsung TVs and smart monitors (2017 and later).": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Samsung TVs and smart monitors (2017 and later)."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Samsung TV'ler ve akıllı monitörler (2017 ve sonrası)."
           }
         }
       }

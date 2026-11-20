@@ -54,22 +54,42 @@ struct HomeHeader: View {
 // MARK: - 8 Ana ekran
 
 /// Apple çevirisinin dil paketi henüz indirilmedi: "İndir" sistemin indirme penceresini açar.
+/// `.translationTask` yalnız yapılandırma değişince çalışır: eskiden ikinci basış aynı yapılandırmayı verdiği için hiçbir
+/// şey olmuyor, hata da `try?` ile yutuluyordu (TestFlight). Her basışta yapılandırma geçersiz kılınıp görev yeniden
+/// başlatılır, hata karonun altında söylenir.
 @available(iOS 26, *)
 private struct LanguagePackTile: View {
     @EnvironmentObject private var model: PhoneModel
     @State private var download: TranslationSession.Configuration?
+    @State private var working = false
+    @State private var error: String?
 
     var body: some View {
         Tile {
             Text("The English–Turkish language pack is not downloaded yet.").font(Mobile.TypeScale.headline)
             Button("Download") {
-                download = TranslationSession.Configuration(source: Locale.Language(identifier: model.settings.sourceLanguage),
-                                                            target: Locale.Language(identifier: model.settings.targetLanguage))
+                error = nil
+                working = true
+                let source = Locale.Language(identifier: model.settings.sourceLanguage)
+                let target = Locale.Language(identifier: model.settings.targetLanguage)
+                if download?.source == source, download?.target == target {
+                    download?.invalidate()
+                } else {
+                    download = TranslationSession.Configuration(source: source, target: target)
+                }
             }
             .buttonStyle(.mobileSecondary)
+            .disabled(working)
+            if let error { MobileNote(text: error) }
         }
         .translationTask(download) { session in
-            try? await session.prepareTranslation()
+            do {
+                try await session.prepareTranslation()
+            } catch {
+                self.error = String(format: String(localized: "The language pack could not be downloaded (%@). Try again, or download it in Settings › Apps › Translate."),
+                                    error.localizedDescription)
+            }
+            working = false
             await model.refreshTranslatorStatus()
         }
     }
@@ -286,6 +306,10 @@ struct RunningScreen: View {
                     Text(verbatim: model.settings.output.showsOnTV ? model.tvStatusText : String(localized: "This phone"))
                         .font(Mobile.TypeScale.title).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            // TV uygulaması 30 saniyede bağlanmadıysa ne yapılacağı (tanı satırı günlüklere yazılır).
+            if model.settings.output.showsOnTV, model.tvWaitingLong, model.tvClients == 0 {
+                MobileNote(text: String(localized: "The TV app has not connected. Open CouchSubs on the TV and keep the phone and the TV on the same Wi-Fi. If it still waits, check that CouchSubs is allowed in Settings › Privacy & Security › Local Network on this iPhone, then stop and start translating again."))
             }
             Text("Keep CouchSubs open on the screen while you play. iOS stops the connection when the app goes to the background; the screen stays on while translating.")
                 .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
