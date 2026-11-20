@@ -45,6 +45,10 @@ class StickyRows {
     var newlySticky: List<String> = emptyList()
         private set
 
+    /** Son [filter] çağrısında okumadan çıkarılan satırlar (sabit ya da uçta bekleyen; görev satırı, [MissionLine]). */
+    var removed: List<TextLine> = emptyList()
+        private set
+
     /** Okumanın sabit (HUD) satırları çıkarılmış hali. [time]: milisaniye saati. */
     fun filter(reading: Reading, time: Long): Reading {
         val newly = mutableListOf<String>()
@@ -75,6 +79,7 @@ class StickyRows {
         newlySticky = newly
         val lingering = lingering(reading, matched)
         val kept = reading.lines.filterIndexed { i, _ -> matched[i]?.sticky != true && !lingering[i] }
+        removed = reading.lines.filterIndexed { i, _ -> matched[i]?.sticky == true || lingering[i] }
         rows.removeAll { time - it.lastSeen > FORGET_AFTER_MS }
         return if (kept.size == reading.lines.size) reading else Reading(kept)
     }
@@ -103,5 +108,6 @@ class StickyRows {
     fun reset() {
         rows.clear()
         newlySticky = emptyList()
+        removed = emptyList()
     }
 }
