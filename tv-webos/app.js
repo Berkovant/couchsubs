@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.42';
+  var APP_VERSION = '0.9.43';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -444,6 +444,72 @@
     if (position < text.length) el.appendChild(document.createTextNode(text.slice(position)));
   }
 
+  // --- Konuşan rengi ---
+  // Bilgisayar altyazıdaki konuşan adlarını ve renklerini gönderir: speakers = [{name, color}] ("Konuşana göre renk"
+  // ayarı açıksa; eski bilgisayar alanı göndermez, yazı eskisi gibi tek renk kalır). Satır başındaki "Ad:" ile o
+  // konuşanın cümlesi, bir sonraki konuşanın adına dek o renkte yazılır. Renk bilgisayarda addan hesaplanır: aynı
+  // karakter her cihazda hep aynı renktir.
+  function speakerMap(list) {
+    if (!list || typeof list.length !== 'number') return null;
+    var map = null;
+    for (var i = 0; i < list.length && i < 16; i++) {
+      var item = list[i];
+      if (!item || typeof item.name !== 'string' || !item.name || item.name.length > 40) continue;
+      if (typeof item.color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(item.color)) continue;
+      map = map || {};
+      map[item.name] = item.color;
+    }
+    return map;
+  }
+
+  // Metnin renkli parçaları: [{text, color}] (renksiz parçada color null). Ad yalnız satır başında aranır; bölünmüş
+  // satırda ("ARTHUR: Gitmeliyiz\nhemen.") renk sonraki satıra da sürer.
+  function speakerSegments(text, map) {
+    if (!map) return [{ text: text, color: null }];
+    var segments = [];
+    var color = null;
+    var start = 0;
+    var lineStart = 0;
+    while (lineStart <= text.length) {
+      var found = null;
+      for (var name in map) {
+        if (!Object.prototype.hasOwnProperty.call(map, name)) continue;
+        var after = text.charAt(lineStart + name.length);
+        if (text.substr(lineStart, name.length) === name && (after === ':' || after === '\uFF1A' ||
+            (after === ' ' && /[:\uFF1A]/.test(text.charAt(lineStart + name.length + 1))))) {
+          if (!found || name.length > found.length) found = name;
+        }
+      }
+      if (found && map[found] !== color) {
+        if (lineStart > start) segments.push({ text: text.slice(start, lineStart), color: color });
+        start = lineStart;
+        color = map[found];
+      }
+      var next = text.indexOf('\n', lineStart);
+      if (next < 0) break;
+      lineStart = next + 1;
+    }
+    if (start < text.length || !segments.length) segments.push({ text: text.slice(start), color: color });
+    return segments;
+  }
+
+  function paintSpeakers(el, text, map) {
+    var segments = speakerSegments(text, map);
+    if (segments.length === 1 && !segments[0].color) return;
+    el.textContent = '';
+    for (var i = 0; i < segments.length; i++) {
+      if (!segments[i].color) {
+        el.appendChild(document.createTextNode(segments[i].text));
+        continue;
+      }
+      var span = document.createElement('span');
+      span.className = 'speaker';
+      span.style.color = segments[i].color;
+      span.textContent = segments[i].text;
+      el.appendChild(span);
+    }
+  }
+
   // --- Uzun çeviriyi bölme ---
   // Uzun çeviri en çok 3 satıra, kelime sınırından ve dengeli bölünür; 3 satıra sığmazsa yazı biraz küçülür (en çok
   // %75'e kadar). Konuşan adı ("ARTHUR:") sonraki sözcükle birleşik kalır, hep ilk satırdadır. Satır sınırı TV'de
@@ -592,11 +658,13 @@
   }
 
   // Satırı yazar. Sayfadaki metin bölünmüş hâlidir; karşılaştırmalar için özgün metin elementte kalır.
-  function setLineText(textId, text, paragraphs, baseSize) {
+  function setLineText(textId, text, paragraphs, baseSize, speakers) {
     var el = $(textId);
     var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text, el, baseSize, coverSize(textId));
     el.rawText = text;
+    el.speakers = speakers || null;
     el.textContent = wrapped.text;
+    paintSpeakers(el, wrapped.text, el.speakers);
     el.style.whiteSpace = 'pre-line';
     var size = Math.round(baseSize * wrapped.scale);
     el.style.fontSize = size + 'px';
@@ -659,7 +727,7 @@
 
   // paragraphs: görev paneli gibi başlık ve maddeli yazılar satır satır, sola yaslı gösterilir.
   // replaces: bilgisayar bu satırı öncekinin uzamış ya da düzelmiş okuması saydı (bkz. replacesCurrent).
-  function showSubtitle(text, duration, box, paragraphs, replaces) {
+  function showSubtitle(text, duration, box, paragraphs, replaces, speakers) {
     var now = Date.now();
     var current = rawText('subtitle-text');
     // Önceki satır kısa göründüyse yeni satırın üstünde kalır. Aynı cümlenin başka bir okunuşu (ya da yeniden gelen
@@ -668,7 +736,7 @@
       // Üstteki daha eski satırlar olduğu gibi kalır.
     } else if (stackPrevious && $('subtitle').className !== 'hidden' && current && now - shownAt < STACK_WITHIN_MS &&
         !paragraphs && !shownParagraphs && !sameLine(current, text)) {
-      showPrevious(current);
+      showPrevious(current, $('subtitle-text').speakers);
     } else {
       hidePrevious();
     }
@@ -676,7 +744,7 @@
     shownParagraphs = !!paragraphs;
     holdUntil = shownAt + Math.min(HOLD_MAX_MS, 2000 + text.length * 60);
     currentBox = validBox(box);
-    setLineText('subtitle-text', text, paragraphs, fontBase);
+    setLineText('subtitle-text', text, paragraphs, fontBase, speakers);
     $('subtitle-text').style.textAlign = paragraphs ? 'left' : '';
     $('subtitle').className = '';
     layout();
@@ -727,22 +795,22 @@
   }
 
   // Önceki satır üste çıkar. Orada hâlâ görünen bir satır varsa o da bir üst sıraya (iki önceki) kayar; en çok üç satır.
-  function showPrevious(text) {
+  function showPrevious(text, speakers) {
     var older = $('subtitle-prev');
     var olderText = rawText('subtitle-prev-text');
     if (older.className === '' && olderText && !sameLine(olderText, text)) {
-      showSlot('subtitle-prev2', olderText);
+      showSlot('subtitle-prev2', olderText, $('subtitle-prev-text').speakers);
     } else {
       hideSlot('subtitle-prev2');
     }
-    showSlot('subtitle-prev', text);
+    showSlot('subtitle-prev', text, speakers);
   }
 
-  function showSlot(id, text) {
+  function showSlot(id, text, speakers) {
     var timers = previousTimers[id];
     clearTimeout(timers[0]);
     clearTimeout(timers[1]);
-    setLineText(id + '-text', text, false, Math.round(fontBase * 0.8));
+    setLineText(id + '-text', text, false, Math.round(fontBase * 0.8), speakers);
     $(id).className = '';
     fitBox($(id + '-text'));
     timers[0] = setTimeout(function () {
@@ -794,6 +862,39 @@
     return typeof value === 'string' && value.length === 7 && /^#[0-9a-f]{6}$/i.test(value);
   }
 
+  // Otomatik bulunan ekran yazısı (bilgisayar "auto-<n>" alanı) özgün yazının görünüşüyle gelir: surface {background,
+  // foreground, flat} zemin ve yazı rengi (flat değilse — harita, oyun dünyası — zemin %85 opak), style {bold,
+  // condensed, align, upper}. Büyük harf çeviriyi bilgisayar zaten büyütür. Alanları göndermeyen eski bilgisayarda
+  // kutu eskisi gibi siyah kalır.
+  var STYLED_MIN_SCALE = 0.8;
+  var STYLED_LABEL_MIN_SCALE = 0.6;
+  var CONDENSED_FONT = '"Roboto Condensed", "Arial Narrow", "Helvetica Neue Condensed", "LG Smart UI Condensed", sans-serif';
+
+  function hexAlpha(hex, alpha) {
+    return 'rgba(' + parseInt(hex.substr(1, 2), 16) + ', ' + parseInt(hex.substr(3, 2), 16) + ', ' +
+      parseInt(hex.substr(5, 2), 16) + ', ' + alpha + ')';
+  }
+
+  // Öğeye özgün yazının görünüşü uygulandı mı.
+  function applyLook(el, item) {
+    var surface = item.surface;
+    if (!surface || !phoneColor(surface.background) || !phoneColor(surface.foreground)) return false;
+    el.style.backgroundColor = surface.flat === false ? hexAlpha(surface.background, 0.85) : surface.background;
+    el.style.color = surface.foreground;
+    el.style.textShadow = 'none';
+    var style = item.style;
+    if (style && typeof style === 'object') {
+      if (style.bold === true) el.style.fontWeight = '700';
+      else if (style.bold === false) el.style.fontWeight = '400';
+      if (style.condensed === true) {
+        el.style.fontFamily = CONDENSED_FONT;
+        el.style.fontStretch = 'condensed';
+      }
+      if (style.align === 'left' || style.align === 'center' || style.align === 'right') el.style.textAlign = style.align;
+    }
+    return true;
+  }
+
   // Yalnız aşağıdaki bağımsız kutular büyümeyi sınırlar; kaynakta zaten üst üste olan
   // kutuların yerini değiştirmeyiz. Aynı hesap bütün sonuçlar için yapılır, sıra önemli değildir.
   function screenBottom(items, box, left, width, screenWidth, screenHeight, pad, minWidth) {
@@ -823,6 +924,7 @@
       if (!box || !item.text) continue;
       var el = document.createElement('div');
       el.className = item.paragraphs === true ? 'item paragraphs' : 'item';
+      var styled = false;
       if (phone) {
         el.className += ' phone';
         var surface = item.surface;
@@ -830,6 +932,9 @@
           el.style.backgroundColor = surface.background;
           el.style.color = surface.foreground;
         }
+      } else if (regionId && (regionId.indexOf('auto-') === 0 || (item.style && typeof item.style === 'object'))) {
+        // Yalnız özgün görünüşü taşıyan bloklar: elle tanımlanmış ek alanların kutusu eskisi gibi siyah kalır.
+        styled = applyLook(el, item);
       }
       fillText(el, item.text, item.icons);
       var left = Math.max(0, box.left - pad);
@@ -846,10 +951,21 @@
       var line = typeof item.line === 'number' && item.line > 0 ? item.line * height : box.bottom * height - box.top * height;
       var floor = phone ? Math.max(10, Math.round(12 * height / 1080)) : SCREEN_MIN_FONT;
       var size = Math.max(floor, Math.min(96, Math.round(line * 0.95)));
+      // Özgün görünüşlü yazı özgün genişlikte kalır: Türkçe uzunsa önce satır kırılır, sığmazsa yazı en çok %20 küçülür,
+      // yine sığmazsa kutu aşağı uzar.
+      // Menü şeridindeki kısa etiket ("OFF" → "KAPALI", en çok iki sözcük) tek satır kalır, şeridin dışına taşmaz: gerekirse
+      // yazı en çok %40 küçülür.
+      var label = styled && item.text.indexOf('\n') < 0 && item.text.split(/\s+/).length <= 2;
+      if (styled) floor = Math.max(label ? 10 : SCREEN_MIN_FONT, Math.round(size * (label ? STYLED_LABEL_MIN_SCALE : STYLED_MIN_SCALE)));
+      if (label) el.style.whiteSpace = 'nowrap';
       el.style.fontSize = size + 'px';
       host.appendChild(el);
+      while (label && el.scrollWidth > el.clientWidth && size > floor) {
+        size = Math.max(floor, size - 1);
+        el.style.fontSize = size + 'px';
+      }
       // Türkçe çoğu zaman İngilizceden uzundur: kutu biraz uzayabilir, daha fazlası için yazı küçülür.
-      var limit = Math.min(available, phone ? boxHeight + 1 : Math.max(boxHeight * 1.5, line * 2.6));
+      var limit = Math.min(available, phone || styled ? boxHeight + 1 : Math.max(boxHeight * 1.5, line * 2.6));
       while (el.scrollHeight > limit && size > floor) {
         size = Math.max(floor, size - 2);
         el.style.fontSize = size + 'px';
@@ -1149,7 +1265,7 @@
     }
     // Ekrandaki yazı yeni ayarlarla yeniden bölünür: yazı boyu, kalınlık, yerleşim ve bant bölmeyi değiştirir.
     var shown = rawText('subtitle-text');
-    if ($('subtitle-text').rawText !== undefined && shown) setLineText('subtitle-text', shown, !!shownParagraphs, fontBase);
+    if ($('subtitle-text').rawText !== undefined && shown) setLineText('subtitle-text', shown, !!shownParagraphs, fontBase, $('subtitle-text').speakers);
     layout();
     if (style.bottomPercent >= 0 && String(style.bottomPercent) !== load('appBottom')) {
       save('appBottom', style.bottomPercent);
@@ -1358,7 +1474,8 @@
     onEvent('subtitle', function (data) {
       diag.subtitles++;
       renderDiag();
-      if (data.text) showSubtitle(data.text, data.duration, data.box, data.paragraphs === true, data.replace === true);
+      if (data.text) showSubtitle(data.text, data.duration, data.box, data.paragraphs === true, data.replace === true,
+        speakerMap(data.speakers));
     });
     onEvent('clear', onClear);
     onEvent('screen', function (data) { showScreen(data.items, data.duration); });
