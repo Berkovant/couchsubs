@@ -30,6 +30,12 @@ public static class Program
             }
             // İzin yardımcısı ikinci arayüzü/oturumu başlatmaz; kurulum yolu kendi sürecinden alınır.
             if (args.Length == 1 && args[0] == Services.WindowsFirewall.ConfigureArgument) return ConfigureFirewall();
+            // Yalnız CI: kasıtlı çökme ve sonraki açılışın kaydı bulması (windows.yml).
+            if (args is ["--crash-test", var kind]) return CrashTest(kind);
+            if (args is ["--crash-report", var output]) return CrashReport(output);
+            if (args is ["--stress-okuma", var seconds, var result]) return ReadStressRun(seconds, result);
+            // Yerel çökmeler (erişim ihlali) .NET'in hata düzenine uğramaz; kayıt için işleyici en başta kurulur.
+            InstallCrashHandler();
             try
             {
                 StartVelopack();
@@ -66,6 +72,18 @@ public static class Program
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void RemoveFirewallRule() => Services.WindowsFirewall.RemoveRuleQuietly();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void InstallCrashHandler() => CrashHandler.Install();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static int CrashTest(string kind) => Services.CrashWatch.RunTest(kind);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static int CrashReport(string output) => Services.CrashWatch.RunReport(output);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static int ReadStressRun(string seconds, string output) => Services.ReadStress.Run(seconds, output);
 
     /// <summary>İndirilmiş güncellemeyi uygular, eski paketleri siler. Kancalar buraya gelmez (Main).</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
