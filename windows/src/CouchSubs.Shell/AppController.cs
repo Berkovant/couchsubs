@@ -151,6 +151,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         {
             CpuTranslationThreads = CpuThreadOptions.Normalize(loaded.CpuTranslationThreads, Environment.ProcessorCount),
         };
+        // beta.63'te varsayılan açık gelen otomatik ekran yazısı bir kez kapatılır; açık olanlara bir kez söylenir.
+        (settings, ShowsAutoScreenTextNotice) = AutoScreenTextMigration.Apply(settings);
         // Uygulama oturum sürerken kapandıysa oyunun profili açık kalmış olabilir: açılışta genel alanlar geri gelir.
         if (settings.ActiveAreaProfile is not null || settings.GeneralAreas is not null) settings = settings.WithGeneralAreas();
         services.Translation.SelectCpuThreads(settings.CpuTranslationThreads);
@@ -438,6 +440,12 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public bool ShowsSubtitleOffTip { get => showsSubtitleOffTip; private set => Set(ref showsSubtitleOffTip, value, [nameof(ShowsSubtitleBackgroundTip)]); }
     /// <summary>İpucu görünürken GTA 6 altyazı zemini izleme açıksa ayrıca söylenir: zemin yoksa bütün satırlar atlanır.</summary>
     public bool ShowsSubtitleBackgroundTip => showsSubtitleOffTip && settings.WatchSubtitleBackground;
+    /// <summary>
+    /// Otomatik ekran yazısı göçle kapatıldı (beta.63'te açıktı): bu oturumda bir kez "deneysel; Ayarlar'dan açabilirsiniz"
+    /// bilgisi görünür. Kullanıcı ayarı değiştirince kalkar.
+    /// </summary>
+    public bool ShowsAutoScreenTextNotice { get => showsAutoScreenTextNotice; private set => Set(ref showsAutoScreenTextNotice, value); }
+    private bool showsAutoScreenTextNotice;
     private bool showsSubtitleOffTip;
     /// <summary>Görüntünün bu bağlantıda ilk geldiği an (bağlantı koparsa sıfırlanır).</summary>
     private DateTime? framesSince;
@@ -496,6 +504,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             server.SpeakerColors = value.SpeakerColors;
             if ((old.MisreadWaitMs != value.MisreadWaitMs || old.PartialWaitMs != value.PartialWaitMs) && pipeline is not null) ApplyWaits(pipeline);
             if (old.SharePool != value.SharePool) services.Pool?.SetEnabled(value.SharePool);
+            if (old.AutoScreenText != value.AutoScreenText) ShowsAutoScreenTextNotice = false;
             if (old.TranslationDevice != value.TranslationDevice)
             {
                 GpuFallbackWarning = false;
