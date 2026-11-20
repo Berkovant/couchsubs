@@ -215,7 +215,9 @@ public enum DisconnectReason: Equatable, Sendable {
     case consoleAsleep
     /// Remote Play başka bir cihazda kullanılıyor.
     case inUse
-    /// PS5 bağlantıyı reddetti (ör. kayıt geçersiz ya da Uzaktan Oynatma kapalı).
+    /// PS5'in adresi oturum ya da ctrl bağlantısını (TCP 9295) reddetti: PS5 yeni uyanıyor ya da adres başka bir cihaza
+    /// geçmiş. Eşleme sorunu değildir (eskiden "PS5'i yeniden kurun" deniyordu); beklenip yeniden denenir ve PS5 ağda
+    /// yeniden aranır.
     case refused
     case network
     /// İkinci kullanıcının PS5'te giriş şifresi var ve Ayarlar'da kayıtlı şifre yok.
@@ -239,6 +241,26 @@ public enum DisconnectReason: Equatable, Sendable {
     /// "Yeniden bağlanılıyor…" deneniyordu (GitHub #519). `CrashRetryLimit.maxRetries` denemeden sonra durulur.
     case consoleRemotePlayCrashed
     case other(String)
+
+    /// Altyazı günlüğüne (altyazi.log) yazılan kısa neden: adres ve ayrıntı olmadan, yalnız türü. Kullanıcılar çoğu zaman
+    /// yalnız altyazi.log gönderiyor; GitHub #456'daki günlükte 30 kopmanın hiçbirinin nedeni görünmüyordu.
+    public var logName: String {
+        switch self {
+        case .stopped: "stopped"
+        case .consoleAsleep: "consoleAsleep"
+        case .inUse: "inUse"
+        case .refused: "refused"
+        case .network: "network"
+        case .loginPasscode: "loginPasscode"
+        case .loginPasscodeIncorrect: "loginPasscodeIncorrect"
+        case .registrationInvalid: "registrationInvalid"
+        case .noPicture: "noPicture"
+        case .notFound: "notFound"
+        case .rejected(let code): code.map { String(format: "rejected 0x%08x", $0) } ?? "rejected"
+        case .consoleRemotePlayCrashed: "consoleRemotePlayCrashed"
+        case .other(let text): text.isEmpty ? "other" : "other: \(text)"
+        }
+    }
 
     /// Oturum ağ hatasıyla düştüyse ve PS5 aramaya da yanıt vermediyse neden "bulunamadı"dır (eskiden yalnız
     /// "Yeniden bağlanılıyor…" görünüyordu).
@@ -292,8 +314,9 @@ public enum DisconnectReason: Equatable, Sendable {
         switch quit {
         case CHIAKI_QUIT_REASON_STOPPED: self = .stopped
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_IN_USE: self = .inUse
-        case CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED, CHIAKI_QUIT_REASON_CTRL_CONNECTION_REFUSED,
-             CHIAKI_QUIT_REASON_PSN_REGIST_FAILED: self = .refused
+        case CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED, CHIAKI_QUIT_REASON_CTRL_CONNECTION_REFUSED: self = .refused
+        // PSN üzerinden eşleme reddedildi: yalnız bu yeniden eşleme ister (eskiden TCP reddiyle aynı `.refused`'du).
+        case CHIAKI_QUIT_REASON_PSN_REGIST_FAILED: self = .registrationInvalid
         case CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_DISCONNECTED, CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_SHUTDOWN,
              CHIAKI_QUIT_REASON_CTRL_CONNECT_FAILED, CHIAKI_QUIT_REASON_STREAM_CONNECTION_UNKNOWN: self = .network
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_CRASH: self = .consoleRemotePlayCrashed
@@ -712,6 +735,9 @@ public final class StreamSession: @unchecked Sendable {
                         return self.emit(.disconnected(reason))
                     }
                 }
+                // PS5'in adresi TCP bağlantısını reddetti: PS5 yeni uyanıyor olabilir ya da adres başka bir cihaza geçmiş
+                // olabilir. Bir sonraki denemede beklemeden ağda da aranır (eşlemeyi yenilemek bunu çözmez).
+                if reason == .refused { self.nextRelocate = .distantPast }
                 self.scheduleReconnect(eventGeneration, reason: reason)
             }
         default:

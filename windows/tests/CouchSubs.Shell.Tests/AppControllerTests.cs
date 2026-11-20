@@ -676,6 +676,9 @@ public class AppControllerTests
     [InlineData(RegistrationFailure.NoReply, AppError.ConsoleNoReply)]
     [InlineData(RegistrationFailure.Canceled, AppError.ConsoleNoReply)]
     [InlineData(RegistrationFailure.BadAddress, AppError.BadAddress)]
+    [InlineData(RegistrationFailure.PairingClosed, AppError.ConsolePairingClosed)]
+    [InlineData(RegistrationFailure.ConnectFailed, AppError.ConsoleConnectFailed)]
+    [InlineData(RegistrationFailure.NoFreePort, AppError.NoFreePort)]
     public async Task RegistrationFailureMapsToItsOwnMessage(RegistrationFailure failure, AppError expected)
     {
         var services = new FakeServices { RegisterError = new RegistrationException(failure) };
@@ -1730,7 +1733,7 @@ public class AppControllerRunTests
         var text = Localizer.ForLanguage("en");
         Assert.Equal("Turn on your PS5", AppController.StatusText(SessionState.Disconnected(DisconnectKind.ConsoleAsleep), true, text));
         Assert.Equal("Remote Play is in use on another device", AppController.StatusText(SessionState.Disconnected(DisconnectKind.InUse), true, text));
-        Assert.Equal("The PS5 refused the connection. Set up the PS5 again.", AppController.StatusText(SessionState.Disconnected(DisconnectKind.Refused), true, text));
+        Assert.Equal("The PS5 did not accept the connection yet. It may still be starting up, or its network address may have changed. Reconnecting and searching for the PS5… If this keeps happening, make sure the PS5 is on and on the same network.", AppController.StatusText(SessionState.Disconnected(DisconnectKind.Refused), true, text));
         Assert.Equal("Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable.",
             AppController.StatusText(SessionState.Disconnected(DisconnectKind.Network), true, text));
         Assert.Equal("PS5 ile bağlantı koptu, yeniden bağlanılıyor… Sık oluyorsa PS5'i modeme kabloyla bağlayın.",
@@ -2367,5 +2370,18 @@ internal sealed class FakeXbox(IReadOnlyList<XboxConsole> consoles) : IXboxServi
     {
         LegacyFrameRateRequests.Add(legacyFrameRate);
         return new FakeStream();
+    }
+}
+
+public class DisconnectLogNameTests
+{
+    /// altyazi.log'a kopmanın nedeni yazılır, PS5'in adresi yazılmaz (GitHub #456).
+    [Fact]
+    public void ReasonIsLoggedWithoutAddress()
+    {
+        Assert.Equal("NotFound", AppController.DisconnectLogName(new DisconnectReason(DisconnectKind.NotFound, "192.168.1.5")));
+        Assert.Equal("Network", AppController.DisconnectLogName(new DisconnectReason(DisconnectKind.Network)));
+        Assert.Equal("Rejected: 0x80108b12", AppController.DisconnectLogName(new DisconnectReason(DisconnectKind.Rejected, "0x80108b12")));
+        Assert.Equal("?", AppController.DisconnectLogName(null));
     }
 }

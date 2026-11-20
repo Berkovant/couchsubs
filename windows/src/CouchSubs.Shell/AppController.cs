@@ -667,6 +667,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             // İptal yalnız cs_register'ın süresi dolunca olur: PS5 yanıt vermemiştir.
             RegistrationFailure.NoReply or RegistrationFailure.Canceled => AppError.ConsoleNoReply,
             RegistrationFailure.BadAddress => AppError.BadAddress,
+            RegistrationFailure.PairingClosed => AppError.ConsolePairingClosed,
+            RegistrationFailure.ConnectFailed => AppError.ConsoleConnectFailed,
+            RegistrationFailure.NoFreePort => AppError.NoFreePort,
             _ => AppError.RegistrationFailed,
         };
         var message = AppException.Describe(kind, text);
@@ -1776,7 +1779,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         {
             DisconnectKind.ConsoleAsleep => text["Turn on your PS5"],
             DisconnectKind.InUse => text["Remote Play is in use on another device"],
-            DisconnectKind.Refused => text["The PS5 refused the connection. Set up the PS5 again."],
+            // Eskiden "PS5'i yeniden kurun" deniyordu; TCP reddi eşleme sorunu değildir, yeniden eşlemek çözmez.
+            DisconnectKind.Refused => text["The PS5 did not accept the connection yet. It may still be starting up, or its network address may have changed. Reconnecting and searching for the PS5… If this keeps happening, make sure the PS5 is on and on the same network."],
             DisconnectKind.LoginPasscode => text["The PS5 asks for this account's login passcode. Enter it in Settings, or turn off this account's login passcode on the PS5."],
             // Yanlış şifre bir kez gönderilir; PS5 yeniden isterse oturum kapanır (döngü yok).
             DisconnectKind.LoginPasscodeIncorrect => text["The PS5 didn't accept the login passcode in Settings. Correct it, or turn off this account's login passcode on the PS5."],
@@ -2424,15 +2428,24 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         Changed(nameof(Console), nameof(Ps5StatusText));
     }
 
+    /// <summary>altyazi.log'a yazılan kopma nedeni: türü; adres (NotFound) yazılmaz, PS5'in kodu ve libchiaki metni yazılır.</summary>
+    public static string DisconnectLogName(DisconnectReason? reason) => reason switch
+    {
+        null => "?",
+        { Kind: DisconnectKind.Rejected or DisconnectKind.Other, Detail: { Length: > 0 } detail } => $"{reason.Kind}: {detail}",
+        _ => reason.Kind.ToString(),
+    };
+
     private void SessionStateChanged(SessionState state)
     {
-        // Altyazı günlüğünde yalnız durumun türü (adres ve ayrıntı remoteplay.log'da).
+        // Altyazı günlüğünde durumun türü ve kopmanın nedeni (adres remoteplay.log'da). Neden eskiden yazılmıyordu; GitHub
+        // #456'daki altyazi.log'da 30 kopmanın hiçbirinin nedeni görünmüyordu.
         if (state.Phase != SessionState.Phase)
             SubtitleLog.Write(state.Phase switch
             {
                 SessionPhase.Connecting => $"{ConsoleTitle}: bağlanıyor",
                 SessionPhase.Streaming => $"{ConsoleTitle}: bağlandı",
-                _ => $"{ConsoleTitle}: bağlantı yok",
+                _ => $"{ConsoleTitle}: bağlantı yok ({DisconnectLogName(state.Reason)})",
             });
         // PS5'in kendi tarafındaki çökme ayrıca yazılır: kullanıcının günlüğünde nedeni görünsün (GitHub #519).
         if (state.Reason?.Kind == DisconnectKind.ConsoleRemotePlayCrashed && SessionState.Reason?.Kind != DisconnectKind.ConsoleRemotePlayCrashed)
