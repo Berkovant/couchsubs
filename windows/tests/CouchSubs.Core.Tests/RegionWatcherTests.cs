@@ -12,10 +12,12 @@ public class RegionWatcherTests
         public List<TextLine> Lines { get; set; } = [];
         public int Count;
         public int FailuresRemaining;
+        public Action? OnRead;
         public string Read(Frame image) => string.Join('\n', Lines.Select(line => line.Text));
         public Reading ReadLines(Frame image, bool deep)
         {
             Interlocked.Increment(ref Count);
+            OnRead?.Invoke();
             if (FailuresRemaining > 0)
             {
                 FailuresRemaining--;
@@ -40,8 +42,9 @@ public class RegionWatcherTests
                     return Task.FromException<string>(new InvalidOperationException("Expected test failure"));
                 }
             }
-            return Task.FromResult(Map(text));
+            return Respond?.Invoke(text) ?? Task.FromResult(Map(text));
         }
+        public Func<string, Task<string>>? Respond { get; set; }
         public Func<string, string> Map { get; set; } = text => "TR: " + text;
     }
 
@@ -77,6 +80,154 @@ public class RegionWatcherTests
     private static readonly WatchedArea Phone = new("p", "Phone", ExtraAreaPreset.Phone.Region());
 
     private static TextLine Line(string text, double top = 0.2, double height = 0.1) => new(text, new TextBox(0.1, top, 0.9, top + height));
+
+    private static readonly WatchedArea Hud = new("hud", "HUD", new CropRegion(0, 1, 0, 1));
+
+    // Beş piksel boyundaki etiket, tüm ekranı örnekleyen iki satırın arasına düşer.
+    private static Frame HudFrame(int letters)
+    {
+        var frame = Frame.Blank(320, 180);
+        for (var y = 38; y < 43; y++)
+            for (var x = 33; x < 33 + 5 * letters; x++)
+                if (x % 5 < 3)
+                    Array.Fill(frame.Pixels, (byte)245, y * frame.Stride + x * 4, 3);
+        return frame;
+    }
+
+    private static async Task WaitForPass(RegionWatcher watcher)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (watcher.IsBusy) await Task.Delay(5, timeout.Token);
+    }
+
+    [Fact]
+    public async Task SmallChangingMenuLabelIsReadEvenWhenTheAreaSignatureMatches()
+    {
+        var greet = HudFrame(5);
+        var antagonize = HudFrame(10);
+        Assert.Equal(RegionCropper.Signature(greet), RegionCropper.Signature(antagonize));
+        var reader = new Reader { Lines = [Line("Greet", 0.2, 0.05)] };
+        var server = new Server();
+        long clock = 0;
+        var watcher = new RegionWatcher(reader, new Translator(), server, clock: () => clock);
+        await watcher.PassAsync(greet, [Hud]);
+        await watcher.PassAsync(greet, [Hud]);
+        reader.Lines = [Line("Antagonize", 0.2, 0.05)];
+        await watcher.PassAsync(antagonize, [Hud]);
+        await watcher.PassAsync(antagonize, [Hud]);
+        clock += 6000;
+        await watcher.PassAsync(antagonize, [Hud]);
+        Assert.Equal(2, reader.Count);
+        Assert.Equal(["TR: Greet", "TR: Antagonize"], server.Sent.Select(message => message.Text));
+    }
+
+    [Fact]
+    public async Task NewTextOutsideEarlierBoxesIsEventuallyReadOnASparseSignatureCollision()
+    {
+        long clock = 0;
+        var reader = new Reader();
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, new Translator(), server, clock: () => clock);
+        await watcher.PassAsync(HudFrame(0), [Hud]);
+        await watcher.PassAsync(HudFrame(0), [Hud]);
+        clock += 6000;
+        reader.Lines = [Line("Antagonize", 0.2, 0.05)];
+        await watcher.PassAsync(HudFrame(10), [Hud]);
+        await watcher.PassAsync(HudFrame(10), [Hud]);
+        Assert.Equal(2, reader.Count);
+        Assert.Equal("TR: Antagonize", Assert.Single(server.Sent).Text);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InFlightTranslationOnlyPublishesIfTheSourceStillMatches(bool newCommand)
+    {
+        var greet = HudFrame(5);
+        var reader = new Reader { Lines = [Line("Greet", 0.2, 0.05)] };
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var translator = new Translator { Respond = text =>
+        {
+            if (text != "Greet") return Task.FromResult("Kışkırt");
+            entered.TrySetResult();
+            return release.Task;
+        } };
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, translator, server, intervalMs: 0);
+        watcher.Offer(greet, [Hud]);
+        await WaitForPass(watcher);
+        watcher.Offer(greet, [Hud]);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var next = HudFrame(newCommand ? 10 : 5);
+        // Başka bölgede de hareket var. O tek başına değişmeyen komutun çevirisini düşürmemeli.
+        Array.Fill(next.Pixels, (byte)200, 0, next.Stride);
+        if (newCommand) reader.Lines = [Line("Antagonize", 0.2, 0.05)];
+        watcher.Offer(next, [Hud]);
+        release.SetResult("Selam ver");
+        await WaitForPass(watcher);
+        watcher.Offer(next, [Hud]);
+        await WaitForPass(watcher);
+        Assert.Equal(newCommand ? "Kışkırt" : "Selam ver", Assert.Single(server.Sent).Text);
+    }
+
+    [Fact]
+    public async Task AConfirmedNewCommandClearsOnlyItsOldTranslationWhileWaiting()
+    {
+        var reader = new Reader { Lines = [Line("Greet", 0.2, 0.05)] };
+        var translator = new Translator();
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, translator, server);
+        await watcher.PassAsync(HudFrame(5), [Hud]);
+        await watcher.PassAsync(HudFrame(5), [Hud]);
+        reader.Lines = [Line("Antagonize", 0.2, 0.05)];
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        translator.Respond = _ => release.Task;
+        await watcher.PassAsync(HudFrame(10), [Hud]);
+        var pending = watcher.PassAsync(HudFrame(10), [Hud]);
+        Assert.Equal(["TR: Greet", ""], server.Sent.Select(message => message.Text));
+        Assert.All(server.Sent, message => Assert.Equal(Hud.Id, message.Id));
+        release.SetResult("Kışkırt");
+        await pending;
+        Assert.Equal("Kışkırt", server.Sent.Last().Text);
+    }
+
+    [Fact]
+    public async Task CommandChangedDuringTheFinalReadDoesNotPublishTheOldResponse()
+    {
+        var greet = HudFrame(5);
+        var next = HudFrame(10);
+        var reader = new Reader { Lines = [Line("Greet", 0.2, 0.05)] };
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var translator = new Translator { Respond = text =>
+        {
+            if (text != "Greet") return Task.FromResult("Kışkırt");
+            entered.TrySetResult();
+            return release.Task;
+        } };
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, translator, server, intervalMs: 0);
+        watcher.Offer(greet, [Hud]);
+        await WaitForPass(watcher);
+        watcher.Offer(greet, [Hud]);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var sameWithMotion = HudFrame(5);
+        Array.Fill(sameWithMotion.Pixels, (byte)200, 0, sameWithMotion.Stride);
+        watcher.Offer(sameWithMotion, [Hud]);
+        reader.OnRead = () => watcher.Offer(next, [Hud]);
+        release.SetResult("Selam ver");
+        await WaitForPass(watcher);
+        Assert.Empty(server.Sent);
+        reader.OnRead = null;
+        reader.Lines = [Line("Antagonize", 0.2, 0.05)];
+        watcher.Offer(next, [Hud]);
+        await WaitForPass(watcher);
+        watcher.Offer(next, [Hud]);
+        await WaitForPass(watcher);
+        Assert.Equal("Kışkırt", Assert.Single(server.Sent).Text);
+    }
 
     [Fact]
     public async Task FailedReadRetriesOnAnUnchangedFrameThenStopsReading()
@@ -138,7 +289,7 @@ public class RegionWatcherTests
         var watcher = new RegionWatcher(reader, new Translator(), server, clock: () => clock);
         for (var step = 0; step <= 20; step++)
         {
-            clock = step * 100;
+            clock = step * RegionWatcher.DefaultIntervalMs / 10;
             watcher.Offer(Shade(10), [Quest]);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             while (watcher.IsBusy) await Task.Delay(5, timeout.Token);
@@ -319,16 +470,53 @@ public class RegionWatcherTests
             while (watcher.IsBusy) await Task.Delay(5);
         }
         await OfferAndWait();
+        const int interval = RegionWatcher.DefaultIntervalMs;
         for (var step = 1; step <= 9; step++)
         {
-            clock = step * 100;
+            clock = step * interval / 10;
             await OfferAndWait();
         }
         Assert.Equal(1, watcher.Passes);
-        clock = 1000;
+        clock = interval;
         await OfferAndWait();
         Assert.Equal(2, watcher.Passes);
         Assert.Equal(["TR: Find the blacksmith"], server.Sent.Select(s => s.Text));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EarlyConfirmationOnlyPublishesAnUnchangedCandidateWithoutOcr(bool changed)
+    {
+        long clock = 0;
+        var reader = new Reader { Lines = [Line("Find the blacksmith")] };
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, new Translator(), server, clock: () => clock);
+        async Task Offer(Frame frame)
+        {
+            watcher.Offer(frame, [Quest]);
+            while (watcher.IsBusy) await Task.Delay(1);
+        }
+        await Offer(Shade(10));
+        clock = 249;
+        await Offer(Shade(10));
+        Assert.Empty(server.Sent);
+        var next = Shade(changed ? (byte)100 : (byte)10);
+        clock = 250;
+        await Offer(next);
+        Assert.Equal(1, reader.Count);
+        Assert.Equal(changed ? 0 : 1, server.Sent.Count);
+
+        reader.Lines = [Line("Talk to Arthur")];
+        clock = 750;
+        await Offer(Shade(100));
+        Assert.Equal(1, reader.Count);
+        clock = 1000;
+        await Offer(Shade(100));
+        Assert.Equal(2, reader.Count);
+        clock = 1250;
+        await Offer(Shade(100));
+        Assert.Equal("TR: Talk to Arthur", server.Sent.Last().Text);
     }
 
     private static TextLine At(string text, double left, double top, double right, double bottom) =>
@@ -467,6 +655,146 @@ public class RegionWatcherTests
         await watcher.PassAsync(Shade(10), [Quest]);
         await watcher.PassAsync(Shade(10), [Quest]);
         Assert.Equal([null], server.Blocks);
+    }
+
+    /// <summary>Kararlı gösterilip shown edilmiş yazı.</summary>
+    private static async Task Show(RegionWatcher watcher, Reader reader, string text, byte shade)
+    {
+        reader.Lines = [Line(text)];
+        await watcher.PassAsync(Shade(shade), [Quest]);
+        await watcher.PassAsync(Shade(shade), [Quest]);
+    }
+
+    /// <summary>Görev yazısı arada kaybolup yeniden çıkınca çevirmene yeniden gidilmez.</summary>
+    [Fact]
+    public async Task ReappearingTextUsesTheEarlierTranslation()
+    {
+        var (reader, translator, server) = (new Reader(), new Translator(), new Server());
+        var watcher = new RegionWatcher(reader, translator, server);
+        await Show(watcher, reader, "Find the blacksmith", 10);
+        await Show(watcher, reader, "", 90);
+        await Show(watcher, reader, "Find the blacksmith", 170);
+        Assert.Equal(["Find the blacksmith"], translator.Calls);
+        Assert.Equal(["TR: Find the blacksmith", "", "TR: Find the blacksmith"], server.Sent.Select(s => s.Text));
+    }
+
+    /// <summary>
+    /// Yazı belirirken renkli sözcük geç geliyor: az önce gösterilen yazının başı okunursa tamamı beklenir; görev iki kez
+    /// çevrilip değişmez.
+    /// </summary>
+    [Fact]
+    public async Task PartialReadingOfTheLastTextWaitsForTheWholeText()
+    {
+        var (reader, translator, server) = (new Reader(), new Translator(), new Server());
+        var watcher = new RegionWatcher(reader, translator, server);
+        await Show(watcher, reader, "Fly to a drop point", 10);
+        await Show(watcher, reader, "", 90);
+        await Show(watcher, reader, "Fly to a", 170);
+        reader.Lines = [Line("Fly to a drop point")];
+        await watcher.PassAsync(Shade(250), [Quest]);
+        await watcher.PassAsync(Shade(250), [Quest]);
+        Assert.Equal(["Fly to a drop point"], translator.Calls);
+        Assert.Equal(["TR: Fly to a drop point", "", "TR: Fly to a drop point"], server.Sent.Select(s => s.Text));
+    }
+
+    /// <summary>Arka plan oynarken ekrandakinin harfi bozuk okuması kutuyu değiştirmez.</summary>
+    [Fact]
+    public async Task NearlySameReadingKeepsTheShownText()
+    {
+        var (reader, translator, server) = (new Reader(), new Translator(), new Server());
+        var watcher = new RegionWatcher(reader, translator, server);
+        await Show(watcher, reader, "SET DESTINATION EXIT", 10);
+        await Show(watcher, reader, "SET DESTINATIPN EXIT", 90);
+        await Show(watcher, reader, "SET DESTINATION EXIT", 170);
+        Assert.Equal(["SET DESTINATION EXIT"], translator.Calls);
+        Assert.Single(server.Sent);
+    }
+
+    /// <summary>Yalnız bir sözcüğü değişen görev, o hâlde kalırsa birkaç tur sonra gösterilir.</summary>
+    [Fact]
+    public async Task NearlySameTextThatStaysIsShownAfterTheHoldLimit()
+    {
+        var (reader, translator, server) = (new Reader(), new Translator(), new Server());
+        var watcher = new RegionWatcher(reader, translator, server);
+        await Show(watcher, reader, "Go to the barn", 10);
+        await Show(watcher, reader, "Go to the bank", 90);
+        Assert.Single(server.Sent);
+        for (var i = 0; i < RegionWatcher.HoldLimit; i++) await watcher.PassAsync(Shade(90), [Quest]);
+        Assert.Equal(["TR: Go to the barn", "TR: Go to the bank"], server.Sent.Select(s => s.Text));
+    }
+
+
+    [Theory]
+    [InlineData("Find the blacksmith", "Escape")]
+    [InlineData("Meet me at gate 5", "Meet me at gate 6")]
+    [InlineData("You can open it", "You can't open it")]
+    public async Task ConfirmedNewPromptDoesNotWaitForTheHoldLimit(string first, string next)
+    {
+        var reader = new Reader();
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, new Translator(), server);
+        await Show(watcher, reader, first, 10);
+        await Show(watcher, reader, next, 90);
+        Assert.Equal(["TR: " + first, "TR: " + next], server.Sent.Select(s => s.Text));
+    }
+
+    [Fact]
+    public async Task IntermittentTypoDoesNotAccumulateHolds()
+    {
+        var reader = new Reader();
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, new Translator(), server);
+        await Show(watcher, reader, "Go to the barn", 10);
+        for (var i = 0; i <= RegionWatcher.HoldLimit; i++)
+        {
+            await Show(watcher, reader, "Go to the bank", 90);
+            await Show(watcher, reader, "Go to the barn", 10);
+        }
+        Assert.Equal(["TR: Go to the barn"], server.Sent.Select(s => s.Text));
+    }
+
+    [Fact]
+    public async Task CancelledConfirmedTranslationCanBeRetriedOnTheSameFrame()
+    {
+        var reader = new Reader { Lines = [Line("Find the blacksmith")] };
+        var translator = new Translator { Respond = _ => Task.FromCanceled<string>(new CancellationToken(true)) };
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, translator, server);
+        await watcher.PassAsync(Shade(10), [Quest]);
+        Assert.Empty(translator.Calls);
+        await watcher.PassAsync(Shade(10), [Quest]);
+        translator.Respond = null;
+        await watcher.PassAsync(Shade(10), [Quest]);
+        Assert.Equal(["Find the blacksmith", "Find the blacksmith"], translator.Calls);
+        Assert.Equal(["TR: Find the blacksmith"], server.Sent.Select(s => s.Text));
+    }
+
+    [Fact]
+    public async Task FailedTranslationDoesNotHoldTheNextConfirmedPrompt()
+    {
+        var reader = new Reader();
+        var translator = new Translator { FailuresRemaining = 1 };
+        var server = new Server();
+        var watcher = new RegionWatcher(reader, translator, server);
+        await Show(watcher, reader, "Find the blacksmith", 10);
+        await Show(watcher, reader, "Find", 90);
+        Assert.Equal(["TR: Find"], server.Sent.Select(s => s.Text));
+    }
+
+    [Fact]
+    public void PartialAndWordLosingReadingsAreRecognised()
+    {
+        Assert.True(RegionWatcher.IsPartOf("add marker set destination", "add marker set destination exit"));
+        Assert.False(RegionWatcher.IsPartOf("talk to arthur", "meet arthur at the barn"));
+        Assert.True(RegionWatcher.LosesWords("find ￼", "find donnie"));
+        Assert.False(RegionWatcher.LosesWords("hold ￼ to climb", "hold to climb"));
+    }
+
+    [Fact]
+    public void TextKeyKeepsButtonIcons()
+    {
+        Assert.Equal("set destination ￼ exit", RegionWatcher.TextKey(["SET DESTINATION ￼ EXIT"]));
+        Assert.NotEqual(RegionWatcher.TextKey(["SET DESTINATION"]), RegionWatcher.TextKey(["SET DESTINATION ￼"]));
     }
 
     [Fact]

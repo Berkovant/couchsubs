@@ -220,7 +220,7 @@ final class RegionWatcherTests: XCTestCase {
         let watcher = RegionWatcher(reader: reader, translator: Translator(), server: server, clock: { clock })
         reader.failuresRemaining = 10
         for step in 0...20 {
-            clock = step * 100
+            clock = step * RegionWatcher.defaultIntervalMs / 10
             watcher.offer(frame(10), areas: [quest])
             while watcher.isBusy { await Task.yield() }
         }
@@ -234,6 +234,7 @@ final class RegionWatcherTests: XCTestCase {
         let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
         reader.lines = [line("Find the blacksmith")]
         await watcher.pass(frame(10), areas: [quest])
+        XCTAssertTrue(translator.calls.isEmpty, "geçici metin çeviri bağlamına girmemeli")
         XCTAssertTrue(server.sent.isEmpty, "ilk okuma kararlı sayılmaz")
         await watcher.pass(frame(10), areas: [quest])
         XCTAssertEqual(server.sent.map(\.text), ["TR: Find the blacksmith"])
@@ -355,17 +356,130 @@ final class RegionWatcherTests: XCTestCase {
         let image = frame(10)
         watcher.offer(image, areas: [quest])
         while watcher.isBusy { await Task.yield() }
+        let interval = 1000 // Mac ve iPhone aynı seri OCR kuyruğunda saniyede en çok bir tur başlatır.
         for step in 1...9 {
-            clock = step * 100
+            clock = step * interval / 10
             watcher.offer(image, areas: [quest])
             while watcher.isBusy { await Task.yield() }
         }
         XCTAssertEqual(watcher.passes, 1)
-        clock = 1000
+        clock = interval
         watcher.offer(image, areas: [quest])
         while watcher.isBusy { await Task.yield() }
         XCTAssertEqual(watcher.passes, 2)
         XCTAssertEqual(server.sent.map(\.text), ["TR: Find the blacksmith"])
+    }
+
+    /// Kararlı okunup gösterilen yazı (iki tur, aynı kare).
+    private func show(_ watcher: RegionWatcher, _ reader: Reader, _ text: String, _ shade: UInt8) async {
+        reader.lines = text.isEmpty ? [] : [line(text)]
+        await watcher.pass(frame(shade), areas: [quest])
+        await watcher.pass(frame(shade), areas: [quest])
+    }
+
+    /// Görev yazısı arada kaybolup yeniden çıkınca çevirmene yeniden gidilmez.
+    func testReappearingTextUsesTheEarlierTranslation() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        await show(watcher, reader, "Find the blacksmith", 10)
+        await show(watcher, reader, "", 90)
+        await show(watcher, reader, "Find the blacksmith", 170)
+        XCTAssertEqual(translator.calls, ["Find the blacksmith"])
+        XCTAssertEqual(server.sent.map(\.text), ["TR: Find the blacksmith", "", "TR: Find the blacksmith"])
+    }
+
+    /// Yazı belirirken renkli sözcük geç geliyor: az önce gösterilen yazının başı okunursa tamamı beklenir; görev iki kez
+    /// çevrilip değişmez.
+    func testPartialReadingOfTheLastTextWaitsForTheWholeText() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        await show(watcher, reader, "Fly to a drop point", 10)
+        await show(watcher, reader, "", 90)
+        await show(watcher, reader, "Fly to a", 170)
+        reader.lines = [line("Fly to a drop point")]
+        await watcher.pass(frame(250), areas: [quest])
+        await watcher.pass(frame(250), areas: [quest])
+        XCTAssertEqual(translator.calls, ["Fly to a drop point"])
+        XCTAssertEqual(server.sent.map(\.text), ["TR: Fly to a drop point", "", "TR: Fly to a drop point"])
+    }
+
+    /// Arka plan oynarken ekrandakinin harfi bozuk okuması kutuyu değiştirmez.
+    func testNearlySameReadingKeepsTheShownText() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        await show(watcher, reader, "SET DESTINATION EXIT", 10)
+        await show(watcher, reader, "SET DESTINATIPN EXIT", 90)
+        await show(watcher, reader, "SET DESTINATION EXIT", 170)
+        XCTAssertEqual(translator.calls, ["SET DESTINATION EXIT"])
+        XCTAssertEqual(server.sent.count, 1)
+    }
+
+    /// Yalnız bir sözcüğü değişen görev, o hâlde kalırsa birkaç tur sonra gösterilir.
+    func testNearlySameTextThatStaysIsShownAfterTheHoldLimit() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        await show(watcher, reader, "Go to the barn", 10)
+        await show(watcher, reader, "Go to the bank", 90)
+        XCTAssertEqual(server.sent.count, 1)
+        for _ in 0..<RegionWatcher.holdLimit { await watcher.pass(frame(90), areas: [quest]) }
+        XCTAssertEqual(server.sent.map(\.text), ["TR: Go to the barn", "TR: Go to the bank"])
+    }
+
+    func testPartialAndWordLosingReadingsAreRecognised() {
+        XCTAssertFalse(RegionWatcher.isPartOf("run", "find the blacksmith"))
+        XCTAssertTrue(RegionWatcher.isPartOf("add marker set destination", "add marker set destination exit"))
+        XCTAssertFalse(RegionWatcher.isPartOf("talk to arthur", "meet arthur at the barn"))
+        XCTAssertTrue(RegionWatcher.losesWords("find \u{FFFC}", "find donnie"))
+        XCTAssertFalse(RegionWatcher.losesWords("hold \u{FFFC} to climb", "hold to climb"))
+    }
+
+    func testNewNumberNegationAndUnrelatedWordAreShownAfterConfirmation() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        let sources = ["Take gate 5", "Take gate 6", "You can leave the base", "You can't leave the base", "Run"]
+        for (index, source) in sources.enumerated() {
+            await show(watcher, reader, source, UInt8(index * 40))
+        }
+        XCTAssertEqual(translator.calls, sources)
+    }
+
+    func testAlternatingRereadsDoNotAccumulateHolds() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        await show(watcher, reader, "Go to the barn", 10)
+        for _ in 0...RegionWatcher.holdLimit {
+            await show(watcher, reader, "Go to the bank", 90)
+            await show(watcher, reader, "Go to the barn", 10)
+        }
+        XCTAssertEqual(translator.calls, ["Go to the barn"])
+    }
+
+    func testFirstConfirmedTextAfterResetUsesTheNewGameTranslation() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        translator.map = { _ in "İlk oyun" }
+        await show(watcher, reader, "Board the train", 10)
+        watcher.reset()
+        translator.map = { _ in "İkinci oyun" }
+        await show(watcher, reader, "Board the train", 10)
+        XCTAssertEqual(server.sent.map(\.text), ["İlk oyun", "İkinci oyun"])
+        XCTAssertEqual(server.clears, 1)
+    }
+
+    func testResetDropsOfferedPassBeforeItStarts() async {
+        let reader = Reader(), translator = Translator(), server = Server()
+        let watcher = RegionWatcher(reader: reader, translator: translator, server: server)
+        watcher.offer(frame(90), areas: [quest])
+        watcher.reset()
+        await show(watcher, reader, "Board the train", 170)
+        XCTAssertEqual(watcher.passes, 2)
+        XCTAssertEqual(watcher.reads, 1)
+        XCTAssertEqual(translator.calls, ["Board the train"])
+    }
+
+    func testTextKeyKeepsButtonIcons() {
+        XCTAssertEqual(RegionWatcher.textKey(["SET DESTINATION \u{FFFC} EXIT"]), "set destination \u{FFFC} exit")
+        XCTAssertNotEqual(RegionWatcher.textKey(["SET DESTINATION"]), RegionWatcher.textKey(["SET DESTINATION \u{FFFC}"]))
     }
 
     func testNoAreasMeansNoWork() async {

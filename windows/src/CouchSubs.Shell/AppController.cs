@@ -1986,6 +1986,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         PlayedGame = current?.Name;
         FollowGameAreas();
         if (current == publishedGame) return;
+        // Yeni oyunda aynı HUD satırının çevirisi ve paketi farklı olabilir.
+        regionWatcher?.Reset();
         publishedGame = current;
         services.Pool?.SetGame(current);
         if (current is not null && services.PackUpdates is { } packUpdater) _ = RefreshPacksAsync(packUpdater, maxAge: PackUpdater.GameCheckInterval);
@@ -2211,6 +2213,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         if (regionWatcher is null)
         {
             if (services.MakeReader(settings.SourceLanguage, settings.OcrEngine) is not { } reader) return;
+            // Yerel çevirmen altyazıyla aynı bağlamı ve modeli kullanır. Yalnız doğrulanmış yazıyı gönder.
             regionWatcher = new RegionWatcher(reader, MakeTranslator(), server) { Log = SubtitleLog.Write };
         }
         regionWatcher.PackLookup = PacksActive ? services.FindInPacks : null;

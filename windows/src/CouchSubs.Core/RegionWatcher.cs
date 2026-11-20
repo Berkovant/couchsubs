@@ -33,8 +33,8 @@ public sealed record WatchedArea(string Id, string Name, CropRegion Region);
 /// aynı kurallar).
 /// <list type="bullet">
 /// <item>Ana okuma hattını beklemez, onu bekletmez: <see cref="Offer"/> hemen döner, tur arka planda sürer.</item>
-/// <item>En çok <see cref="DefaultIntervalMs"/>'de bir tur atılır; önceki tur bitmediyse kare atlanır.</item>
-/// <item>Bölge izi değişmeyen alan yeniden okunmaz.</item>
+/// <item>En çok <see cref="DefaultIntervalMs"/>'de bir tur atılır; süren tur yalnız en yeni kareyi tutar.</item>
+/// <item>Bölge ve son okunan satırlar değişmedikçe OCR çalışmaz.</item>
 /// <item>Yazı ancak kararlıysa çevrilir: iz bir tur değişmediyse ya da iki okuma aynı yazıyı verdiyse.</item>
 /// <item>Yazı değişmedikçe yeniden çevrilmez; boşalan alanın kutusu kalkar.</item>
 /// <item>Paket ve çeviri motoru altyazıyla aynıdır; ama ek alan satırları ortak havuza önerilmez.</item>
@@ -42,14 +42,39 @@ public sealed record WatchedArea(string Id, string Name, CropRegion Region);
 /// </summary>
 public sealed class RegionWatcher
 {
+    /// <summary>Hareketli ek alanlar en fazla saniyede bir normal OCR turuna girer.</summary>
     public const int DefaultIntervalMs = 1000;
+
+    // Okunmuş bir aday aynı görüntüde kalıyorsa ikinci OCR turunu beklemeden gösterilebilir.
+    private const int ConfirmationMs = 250;
+
+    /// <summary>
+    /// Ekrandakinden yalnız biraz farklı (ya da eksik) kararlı okuma en çok bu kadar tur bekletilir; o hâlde kalırsa
+    /// gerçekten değişmiş sayılır ve gösterilir (görevin tek sözcüğü değişebilir: "Go to the barn" → "Go to the bank").
+    /// </summary>
+    internal const int HoldLimit = 4;
+
+    /// <summary>Çevirisi saklanan en çok yazı sayısı (oyun görev yazısını arada silip yeniden gösteriyor).</summary>
+    private const int RenderedLimit = 64;
 
     private sealed class State
     {
         public byte[]? Signature;
+        public Frame? LastReadCrop;
+        public TextBox[] Lines = [];
+        public long LastFullCheck;
         public string? LastRead;
         public Candidate? Candidate;
         public string Shown = "";
+        /// <summary>Gösterilen yazının <see cref="Candidate.Text"/>'i.</summary>
+        public string ShownText = "";
+        /// <summary>Gösterilen yazıdaki tuş simgesi sayısı.</summary>
+        public int ShownIcons;
+        /// <summary>Son gösterilen (boş olmayan) yazı; alan boşalınca da hatırlanır (yarım okumayı tanımak için).</summary>
+        public string Remembered = "";
+        /// <summary>Bekletilen okuma ve kaç turdur bekletildiği (<see cref="HoldLimit"/>).</summary>
+        public string? Held;
+        public int Holds;
         public string? RenderedKey;
         public string? RenderedText;
         public IReadOnlyList<IconPlacement>? RenderedIcons;
@@ -67,7 +92,24 @@ public sealed class RegionWatcher
     /// <param name="Icons">Her parçadaki kumanda simgeleri (kareden kesilmiş), parçadaki sırasıyla.</param>
     /// <param name="Blocks">Alanda birden çok ayrı yazı grubu varsa grupları; tek grupta null (tek kutu).</param>
     internal sealed record Candidate(IReadOnlyList<string> Paragraphs, TextBox? Box, double? LineHeight, string Key,
-                                     IReadOnlyList<IReadOnlyList<IconSlot>>? Icons = null, IReadOnlyList<Block>? Blocks = null);
+                                     IReadOnlyList<IReadOnlyList<IconSlot>>? Icons = null, IReadOnlyList<Block>? Blocks = null)
+    {
+        /// <summary>Yazının sadeleştirilmiş hâli (simgeler dahil, yerleşim hariç); okumaları karşılaştırmak için.</summary>
+        public string Text { get; init; } = "";
+    }
+
+    /// <summary>
+    /// Sadeleştirilmiş yazı; tuş simgeleri <see cref="ButtonIcons.Marker"/> olarak kalır. Simgesi sonradan bulunan okuma
+    /// ("SET DESTINATION ✕") eskisinden ayrılsın.
+    /// </summary>
+    internal static string TextKey(IEnumerable<string> paragraphs) =>
+        string.Join(' ', string.Join(' ', paragraphs).Split(ButtonIcons.Marker).Select(TextMatch.Normalize)
+            .Aggregate(new List<string>(), (parts, part) =>
+            {
+                if (parts.Count > 0) parts.Add(ButtonIcons.Marker.ToString());
+                parts.Add(part);
+                return parts;
+            }).Where(part => part.Length > 0));
 
     private readonly ITextReader reader;
     private readonly ITextTranslator translator;
@@ -76,6 +118,9 @@ public sealed class RegionWatcher
     private readonly Func<long> now;
     private Dictionary<string, State> states = [];
     private long? lastPass;
+    private long? confirmAt;
+    private readonly object captureGate = new();
+    private (Frame Frame, IReadOnlyList<WatchedArea> Areas)? latest;
     private int busy;
     private int session;
     private int passes;
@@ -113,17 +158,51 @@ public sealed class RegionWatcher
     /// <summary>Her karede çağrılır; tur zamanı geldiyse ve önceki tur bittiyse turu arka planda başlatır, hemen döner.</summary>
     public void Offer(Frame frame, IReadOnlyList<WatchedArea> areas)
     {
-        if (areas.Count == 0 && !AnyShown()) return;
         var time = now();
-        if (lastPass is { } last && time - last < intervalMs) return;
-        if (Interlocked.Exchange(ref busy, 1) == 1) return;
-        lastPass = time;
+        bool confirmOnly;
+        int started;
+        lock (captureGate)
+        {
+            if (IsBusy)
+            {
+                latest = (frame, areas);
+                return;
+            }
+            if (areas.Count == 0 && !AnyShown()) return;
+            confirmOnly = lastPass is { } last && time - last < intervalMs;
+            if (confirmOnly)
+            {
+                if (confirmAt is not { } due || time < due) return;
+                confirmAt = null;
+                var map = states;
+                lock (map) if (!map.Values.Any(state => state.Candidate is not null)) return;
+            }
+            else
+            {
+                lastPass = time;
+                confirmAt = time + ConfirmationMs;
+            }
+            started = Volatile.Read(ref session);
+            Volatile.Write(ref busy, 1);
+        }
         _ = Task.Run(async () =>
         {
-            try { await PassAsync(frame, areas).ConfigureAwait(false); }
+            try { await PassAsync(frame, areas, started, confirmOnly).ConfigureAwait(false); }
             catch (Exception error) { Log?.Invoke($"ek alan turu hata verdi: {error.Message}"); }
-            finally { Volatile.Write(ref busy, 0); }
+            finally
+            {
+                lock (captureGate)
+                {
+                    latest = null;
+                    Volatile.Write(ref busy, 0);
+                }
+            }
         });
+    }
+
+    private (Frame Frame, IReadOnlyList<WatchedArea> Areas)? Latest()
+    {
+        lock (captureGate) return latest;
     }
 
     private bool AnyShown()
@@ -133,11 +212,14 @@ public sealed class RegionWatcher
     }
 
     /// <summary>Bir tur: kaldırılan alanların kutusu kalkar, her alan gerekirse okunur ve kararlı yazısı çevrilir. Testler doğrudan çağırır.</summary>
-    public async Task PassAsync(Frame frame, IReadOnlyList<WatchedArea> areas)
+    public Task PassAsync(Frame frame, IReadOnlyList<WatchedArea> areas) =>
+        PassAsync(frame, areas, Volatile.Read(ref session), confirmOnly: false);
+
+    private async Task PassAsync(Frame frame, IReadOnlyList<WatchedArea> areas, int started, bool confirmOnly)
     {
-        var started = Volatile.Read(ref session);
+        if (Volatile.Read(ref session) != started) return;
         var map = states;
-        Interlocked.Increment(ref passes);
+        if (!confirmOnly) Interlocked.Increment(ref passes);
         var ids = areas.Select(area => area.Id).ToHashSet();
         List<string> removed;
         lock (map)
@@ -148,22 +230,46 @@ public sealed class RegionWatcher
         foreach (var id in removed) server.SendRegion(id, "", null);
         foreach (var area in areas)
         {
-            await VisitAsync(area, frame, map, started).ConfigureAwait(false);
+            var current = Latest();
+            if (current is null || current.Value.Areas.Contains(area))
+                await VisitAsync(area, current?.Frame ?? frame, map, started, confirmOnly).ConfigureAwait(false);
             if (Volatile.Read(ref session) != started) return;
         }
     }
 
-    private async Task VisitAsync(WatchedArea area, Frame frame, Dictionary<string, State> map, int started)
+    private async Task VisitAsync(WatchedArea area, Frame frame, Dictionary<string, State> map, int started, bool confirmOnly)
     {
-        var crop = RegionCropper.Crop(frame, area.Region);
-        var signature = RegionCropper.Signature(crop);
         State state;
         lock (map)
         {
-            if (!map.TryGetValue(area.Id, out state!)) map[area.Id] = state = new State();
+            if (!map.TryGetValue(area.Id, out state!))
+            {
+                if (confirmOnly) return;
+                map[area.Id] = state = new State();
+            }
         }
-        var changed = state.Signature is not { } previous || ReadScheduler.Changed(previous, signature, ReadScheduler.ChangeThreshold);
-        state.Signature = signature;
+        if (confirmOnly && state.Candidate is null) return;
+        var crop = RegionCropper.Crop(frame, area.Region);
+        if (confirmOnly)
+        {
+            if (state.LastReadCrop is { } before && before.Width == crop.Width && before.Height == crop.Height
+                && before.Pixels.AsSpan().SequenceEqual(crop.Pixels) && state.Candidate is { } ready)
+            {
+                state.Candidate = null;
+                await CommitAsync(ready, area, state, started).ConfigureAwait(false);
+            }
+            return;
+        }
+        var signature = RegionCropper.Signature(crop);
+        var changed = PixelsChanged(state, crop, signature);
+        // Örneklerin arasına düşen ya da eski satır kutusunun dışında beliren bir yazıyı da yakala.
+        // Birebir aynı görüntüde süre dolsa bile OCR çalışmaz.
+        var time = now();
+        if (!changed && time - state.LastFullCheck >= 5000 && state.LastReadCrop is { } last)
+        {
+            state.LastFullCheck = time;
+            changed = !last.Pixels.AsSpan().SequenceEqual(crop.Pixels);
+        }
         if (!changed)
         {
             // İz bir tur değişmedi: okunan yazı kararlıdır.
@@ -174,9 +280,60 @@ public sealed class RegionWatcher
             }
             return;
         }
+        var candidate = ReadCandidate(frame, crop, signature, area, state, started);
+        if (candidate is null) return;
+        if (state.LastRead == candidate.Key)
+        {
+            state.Candidate = null;
+            await CommitAsync(candidate, area, state, started).ConfigureAwait(false);
+        }
+        else Stage(candidate, state);
+    }
+
+    private static void Stage(Candidate candidate, State state)
+    {
+        state.LastRead = candidate.Key;
+        (state.Held, state.Holds) = (null, 0);
+        state.Candidate = candidate;
+    }
+
+    // Alanın seyrek izinin arasına sığan kısa komutlar için son okunan satırların içinden örnek al.
+    // Birkaç parlaklık seviyesindeki sıkıştırma gürültüsü yeniden OCR başlatmaz.
+    private static bool PixelsChanged(State state, Frame crop, byte[] signature)
+    {
+        if (state.Signature is not { } previous || ReadScheduler.Changed(previous, signature, ReadScheduler.ChangeThreshold)) return true;
+        if (state.LastReadCrop is not { } before || before.Width != crop.Width || before.Height != crop.Height) return true;
+        foreach (var line in state.Lines)
+        {
+            var x0 = Math.Clamp((int)(line.Left * crop.Width), 0, crop.Width);
+            var x1 = Math.Clamp((int)Math.Ceiling(line.Right * crop.Width), 0, crop.Width);
+            var y0 = Math.Clamp((int)(line.Top * crop.Height), 0, crop.Height);
+            var y1 = Math.Clamp((int)Math.Ceiling(line.Bottom * crop.Height), 0, crop.Height);
+            var dx = Math.Max(1, (x1 - x0 + 63) / 64);
+            var dy = Math.Max(1, (y1 - y0 + 7) / 8);
+            int changes = 0;
+            for (var y = y0; y < y1; y += dy)
+                for (var x = x0; x < x1; x += dx)
+                {
+                    var p = y * crop.Stride + x * 4;
+                    if ((Math.Abs(crop.Pixels[p] - before.Pixels[p]) > ReadScheduler.ChangeThreshold
+                        || Math.Abs(crop.Pixels[p + 1] - before.Pixels[p + 1]) > ReadScheduler.ChangeThreshold
+                        || Math.Abs(crop.Pixels[p + 2] - before.Pixels[p + 2]) > ReadScheduler.ChangeThreshold) && ++changes >= 2) return true;
+                }
+        }
+        return false;
+    }
+
+    private Candidate? ReadCandidate(Frame frame, Frame crop, byte[] signature, WatchedArea area, State state, int started)
+    {
         var clock = now();
         Reading reading;
-        try { reading = reader.ReadLines(crop, false); }
+        // Alan "Ekranı çevir" gibi okunur (ham okuma + yalnız beyaz yazının eklediği satırlar): altyazının hazırlık zinciri
+        // gölgeli-beyaz hazırlığı seçince görev yazısındaki renkli sözcük ("Fly to a drop point" içinde pembe "drop
+        // point") ve koyu zeminli ipucu kutusu yazıları düşüyordu. 720p akışta küçük yazı (telefon mesajı, ipucu) iki kat
+        // büyütülerek okunur.
+        var image = frame.Height < 900 ? crop.Scaled(2) : crop;
+        try { reading = reader.ReadScreen(image); }
         catch
         {
             // OCR hatası boş alan değildir. Eski kutuyu koru; aynı kareyi sonraki normal turda yeniden oku.
@@ -184,22 +341,72 @@ public sealed class RegionWatcher
             state.Signature = null;
             state.LastRead = null;
             state.Candidate = null;
-            return;
+            return null;
         }
-        if (Volatile.Read(ref session) != started) return;
+        if (Volatile.Read(ref session) != started) return null;
         Interlocked.Increment(ref reads);
         ReadMeasured?.Invoke(now() - clock);
-        var candidate = MakeCandidate(reading, area.Region, crop, SplitsMenuRows(Game?.Invoke()));
-        if (state.LastRead == candidate.Key)
+        state.Signature = signature;
+        state.LastReadCrop = crop;
+        state.LastFullCheck = now();
+        state.Lines = [.. reading.Lines.Where(line => line.Box.HasValue).Take(32).Select(line => line.Box!.Value)];
+        return MakeCandidate(reading, area.Region, image, SplitsMenuRows(Game?.Invoke()));
+    }
+
+    private static int IconCount(Candidate candidate) =>
+        candidate.Paragraphs.Sum(paragraph => paragraph.Count(c => c == ButtonIcons.Marker));
+
+    /// <summary>
+    /// Okuma bekletilmeli mi (gösterilmeden önce bir iki tur daha okunur):
+    /// <list type="bullet">
+    /// <item>Az önce gösterilen yazının başı: yazı belirirken renkli sözcük geç geliyor ("Fly to a" ← "Fly to a drop");
+    /// görev her belirişinde iki kez çevrilip değişiyordu.</item>
+    /// <item>Ekrandakiyle neredeyse aynı ya da onun eksik hâli, ve daha çok simge bulmamış: harita arkada oynarken tuş
+    /// çubuğu "SET DESTINATION ✕ EXIT ○" / "SET DESTINATIPN EXIT ○" diye okunup kutu sürekli değişiyordu.</item>
+    /// <item>Daha çok simge bulmuş ama ekrandakinin bir sözcüğünü simgeyle değiştirmiş ("Find □" ← "Find Donnie").</item>
+    /// </list>
+    /// </summary>
+    private static bool ShouldHold(Candidate candidate, State state)
+    {
+        if (candidate.Text.Length == 0) return false;
+        if (state.Remembered.Length > candidate.Text.Length && state.Remembered.StartsWith(candidate.Text + " ", StringComparison.Ordinal))
+            return true;
+        if (state.ShownText.Length == 0 || state.ShownText == candidate.Text || TextMatch.AddsMeaning(candidate.Text, state.ShownText)) return false;
+        var icons = IconCount(candidate);
+        return icons <= state.ShownIcons
+            ? TextMatch.IsSimilar(state.ShownText, candidate.Text, 0.85) || IsPartOf(candidate.Text, state.ShownText)
+            : LosesWords(candidate.Text, state.ShownText);
+    }
+
+    private static bool Matches(string a, string b) => a == b || TextMatch.IsSimilar(a, b, 0.75);
+
+    private static string[] Words(string text) =>
+        [.. text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(token => token.Any(char.IsLetterOrDigit))];
+
+    /// <summary>Okuma ekrandakinin eksik hâli mi: sözcükleri (biri tanınmayabilir) ekrandakinde sırasıyla geçiyor.</summary>
+    internal static bool IsPartOf(string reading, string shown)
+    {
+        var part = reading.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var whole = shown.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (part.Length == 0 || part.Length >= whole.Length) return false;
+        int at = 0, misses = 0;
+        foreach (var word in part)
         {
-            state.Candidate = null;
-            await CommitAsync(candidate, area, state, started).ConfigureAwait(false);
+            var found = Array.FindIndex(whole, at, w => Matches(w, word));
+            if (found < 0) { if (++misses > 1) return false; continue; }
+            at = found + 1;
         }
-        else
-        {
-            state.LastRead = candidate.Key;
-            state.Candidate = candidate;
-        }
+        return misses < part.Length;
+    }
+
+    /// <summary>
+    /// Okumanın bütün sözcükleri ekrandakinde geçiyor ama ekrandakinin bir sözcüğü kayıp (simge onun yerine okunmuş).
+    /// </summary>
+    internal static bool LosesWords(string reading, string shown)
+    {
+        var have = Words(reading);
+        var whole = Words(shown);
+        return have.Length > 0 && whole.Any(word => !have.Any(w => Matches(w, word))) && have.All(word => whole.Any(w => Matches(w, word)));
     }
 
     /// <summary>
@@ -225,7 +432,7 @@ public sealed class RegionWatcher
         // gibi gruplanır; her grubun çevirisi TV'de kendi yerine konur. Tek grupta (ya da yeri bilinmeyen satır varsa)
         // eskisi gibi tek kutu. Anahtar grup yapısını da içerir: aynı yazı farklı gruplanırsa bloklar yeniden kurulur.
         IReadOnlyList<Block>? blocks = null;
-        var key = TextMatch.Normalize(string.Join(' ', paragraphs));
+        var key = TextKey(paragraphs);
         var groups = lines.Count > 1 && boxes.Count == lines.Count ? ScreenTranslation.Groups(reading, menuRows) : [];
         if (groups.Count is > 1 and < ScreenTranslation.MaxGroups)
         {
@@ -240,11 +447,11 @@ public sealed class RegionWatcher
                 start += group.Paragraphs.Count;
             }
             blocks = list;
-            key = TextMatch.Normalize(string.Join(' ', paragraphs)) + "|" + string.Join(',', list.Select(block => block.Count));
+            key = TextKey(paragraphs) + "|" + string.Join(',', list.Select(block => block.Count));
         }
         IReadOnlyList<IReadOnlyList<IconSlot>>? cut = frame is null || icons.All(list => list.Count == 0) ? null
             : [.. icons.Select(list => ButtonIcons.WithImages(list, frame))];
-        return new Candidate(paragraphs, box, lineHeight, key, cut, blocks);
+        return new Candidate(paragraphs, box, lineHeight, key, cut, blocks) { Text = TextKey(paragraphs) };
     }
 
     private static bool SameLayout(IReadOnlyList<Block>? a, IReadOnlyList<Block>? b) =>
@@ -270,8 +477,21 @@ public sealed class RegionWatcher
             state.RenderedBlocks = moved;
             return;
         }
-        var previousShown = state.Shown;
+        if (ShouldHold(candidate, state))
+        {
+            if (state.Held != candidate.Key) (state.Held, state.Holds) = (candidate.Key, 0);
+            if (++state.Holds <= HoldLimit)
+            {
+                // Sonraki tur (iz değişmese de) bu okumayı yeniden dener; o hâlde kalırsa sınırda gösterilir.
+                state.Candidate = candidate;
+                return;
+            }
+        }
+        (state.Held, state.Holds) = (null, 0);
+        var previous = (state.Shown, state.ShownText, state.ShownIcons);
         state.Shown = candidate.Key;
+        state.ShownText = candidate.Text;
+        state.ShownIcons = IconCount(candidate);
         if (candidate.Key.Length == 0)
         {
             server.SendRegion(area.Id, "", null);
@@ -282,21 +502,27 @@ public sealed class RegionWatcher
             Log?.Invoke($"ek alan {area.Name}: boşaldı");
             return;
         }
-        // Simgeler paket aramasında yok sayılır, çeviride uydurma adlarla korunur (IconText).
-        var prepared = candidate.Paragraphs.Select(IconText.Protect).ToList();
-        string?[] result = [.. candidate.Paragraphs.Select(paragraph => PackLookup?.Invoke(IconText.Plain(paragraph))?.Text)];
-        var fromPack = result.Count(text => text is not null);
-        // Zaten Türkçe olan parça çevrilmez: aslı kalır, tümü öyleyse kutu gösterilmez.
-        for (var i = 0; i < result.Length; i++)
-            if (result[i] is null && SkipsTurkish && TurkishText.IsSure(candidate.Paragraphs[i])) result[i] = candidate.Paragraphs[i];
+        var key = TranslationKey(candidate);
+        Translation? cached;
+        lock (translations) translations.TryGetValue(key, out cached);
+        Translation translation;
+        var waited = false;
         try
         {
-            var missing = Enumerable.Range(0, result.Length).Where(i => result[i] is null).ToList();
-            if (missing.Count > 0)
+            if (cached is not null) translation = cached;
+            else
             {
-                var texts = missing.Select(i => prepared[i].Text).ToList();
-                var translations = await translator.TranslateAllAsync(texts).ConfigureAwait(false);
-                for (var i = 0; i < missing.Count && i < translations.Count; i++) result[missing[i]] = translations[i];
+                var request = TranslateAsync(candidate.Paragraphs);
+                waited = !request.IsCompleted;
+                // Yeni komut doğrulandı; yavaş motor yanıtını beklerken eski Türkçe onun üstünde kalmasın.
+                if (waited && !string.IsNullOrEmpty(state.RenderedText) && Volatile.Read(ref session) == started)
+                {
+                    server.SendRegion(area.Id, "", null);
+                    state.RenderedText = null;
+                    state.RenderedKey = null;
+                    previous = ("", "", 0);
+                }
+                translation = await request.ConfigureAwait(false);
             }
         }
         catch (Exception error)
@@ -305,14 +531,61 @@ public sealed class RegionWatcher
             {
                 if (state.Shown == candidate.Key)
                 {
-                    state.Shown = previousShown;
+                    (state.Shown, state.ShownText, state.ShownIcons) = previous;
                     state.Candidate = candidate;
                 }
                 Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(IconText.Plain(string.Join(' ', candidate.Paragraphs)))} çevrilemedi ({error.Message})");
             }
             return;
         }
-        if (Volatile.Read(ref session) != started || state.Shown != candidate.Key) return;
+        lock (translations)
+        {
+            if (Volatile.Read(ref session) != started || state.Shown != candidate.Key) return;
+            if (cached is null)
+            {
+                if (translations.Count >= RenderedLimit) translations.Clear();
+                translations[key] = translation;
+            }
+        }
+        // Motor çalışırken araya giren kareler kuyruğa alınmaz. Yalnız en son karede bu alan değiştiyse
+        // tekrar oku: arka plandaki hareket geçerli bir çeviriyi silemez, eski menü komutu da geri dönmez.
+        if (waited && Latest() is { } newest)
+        {
+            if (!newest.Areas.Contains(area))
+            {
+                (state.Shown, state.ShownText, state.ShownIcons) = previous;
+                state.Signature = null;
+                state.LastRead = null;
+                return;
+            }
+            var crop = RegionCropper.Crop(newest.Frame, area.Region);
+            var signature = RegionCropper.Signature(crop);
+            if (PixelsChanged(state, crop, signature))
+            {
+                var fresh = ReadCandidate(newest.Frame, crop, signature, area, state, started);
+                if (fresh is null || fresh.Key != candidate.Key || TranslationKey(fresh) != key)
+                {
+                    (state.Shown, state.ShownText, state.ShownIcons) = previous;
+                    if (fresh is not null) Stage(fresh, state);
+                    return;
+                }
+                // OCR sürerken de başka bir komuta geçilebilir. Motor sonucunu sakladık; tekrar motor
+                // çağırmadan sonraki normal turda doğrula, burada sürekli OCR yaparak yetişmeye çalışma.
+                if (Latest() is { } afterRead && (!afterRead.Areas.Contains(area)
+                    || (!ReferenceEquals(afterRead.Frame, newest.Frame)
+                        && PixelsChangedSinceRead(afterRead.Frame, area, state))))
+                {
+                    (state.Shown, state.ShownText, state.ShownIcons) = previous;
+                    Stage(fresh, state);
+                    return;
+                }
+                candidate = fresh;
+            }
+        }
+        if (Volatile.Read(ref session) != started) return;
+        state.Remembered = candidate.Text;
+        var (result, fromPack) = (translation.Result, translation.FromPack);
+        var prepared = candidate.Paragraphs.Select(IconText.Protect).ToList();
         var slots = new List<IconSlot>();
         var text = new List<string>(candidate.Paragraphs.Count);
         for (var i = 0; i < candidate.Paragraphs.Count; i++)
@@ -337,7 +610,7 @@ public sealed class RegionWatcher
             state.RenderedBlocks = null;
             return;
         }
-        var origin = fromPack == candidate.Paragraphs.Count ? "paket" : fromPack > 0 ? "paket+motor" : "motor";
+        var origin = cached is not null ? "hazır çeviri" : fromPack == candidate.Paragraphs.Count ? "paket" : fromPack > 0 ? "paket+motor" : "motor";
         Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(IconText.Plain(string.Join(' ', candidate.Paragraphs)))} → {origin}");
         var (shown, icons) = IconText.Render(string.Join('\n', text), slots);
         var blocks = candidate.Blocks is { } layout ? RenderBlocks(candidate, layout, text, similar, slots) : null;
@@ -350,6 +623,12 @@ public sealed class RegionWatcher
         state.RenderedLineHeight = candidate.LineHeight;
         state.RenderedLayout = candidate.Blocks;
         state.RenderedBlocks = blocks;
+    }
+
+    private static bool PixelsChangedSinceRead(Frame frame, WatchedArea area, State state)
+    {
+        var crop = RegionCropper.Crop(frame, area.Region);
+        return PixelsChanged(state, crop, RegionCropper.Signature(crop));
     }
 
     /// <summary>
@@ -374,13 +653,50 @@ public sealed class RegionWatcher
         return result;
     }
 
+    /// <summary>Paragrafların çevirisi (çevrilmeyen parça null) ve kaçının paketten geldiği.</summary>
+    private sealed record Translation(string?[] Result, int FromPack);
+
+    // Yalnız kararlı okumaların başarılı çevirileri saklanır.
+    private readonly Dictionary<string, Translation> translations = [];
+
+    /// <summary>
+    /// Saklanan çevirinin anahtarı: paragraflar ayrı ayrı. Aynı yazı başka satırlardan bölünürse paragraf sayısı değişir;
+    /// <see cref="Candidate.Key"/> aynı kalsa da eski çeviri kullanılmaz (dizinin dışına taşardı).
+    /// </summary>
+    private static string TranslationKey(Candidate candidate) => string.Join('\n', candidate.Paragraphs);
+
+    private async Task<Translation> TranslateAsync(IReadOnlyList<string> paragraphs)
+    {
+        // Simgeler paket aramasında yok sayılır, çeviride uydurma adlarla korunur (IconText).
+        var prepared = paragraphs.Select(IconText.Protect).ToList();
+        string?[] result = [.. paragraphs.Select(paragraph => PackLookup?.Invoke(IconText.Plain(paragraph))?.Text)];
+        var fromPack = result.Count(text => text is not null);
+        // Zaten Türkçe olan parça çevrilmez: aslı kalır, tümü öyleyse kutu gösterilmez.
+        for (var i = 0; i < result.Length; i++)
+            if (result[i] is null && SkipsTurkish && TurkishText.IsSure(paragraphs[i])) result[i] = paragraphs[i];
+        var missing = Enumerable.Range(0, result.Length).Where(i => result[i] is null).ToList();
+        if (missing.Count > 0)
+        {
+            var texts = missing.Select(i => prepared[i].Text).ToList();
+            var translated = await translator.TranslateAllAsync(texts).ConfigureAwait(false);
+            for (var i = 0; i < missing.Count && i < translated.Count; i++) result[missing[i]] = translated[i];
+        }
+        return new Translation(result, fromPack);
+    }
+
     /// <summary>Çeviri durdu ya da hat yeniden kuruldu: süren tur bırakılır, TV'deki ek alan kutuları kalkar.</summary>
     public void Reset()
     {
         Interlocked.Increment(ref session);
         var anyShown = AnyShown();
         states = [];
-        lastPass = null;
+        lock (captureGate)
+        {
+            lastPass = null;
+            confirmAt = null;
+            latest = null;
+        }
+        lock (translations) translations.Clear();
         if (anyShown) server.ClearRegions();
     }
 }

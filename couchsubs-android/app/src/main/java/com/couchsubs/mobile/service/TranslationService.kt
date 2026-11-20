@@ -181,6 +181,8 @@ class TranslationService : Service() {
     @Volatile private var regionWatcher: com.couchsubs.mobile.core.RegionWatcher? = null
     @Volatile private var regionReader: SubtitleReader? = null
     private val regionWork = Executors.newSingleThreadExecutor { Thread(it, "CouchSubs extra areas").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
+    /** Ek alan yazısı kararlı mı diye beklenirken çevirisinin önceden istendiği iş parçacığı (turu bekletmesin). */
+    private val regionPrefetch = Executors.newSingleThreadExecutor { Thread(it, "CouchSubs extra area translations").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
     private val lifecycle = Any()
     @Volatile private var destroyed = false
     @Volatile private var streaming = false
@@ -377,8 +379,14 @@ class TranslationService : Service() {
         // Ek alanlar aynı paketlerle ve aynı motorla (ayrı bir örnekle; altyazının bağlamına karışmasın) çevrilir; satırları
         // ortak havuza önerilmez (arayüz yazıları havuzu kirletmesin). Mac ve iPhone ile aynı.
         val areaReader = SubtitleReader().also { regionReader = it }
+        // Ön okuma, bulut kotasını tüketmemeli veya paketin son eşleşmesini (oyun tanıma) değiştirmemeli.
+        val areaTranslator = engineTranslator(free.separate())
+        val earlyTranslator = if (settings.engine == EngineChoice.FREE && packTitles == null) engineTranslator(free.separate()) else null
         regionWatcher = com.couchsubs.mobile.core.RegionWatcher({ crop -> areaReader.read(crop.pixels as RegionPixels) },
-            engineTranslator(free.separate()), subtitleServer).apply {
+            areaTranslator, subtitleServer,
+            prefetchWork = regionPrefetch,
+            prefetchTranslator = earlyTranslator ?: areaTranslator).apply {
+            prefetchesTranslations = earlyTranslator != null
             packLookup = { text ->
                 if (packTitles != null && settings.packsEnabled) {
                     library.setDisabled(settings.disabledPacks)
@@ -425,7 +433,7 @@ class TranslationService : Service() {
                 SubtitleReader.copyRegion(frame, r)?.let {
                     com.couchsubs.mobile.core.RegionWatcher.Crop(it, com.couchsubs.mobile.core.RegionSignature.of(it.nv21, it.width, it.height), it.gray)
                 }
-            }) { task -> runCatching { regionWork.execute(task) } }
+            }) { task -> regionWork.execute(task) }
             FramePreview.offer(frame, now)
         }
         val onState: (SessionState) -> Unit = { state ->
@@ -443,6 +451,7 @@ class TranslationService : Service() {
             // Elle seçilen oyunda satırlar yalnız o oyunun paketinde aranır, paketi yoksa hiç aranmaz (#218).
             PlayedGame.packs = library
             PlayedGame.onChange = { game ->
+                regionWatcher?.reset()
                 linePool.setGame(game)
                 // Yeni oyun: o oyunun (havuzdan otomatik) paketi sunucuda yeni çıkmış olabilir; inerse bu oturumun
                 // paketleri hemen yeniden okunur (iPhone'daki gibi).
@@ -790,6 +799,7 @@ class TranslationService : Service() {
         background.shutdownNow()
         ocr.shutdownNow()
         regionWork.shutdownNow()
+        regionPrefetch.shutdownNow()
         screenGeneration.incrementAndGet()
         screenTask?.cancel(true)
         screenWork.shutdownNow()

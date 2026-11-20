@@ -253,6 +253,7 @@ final class PhoneModel: ObservableObject {
         reloadPackList()
         let pool = self.pool
         gameChoice.onChange = { [weak self] game in
+            self?.regionWatcher?.reset()
             Task { await pool.setGame(game) }
             // Bu oyunun (havuzdan otomatik) paketi sunucuda yeni çıkmış olabilir.
             if game != nil { self?.onGameStarted() }
@@ -785,7 +786,7 @@ final class PhoneModel: ObservableObject {
     private func handle(_ frame: CGImage, capturedAt: Int) async {
         framePreview.image = frame
         guard let current = pipeline else { return }
-        // Ek alanlar ayrı ve seyrek okunur (saniyede bir); altyazı okumasını beklemez, onu bekletmez.
+        // Ek alanlar altyazıyla aynı OCR kuyruğunu kullanır; saniyede bir tur yeterlidir.
         let areas = settings.activeExtraAreas
         if regionWatcher == nil, !areas.isEmpty { regionWatcher = makeRegionWatcher(packLookup: current.packLookup) }
         regionWatcher?.offer(frame, areas: areas)
