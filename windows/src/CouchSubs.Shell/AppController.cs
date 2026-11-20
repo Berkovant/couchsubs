@@ -2517,6 +2517,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             regionWatcher.TranslatesUiCommands = settings.SourceLanguage == "en" && settings.TargetLanguage == "tr";
             regionWatcher.EnglishPhoneMessages = settings.SourceLanguage == "en";
             regionWatcher.Game = () => gameSense.Current?.Name;
+            regionWatcher.Slowdown = () => ReadPressure.Slowdown(pipeline?.LastReadMs, frameGate.BusyMs(Environment.TickCount64));
         }
     }
 
