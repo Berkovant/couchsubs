@@ -70,6 +70,13 @@
     <string name="psn_page_failed">Sony\'nin giriş sayfası açılamadı</string>
     <string name="psn_page_failed_hint">Yeniden deneyebilir ya da girişi telefonun tarayıcısında yapıp adresi buraya yapıştırabilirsin.</string>
     <string name="psn_retry">Yeniden dene</string>
+    <string name="psn_completing">Giriş tamamlanıyor…</string>
+    <string name="psn_error_timeout">Sony\'den zamanında yanıt gelmedi. Bağlantını kontrol edip yeniden dene.</string>
+    <string name="psn_error_no_code">Sony giriş kodunu göndermedi.</string>
+    <string name="psn_error_refused">Sony girişi kabul etmedi.</string>
+    <string name="psn_error_rate_limited">Sony çok sayıda deneme yüzünden girişi geçici olarak durdurdu. Birkaç dakika bekleyip yeniden dene.</string>
+    <string name="psn_error_http">Sony\'nin sunucusu şu an yanıt vermiyor (HTTP %1$s).</string>
+    <string name="psn_error_bad_response">Sony\'den beklenmeyen bir yanıt geldi.</string>
     <string name="psn_browser">Tarayıcıda aç</string>
     <string name="psn_browser_reopen">Tarayıcıyı yeniden aç</string>
     <string name="psn_browser_title">Tarayıcıda giriş</string>
@@ -163,6 +170,10 @@
     <string name="settings_display_mode_overlay">Katman</string>
     <string name="settings_display_mode_note">PS5 görüntüsü CouchSubs TV uygulamasının içinde siyah kalıyorsa Katman\'ı seçin: TV, PS5\'i kendi HDMI girişinde gösterir, altyazı görüntünün üstünde çıkar. Görüntü gelmezse TV uygulaması önce HDMI girişlerini gösterir, Katman varsa ona geçer. TV uygulaması açıkken TV\'nin görüntü modu değişiyor, oyun modu ya da HDR kayboluyorsa da Katman\'ı seçin: uygulamanın içinde TV, PS5 görüntüsünü HDMI girişi olarak değil uygulama olarak işler. Google Play\'den kurulan TV uygulamasında Katman yok: orada bu seçim uygulanmaz, TV bunu ekranda söyler.</string>
     <string name="settings_screen_on">Ekranı açık tut</string>
+    <string name="settings_screen_on_note">Telefon kilitlense ya da ekran kapansa da TV\'deki çeviri sürer. Ancak ekran kapalıyken Wi-Fi güç tasarrufuna geçer; bazı telefonlarda bağlantı yavaşlayabilir ya da kopabilir. En sağlam yol, ekranı açık bırakıp parlaklığı kısmak.</string>
+    <string name="background_limit_title">Telefon kilitlenince çeviri durabilir</string>
+    <string name="background_limit_body">Bu telefonda CouchSubs için pil kısıtlaması açık. Ekran kapanınca telefonun pil tasarrufu bağlantıyı yavaşlatabilir, kesebilir ya da çeviriyi durdurabilir. Açılan ayarda Pil bölümünden CouchSubs\'ı Kısıtlamasız yap. Vivo, Xiaomi ve Oppo\'da ayrıca arka planda çalışmaya ve otomatik başlatmaya izin ver.</string>
+    <string name="background_limit_button">Pil ayarını aç</string>
     <string name="close">Kapat</string>
     <!-- Kendi ürünlerimizin tanıtım popup'ı (promo.json) -->
     <string name="promo_label">Sponsorlu</string>
@@ -379,6 +390,11 @@
     <string name="tvinstall_share_log">Kurulum günlüğünü paylaş</string>
     <string name="tvinstall_signin_title">Samsung girişi</string>
     <string name="tvinstall_signin_browser">Tarayıcıda aç</string>
+    <string name="tvinstall_signin_loading">Samsung\'un giriş sayfası açılıyor…</string>
+    <string name="tvinstall_signin_loading_hint">Sayfa gelmezse yukarıdaki Tarayıcıda aç ile girişi telefonun tarayıcısında yapabilirsin.</string>
+    <string name="tvinstall_signin_failed">Samsung\'un giriş sayfası açılamadı</string>
+    <string name="tvinstall_signin_failed_hint">Yeniden deneyebilir ya da girişi telefonun tarayıcısında yapabilirsin. Giriş bitince CouchSubs\'a dön; kurulum kendiliğinden sürer.</string>
+    <string name="webview_out_of_memory">Telefonun belleği uygulama içi tarayıcıya yetmedi. Arka plandaki uygulamaları kapatıp yeniden dene ya da girişi tarayıcıda yap.</string>
     <string name="tvinstall_maintenance">TV\'de “Sunucu bakım altında” yazıyorsa TV, Samsung\'un sunucularına ulaşamıyor: TV\'nin internet bağlantısını, tarih ve saatini kontrol et, TV\'yi yeniden başlatıp tekrar dene.</string>
     <string name="tvinstall_err_unreachable">TV bu telefonu kabul etmedi. TV\'deki geliştirici modu penceresinde Host PC IP\'nin bu telefonun adresi (%1$s) olduğunu kontrol et ve TV\'yi tam yeniden başlat: güç tuşunu Samsung logosu görünene kadar (yaklaşık 5 saniye) basılı tut ya da TV\'nin fişini 30 saniye çek.</string>
     <string name="tvinstall_err_other_network">TV (%1$s) ile bu telefon (%2$s) farklı ağlarda, bu yüzden TV telefonu kabul etmiyor. İkisini aynı Wi-Fi\'ya bağla (misafir ağı ya da ikinci modem değil), TV\'de Host PC IP\'ye telefonun yeni adresini yaz, sonra TV\'yi tam yeniden başlat (güç tuşunu Samsung logosu görünene kadar, yaklaşık 5 saniye basılı tut).</string>
