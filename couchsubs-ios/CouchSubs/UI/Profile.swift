@@ -417,6 +417,7 @@ struct SettingsScreen: View {
                 }
             }
             AreaProfileTile(areas: model.gameAreas)
+            GameProfilesTile(areas: model.gameAreas)
             AreaTile()
             ExtraAreasTile()
             LoginPasscodeTile()
