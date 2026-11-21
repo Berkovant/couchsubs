@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -20,6 +21,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -94,6 +97,8 @@ class MainActivity : ComponentActivity() {
                     if (status.running && settings.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
+                // "Arka planda sürdür": çeviri sürerken uygulamadan çıkınca küçük pencere açılır (Android 12+'da sistem açar).
+                LaunchedEffect(status.running) { BackgroundPip.update(this@MainActivity, BackgroundPip.wanted(this@MainActivity, status)) }
                 // Masaüstündeki gibi: uygulama açılınca ve TV her bağlandığında TV'deki CouchSubs sürümüne bakılır;
                 // eskiyse ana ekran "TV uygulamasını güncelle" önerir.
                 val tvConnected = status.connectedTvs > 0
@@ -199,14 +204,32 @@ class MainActivity : ComponentActivity() {
                 }
                 // TV'nin eşleştirme isteği: onay penceresi ve her ekranın üstünde onay satırı (iPhone ile aynı).
                 TvPairingPrompt(status.pairing)
+                // Küçük pencerede (Resim içinde resim) yalnız oyun görüntüsü ve canlı altyazı; gezinme yığını altta durur.
+                if (inPip) PipSubtitleView(status)
             }
         }
     }
+
+    /** Küçük pencerede (Resim içinde resim) mi; Compose içeriği buna göre çizilir. */
+    private var inPip by mutableStateOf(false)
 
     /** Öne gelen ekran, gösterilemeyen (ya da arka plandayken gelen) eşleştirme isteğini yeniden gösterir. */
     override fun onResume() {
         super.onResume()
         TranslationService.syncPairing()
+        // Profil'de "Arka planda sürdür" değişmiş olabilir.
+        BackgroundPip.update(this, BackgroundPip.wanted(this, LiveState.status.value))
+    }
+
+    /** Android 11 ve öncesi: ana ekrana dönülürken küçük pencere burada açılır. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        BackgroundPip.onUserLeave(this, BackgroundPip.wanted(this, LiveState.status.value))
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
     }
 
     /**
