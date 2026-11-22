@@ -5,6 +5,7 @@ import json, re, sys
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import common as c, llm
+from atomic_json import dump_atomic
 
 game, srcs, out = sys.argv[1], sys.argv[2].split(","), sys.argv[3]
 
@@ -52,7 +53,12 @@ def run(start):
         for j, s in enumerate(l["sents"]):
             parts.append(f"  {start + i}.{j}\t{s}")
     res = llm.call(SYSTEM, "\n".join(parts), SCHEMA, f"{game}-translate", max_tokens=32000)
-    return start, {it["id"]: it["tr"].strip() for it in (res or {}).get("items", [])}
+    # LLM responses may contain hallucinated IDs from the preceding context
+    # or other chunks. Only allow this chunk's requested sentence IDs to
+    # update translations, or a later chunk could overwrite an earlier one.
+    valid = {f"{start + i}.{j}" for i, l in enumerate(chunk) for j in range(len(l["sents"]))}
+    return start, {it["id"]: it["tr"].strip() for it in (res or {}).get("items", [])
+                   if it["id"] in valid and it["tr"].strip()}
 
 
 got = {}
@@ -70,4 +76,4 @@ for i, l in enumerate(lines):
     l["tr"] = [got.get(f"{i}.{j}") for j in range(len(l["sents"]))]
 missing = sum(1 for l in lines for t in l["tr"] if not t)
 print("missing sentences", missing)
-json.dump(lines, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+dump_atomic(lines, out, ensure_ascii=False, indent=0)

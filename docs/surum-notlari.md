@@ -10,6 +10,7 @@ CouchSubs'ın yeni deneme sürümü. Türkçe dil desteği olmayan PS5 oyunları
 - **GTA 6 telefon mesajları oynamıyor:** Panel ve balonlar yerinde duruyor, aynı mesaj yeniden çevrilmiyor, kısa okunamamada panel yanıp sönmüyor.
 - **Konuşan adı rengi yalnız adı boyuyor:** "Konuşan adını renklendir" açıkken cümle Yazı rengi ayarında kalıyor.
 - **LG'de aralıklı kararma:** Açık ve bağlı TV uygulamasına yeniden açma komutu gitmiyor; çeviri sırasında ekran kararıp "HDR" yazısıyla geri gelmiyor (TV uygulaması 0.9.80).
+- **TV'de eşleştirme kodu:** Kod görünmeden "karşılaştırın" yazması düzeltildi (TV uygulaması 0.9.81).
 
 **beta.86'da gelenler:** Mac'te yeni arayüz, TV bağlantısı koptuğunda "Yeniden bağlanılıyor…" ve TV uygulamasının kendiliğinden yeniden açılması, yapay zekâ çevirisinde kaybolan satırlar (#893), GTA 6 telefon mesajlarının yanda panelde gösterilmesi, plaka ve tabela yazılarının çevrilmemesi, Samsung "Sunucu bakım altında" uyarısı, Windows'ta güncelleme döngüsü.
 
