@@ -4,11 +4,15 @@ CouchSubs'ın yeni deneme sürümü. Türkçe dil desteği olmayan PS5 oyunları
 
 **İndir:** [Mac (DMG)](https://github.com/yorulmazsinan/couchsubs/releases/latest/download/CouchSubs-macos.dmg) · [Windows (kurulum)](https://github.com/yorulmazsinan/couchsubs/releases/latest/download/CouchSubs-windows-Setup.exe) · [Android telefon (Google Play)](https://play.google.com/store/apps/details?id=com.couchsubs.mobile)
 
-**Bu sürümde yeni** (yalnız hata düzeltmeleri; gerçek oyun kareleriyle gerileme testinden geçti)
+**Bu sürümde yeni**
 
-- **Android TV'de siyah ekran** (Philips, TCL vb.): Görüntü modu artık varsayılan olarak Otomatik; TV uygulaması doğrudan Katman'da açılıyor, çeviri başlayınca ekran kararmıyor (TV uygulaması 0.9.74). İsteyen Ayarlar'dan Uygulama İçinde ya da Katman'ı seçebilir.
-- **Güncelleme penceresi:** Yalnız yeni sürümün notlarını gösteriyor, eski sürümlerin notları tekrar gelmiyor.
-- **Oyun paketleri:** Paket indirme istekleri uygulama tarafından imzalanıyor. Paketlerin kesintisiz inmesi için bu sürüme güncellemeniz önerilir.
+- **Windows: yeni arayüz.** Windows uygulaması Mac'teki yeni tasarımla geliyor; özellikler ve ayarlar aynı. Ana ekran, Ayarlar, kurulum ve TV ekranları yenilendi, "Günlüğü Kopyala" Windows'ta da var. Açılışta bir sorun olursa uygulama düzeltilmiş sürümü kendiliğinden kurmayı dener.
+- **GTA 6 telefon mesajları oynamıyor:** Panel ve balonlar yerinde duruyor, aynı mesaj yeniden çevrilmiyor, kısa okunamamada panel yanıp sönmüyor.
+- **Konuşan adı rengi yalnız adı boyuyor:** "Konuşan adını renklendir" açıkken cümle Yazı rengi ayarında kalıyor (TV uygulaması 0.9.79).
+
+**beta.86'da gelenler:** Mac'te yeni arayüz, TV bağlantısı koptuğunda "Yeniden bağlanılıyor…" ve TV uygulamasının kendiliğinden yeniden açılması, yapay zekâ çevirisinde kaybolan satırlar (#893), GTA 6 telefon mesajlarının yanda panelde gösterilmesi, plaka ve tabela yazılarının çevrilmemesi, Samsung "Sunucu bakım altında" uyarısı, Windows'ta güncelleme döngüsü.
+
+**beta.84'te gelenler:** Android TV'de siyah ekran düzeltmesi (varsayılan Otomatik görüntü modu, TV uygulaması 0.9.74), güncelleme penceresinde yalnız yeni sürümün notları, imzalı paket indirme.
 
 **beta.83'te gelenler:** GTA 6 telefon mesajlarının kendi balonunda çevrilmesi, haber bandının konuşmanın önüne geçmemesi (#933), Samsung'da AS400 uyarısı düzeltmesi.
 

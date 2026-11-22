@@ -542,8 +542,8 @@
                             <c:SwitchRow x:Name="SpeakerNames" Content="{t:T 'Show speaker name'}"
                                          Description="{t:T 'Keeps the character\'s name in front of the translation (ARTHUR: …). The name itself is never translated.'}"
                                          Checked="OnSpeakerNames" Unchecked="OnSpeakerNames" />
-                            <c:SwitchRow x:Name="SpeakerColors" Content="{t:T 'Color by speaker'}"
-                                         Description="{t:T 'Each speaker\'s name and line keep their own color.'}"
+                            <c:SwitchRow x:Name="SpeakerColors" Content="{t:T 'Color speaker names'}"
+                                         Description="{t:T 'Only the speaker\'s name gets its own color; the line stays in your Text color.'}"
                                          Checked="OnSpeakerColors" Unchecked="OnSpeakerColors" />
                             <c:SwitchRow x:Name="SetTextApart" Content="{t:T 'Set on-screen text apart from subtitles'}"
                                          Description="{t:T 'On-screen text keeps its own colours and place, and never looks like the subtitle box.'}"
