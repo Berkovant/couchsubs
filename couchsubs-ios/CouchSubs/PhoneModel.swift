@@ -230,6 +230,8 @@ final class PhoneModel: ObservableObject {
     @Published private(set) var serverPort: UInt16 = AppIdentity.serverPort
     private var session: StreamControlling?
     private var keeper: KeeperControlling?
+    /// Her yeni bekçide artar: durdurulan bekçinin geç gelen açma sonucu yenisininkiyle karışmaz.
+    private var keeperGeneration = 0
     private var pipeline: SubtitlePipeline?
     /// Ek alanları (görev, telefon, bildirim) okuyup çeviren; çeviri sürerken ve ek alan varken var (Mac ile aynı).
     private var regionWatcher: RegionWatcher?
@@ -246,6 +248,8 @@ final class PhoneModel: ObservableObject {
     private var noticeAreas: [ExtraArea] = []
     /// Hatta aynı anda tek kare girer. Durdurma ve yeni hat kapıyı sıfırlar; takılan okuma hattı yeniden kurdurur (Mac ile aynı).
     private var frameGate = FrameGate()
+    /// Okuma sürerken atlanan son kare; okuma bitince okunur (bkz. `FrameGate.leave`).
+    private var skippedFrame: (frame: CGImage, capturedAt: Int)?
     /// Çözücüden gelen son kare (ana iş parçacığında bekleyen en çok bir kare); çeviri sürerken var.
     private var frameMailbox: FrameMailbox<(frame: CGImage, capturedAt: Int)>?
     /// Takılan okuma bu kadar sürdüyse bırakılır, okuma yeni kuyrukta sürer (bkz. `ReadQueue.abandonStall`). Takılan okuma
@@ -795,6 +799,7 @@ final class PhoneModel: ObservableObject {
         session = nil
         frameMailbox?.clear()
         frameGate.reset()
+        skippedFrame = nil
         abandonStalledRead(olderThanMs: 0)
         guard let (session, _) = makeSession(xbox: xbox) else { return }
         sessionState = .connecting
@@ -858,6 +863,7 @@ final class PhoneModel: ObservableObject {
         frameMailbox = nil
         // Yeni "Başlat" eski oturumdan kalan (belki takılmış) okumayı beklemeden temiz başlar.
         frameGate.reset()
+        skippedFrame = nil
         server.pairing.setSession(false)
         tvPairingRequest = nil
         tvPairingOpened = false
@@ -966,13 +972,19 @@ final class PhoneModel: ObservableObject {
     private func startKeeper() {
         guard keeper == nil, settings.output.showsOnTV, hasTV, let tv else { return }
         let server = self.server
+        keeperGeneration += 1
+        let generation = keeperGeneration
         let keeper = services.makeKeeper(tv: tv, key: store.load(String.self, for: StoreKey.tvKey), params: ["server": serverAddress(for: tv), "key": server.accessKey],
                                          appConnected: { server.connectedClients > 0 }, onMoved: { [weak self] moved in
             Task { @MainActor in self?.tvMoved(to: moved) }
         }, onKey: { [weak self] key in
             Task { @MainActor in self?.store.save(key, for: StoreKey.tvKey) }
         }, consolePort: { server.consolePort }, onOpenResult: { [weak self] problem in
-            Task { @MainActor in self?.openResult(problem, brand: tv.brand) }
+            Task { @MainActor in
+                // Yerine yenisi kurulan (eski adresteki) bekçinin geç gelen sonucu yok sayılır.
+                guard let self, self.keeper != nil, self.keeperGeneration == generation else { return }
+                self.openResult(problem, brand: tv.brand)
+            }
         })
         keeper.start(interval: .seconds(5))
         self.keeper = keeper
@@ -1098,6 +1110,7 @@ final class PhoneModel: ObservableObject {
         pipeline?.reset()
         // Eski hatta süren okuma beklenmez; yeni hat ilk karesini hemen alır.
         frameGate.reset()
+        skippedFrame = nil
         let scheduler = ReadScheduler(maxReuse: settings.fastSubtitleDetection
             ? ReadScheduler.fastMaxReuse : ReadScheduler.defaultMaxReuse)
         let pipeline = SubtitlePipeline(reader: VisionReader(language: settings.sourceLanguage), translator: makeTranslator(),
@@ -1274,11 +1287,25 @@ final class PhoneModel: ObservableObject {
             makePipeline()
             entry = frameGate.enter(now: SubtitleStabilizer.uptimeMs())
         }
-        guard case .enter(let token) = entry, let pipeline else { return }
-        let region = settings.region
+        guard case .enter(let token) = entry, let pipeline else {
+            if case .busy = entry { skippedFrame = (frame, capturedAt) }
+            return
+        }
+        skippedFrame = nil
         Task { [weak self] in
-            await pipeline.process(frame, region: region, capturedAt: capturedAt)
-            self?.frameGate.leave(token)
+            var token = token
+            var next = (frame: frame, capturedAt: capturedAt)
+            while let model = self {
+                await pipeline.process(next.frame, region: model.settings.region, capturedAt: next.capturedAt)
+                // Okuma sürerken atlanan son kare hemen okunur: altyazı belirirken gelen son kare atlanıp ardından kare
+                // gelmezse yeni satır okunmuyordu (GitHub #1019; Mac ve Windows ile aynı).
+                guard model.frameGate.leave(token), let skipped = model.skippedFrame else { return }
+                model.skippedFrame = nil
+                guard model.pipeline === pipeline, model.screenTextDetector?.inMenu != true,
+                      case .enter(let again) = model.frameGate.enter(now: SubtitleStabilizer.uptimeMs()) else { return }
+                token = again
+                next = skipped
+            }
         }
     }
 
@@ -1984,12 +2011,20 @@ final class PhoneModel: ObservableObject {
         // Kurulan TV altyazı hedefi olur (Android'deki TvAppUpdate.installed gibi); yoksa kurulumun 3. adımında "Devam"
         // kapalı kalıyor, uygulama her açılışta yine o adımdan başlıyordu (#113).
         if !(tv?.brand == brand && tv?.host == host && hasTV) {
+            let previousHost = tv?.host
             let name = switch brand {
             case .androidTV: "Android TV"
             case .lg: "LG TV"
             case .samsung: "Samsung TV"
             }
             try? await pair(LGTV(name: name, host: host, brand: brand))
+            if keeper != nil, tv?.host == host, previousHost != host {
+                // Çeviri sürerken bekçi eski adresi tutar (Android TV DHCP'den yeni adres aldı, #985); yeni TV kaydıyla
+                // yeniden kurulur (Mac ile aynı).
+                keeper?.stop()
+                keeper = nil
+                startKeeper()
+            }
         }
         if hasTV, tv?.host == host, step == .output {
             store.save(true, for: StoreKey.setupComplete)

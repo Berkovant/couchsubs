@@ -84,6 +84,40 @@ object TvSessionLauncher {
         if (presence == null) "Samsung $host: uygulama listesi 3 sn'de gelmedi; açma isteği gönderilmedi (kurulu olmayan uygulamaya DEEP_LINK Smart Hub'ı mağazaya yollar)."
         else "Samsung $host: kurulu uygulama listesinde CouchSubs yok; açma isteği gönderilmedi."
 
+    /** Listesiz DEEP_LINK gönderilen ama TV uygulaması o günden beri bağlanmayan TV'ler (yalnız bellekte). */
+    private val samsungUnconfirmed = java.util.Collections.synchronizedSet(HashSet<String>())
+    /** Bayat bilgi günlüğe yazıldı (bekçi her 30 sn'de denediği için bir kez). */
+    private val samsungStaleReported = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Kurulu olduğu bilinen TV'de listeye bakmadan DEEP_LINK gönderilebilir mi. Hak, TV uygulaması her bağlandığında
+     * ([samsungAppConnected]) bir kez verilir: bir önceki listesiz DEEP_LINK'ten sonra uygulama bağlanmadıysa bilgi bayat
+     * sayılır ve TV'nin kurulu uygulama listesine bakılır. Uygulama TV'den silinince (Smart Hub sıfırlaması, kaldırılıp
+     * yeniden kurulamayan güncelleme, TV yazılım güncellemesi) "kurulu" bilgisi kalıyordu; bekçi her 30 sn'de DEEP_LINK
+     * gönderiyor, Smart Hub uygulamayı mağazada arıyor, TV her seferinde "Sunucu bakım altında (1544007)" diyordu (22 Kas).
+     * Windows ve Mac/iPhone ile aynı. Yalnız bilinen TV için çağrılır.
+     */
+    fun samsungAllowsDirect(host: String, installLog: (String) -> Unit = {}): Boolean {
+        val key = host.trim().lowercase()
+        if (samsungUnconfirmed.add(key)) return true
+        if (samsungStaleReported.add(key)) {
+            val line = samsungUnconfirmedLine(host)
+            android.util.Log.i("CouchSubsTvLaunch", line)
+            installLog(line)
+        }
+        return false
+    }
+
+    /** TV uygulaması bu Samsung TV'den bağlandı: listesiz açma hakkı yenilenir. */
+    fun samsungAppConnected(host: String) {
+        val key = host.trim().lowercase()
+        samsungUnconfirmed.remove(key)
+        samsungStaleReported.remove(key)
+    }
+
+    fun samsungUnconfirmedLine(host: String): String =
+        "Samsung $host: son doğrudan açma komutundan sonra TV uygulaması bağlanmadı; kurulu uygulama listesine bakılıyor (kurulu olmayan uygulamaya DEEP_LINK \"Sunucu bakım altında\" uyarısı çıkarır)."
+
     /** Bekçi her 30 sn'de denediği için aynı satır tvinstall.log'da yinelenmez. */
     private val lastNotSent = java.util.concurrent.atomic.AtomicReference<String?>(null)
 
@@ -112,21 +146,32 @@ object TvSessionLauncher {
      * @param open (adres, ADB portu, başlatma parametreleri) → `am start` çıktısı ya da AndroidTvInstaller.ALREADY_RUNNING;
      *   testlerde sahtesi verilir.
      * @param sleep en çok verilen süre bekler; "Otomatik açmayı dene" istendiyse true döner (sayaç sıfırlanır).
+     * @param current kayıtlı TV (her turda okunur): Android TV DHCP'den yeni adres alıp kurulum onu yeni adreste bulunca
+     *   bekçi yeni adrese geçer. Eskiden çeviri boyunca eski adreste açmaya çalışıyordu (#985; Mac, Windows, iPhone ile aynı).
      */
     internal fun keepAndroidTvOpen(
         tv: InstalledTv, server: String, active: () -> Boolean, connected: () -> Boolean,
         open: (String, Int, String?) -> String, log: (String) -> Unit = {},
         sleep: (Long) -> Boolean = { TvOpenRetry.waitOrRetry(it) },
         onOpenResult: (TvOpenProblem?) -> Unit = {}, now: () -> Long = { android.os.SystemClock.elapsedRealtime() },
-        rule: AndroidTvOpenRule = AndroidTvOpenRule(),
+        rule: AndroidTvOpenRule = AndroidTvOpenRule(), current: () -> InstalledTv? = { tv },
     ) {
-        val adbPort = tv.port.takeIf { it > 0 } ?: com.couchsubs.mobile.tv.android.AdbConnection.DEFAULT_PORT
+        var target = tv
+        var adbPort = adbPortOf(target)
         val params = com.couchsubs.mobile.tv.android.AndroidTvInstaller.launchParams(server)
         var last: String? = null
         while (active()) {
+            val saved = current()
+            if (saved != null && saved.brand == TvBrand.ANDROID_TV && (saved.host != target.host || adbPortOf(saved) != adbPort)) {
+                log("Android TV yeni adreste: ${target.host}:$adbPort → ${saved.host}:${adbPortOf(saved)}")
+                target = saved
+                adbPort = adbPortOf(saved)
+                last = null
+                rule.reset()
+            }
             if (rule.shouldTry(connected(), now())) {
                 val result = try {
-                    val output = open(tv.host, adbPort, params)
+                    val output = open(target.host, adbPort, params)
                     // Uygulama TV'de çalışırken bulunduysa `am start` gönderilmedi: açılış sayılmaz.
                     if (output != com.couchsubs.mobile.tv.android.AndroidTvInstaller.ALREADY_RUNNING) rule.opened()
                     onOpenResult(null)
@@ -136,12 +181,14 @@ object TvSessionLauncher {
                     "açılamadı: ${error.message ?: error.javaClass.simpleName}"
                 }
                 // Aynı sonuç her denemede yeniden yazılmaz.
-                if (result != last) log("Android TV (${tv.host}:$adbPort) telefonun adresiyle $result")
+                if (result != last) log("Android TV (${target.host}:$adbPort) telefonun adresiyle $result")
                 last = result
             }
             if (sleep(ANDROID_CHECK_MS)) rule.reset()
         }
     }
+
+    private fun adbPortOf(tv: InstalledTv) = tv.port.takeIf { it > 0 } ?: com.couchsubs.mobile.tv.android.AdbConnection.DEFAULT_PORT
 
     /** Telefonun TV'ye bakan adresiyle altyazı sunucusu ("http://192.168.1.20:8787"); bilinemezse null. */
     private fun serverAddress(remote: InetAddress, port: Int): String? {
@@ -221,7 +268,7 @@ object TvSessionLauncher {
                 if (!com.couchsubs.mobile.tv.android.AndroidTvInstaller.isReachable(host, adbPort)) throw java.io.IOException("ADB kapalı")
                 com.couchsubs.mobile.tv.android.AndroidTvInstaller(host, adbPort,
                     adbKey = { com.couchsubs.mobile.tv.samsung.AdbKey.loadOrCreate(adbKeyFile) }).open(params)
-            }, log = log, onOpenResult = onOpenResult)
+            }, log = log, onOpenResult = onOpenResult, current = { settings.installedTv })
             return
         }
         // Samsung: önce geliştirici bağlantısı (sdb `was_execute`; Windows, Mac ve iPhone ile aynı). Uzaktan kumanda
@@ -269,7 +316,8 @@ object TvSessionLauncher {
                 // Samsung: kurulu uygulama listesinin yanıtı bekleniyor mu. Yanıt 3 saniyede gelmezse eski yol (DEEP_LINK).
                 val awaitingList = java.util.concurrent.atomic.AtomicBoolean(false)
                 // Uygulamanın bu TV'de kurulu olduğu biliniyorsa listeye bakılmaz, eskisi gibi doğrudan açılır.
-                val known = samsungKnownInstalled(tv, settings.samsungAppSeenHost)
+                // Listesiz açma, uygulama her bağlandığında bir kez: bayat bilgi "Sunucu bakım altında" çıkarmasın.
+                val known = samsungKnownInstalled(tv, settings.samsungAppSeenHost) && samsungAllowsDirect(tv.host, installLog)
                 // Bilinen TV'de açma komutundan sonra, yalnız günlük için listeye bir kez bakılıyor mu.
                 val probing = java.util.concurrent.atomic.AtomicBoolean(false)
                 fun samsungLaunch(webSocket: WebSocket, presence: SamsungAppPresence?) {

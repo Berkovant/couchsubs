@@ -30,6 +30,26 @@ class TvSessionLauncherTest {
         val native = JSONObject(TvSessionLauncher.launchMessage(TvBrand.SAMSUNG, "http://1.2.3.4:8787", "k", "NATIVE_LAUNCH"))
         assertEquals("NATIVE_LAUNCH", native.getJSONObject("params").getJSONObject("data").getString("action_type"))
     }
+    /**
+     * TV'den silinmiş uygulama "kurulu" bilinirse bekçi her 30 sn'de listesiz DEEP_LINK gönderiyor, TV her seferinde
+     * "Sunucu bakım altında (1544007)" diyordu: listesiz açma, uygulama her bağlandığında bir kez.
+     */
+    @Test fun samsungDirectLaunchIsAllowedOncePerAppConnection() {
+        val host = "198.51.100.77"
+        val logged = mutableListOf<String>()
+        TvSessionLauncher.samsungAppConnected(host)
+        assertTrue(TvSessionLauncher.samsungAllowsDirect(host, logged::add))
+        // Uygulama bağlanmadı: bilgi bayat sayılır, liste belirler; satır bir kez yazılır.
+        assertFalse(TvSessionLauncher.samsungAllowsDirect(host, logged::add))
+        assertFalse(TvSessionLauncher.samsungAllowsDirect(host, logged::add))
+        assertEquals(1, logged.size)
+        assertTrue(logged[0].contains("kurulu uygulama listesine bakılıyor"))
+        // Uygulama bağlandı: hak yenilenir.
+        TvSessionLauncher.samsungAppConnected(" $host ")
+        assertTrue(TvSessionLauncher.samsungAllowsDirect(host, logged::add))
+        TvSessionLauncher.samsungAppConnected(host)
+    }
+
     /** beta.63: liste geliştirici moduyla kurulan uygulamayı içermiyorsa telefon uygulamayı hiç açmıyordu. */
     @Test fun samsungKnownInstalledAppLaunchesWithoutTheList() {
         val missing = TvSessionLauncher.SamsungAppPresence(false, null)
@@ -108,6 +128,25 @@ class TvSessionLauncherTest {
                 throw com.couchsubs.mobile.tv.android.AndroidInstallException(com.couchsubs.mobile.tv.android.AndroidInstallError.NOT_APPROVED) },
             sleep = { rounds++; false }, now = { rounds * 5_000L })
         assertEquals(3, tries)
+    }
+
+    /**
+     * #985: Android TV DHCP'den yeni adres aldı, kurulum onu yeni adreste bulup kaydı güncelledi. Bekçi eski adreste açmaya
+     * çalışıp duruyordu; artık kayıtlı TV'nin yeni adresine geçer ve orada yeniden dener.
+     */
+    @Test fun androidTvKeeperFollowsTheNewAddress() {
+        var rounds = 0
+        val opened = mutableListOf<String>()
+        val logged = mutableListOf<String>()
+        var saved = InstalledTv(TvBrand.ANDROID_TV, "192.168.1.120")
+        TvSessionLauncher.keepAndroidTvOpen(saved, "http://192.168.1.124:8787",
+            active = { rounds < 12 }, connected = { false },
+            open = { host, port, _ -> opened += "$host:$port"; throw java.io.IOException("ADB kapalı") }, log = { logged += it },
+            sleep = { rounds++; if (rounds == 4) saved = InstalledTv(TvBrand.ANDROID_TV, "192.168.1.121"); false },
+            now = { rounds * 30_000L }, current = { saved })
+        assertEquals(listOf("192.168.1.120:5555", "192.168.1.120:5555", "192.168.1.120:5555",
+            "192.168.1.121:5555", "192.168.1.121:5555", "192.168.1.121:5555"), opened)
+        assertTrue(logged.any { it.contains("192.168.1.120:5555 → 192.168.1.121:5555") })
     }
 
     @Test fun connectedAndroidTvAppNeverGetsAnAdbConnection() {

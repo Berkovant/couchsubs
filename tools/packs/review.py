@@ -10,7 +10,7 @@ game, src, out = sys.argv[1:4]
 lines = json.load(open(src, encoding="utf-8"))
 
 STRONG_EN = re.compile(r"\b(fuck\w*|shit\w*|bitch\w*|bastard\w*|asshole\w*|motherfuck\w*|dick\w*|cunt\w*)\b", re.I)
-STRONG_TR = re.compile(r"(sik|amk|amın|amına|orospu|piç|bok|göt|kahpe|yavşak|puşt|siktir|ibne|şerefsiz|pislik|kaltak|lanet|kahrolası|aşağılık|alçak)", re.I)
+STRONG_TR = re.compile(r"(?<!\w)(?:sik|amk|amın|amına|orospu|piç|bok|göt|kahpe|yavşak|puşt|siktir|ibne|şerefsiz|pislik|kaltak|lanet|kahrolası|aşağılık|alçak)", re.I)
 TR_CHARS = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
 EN_WORDS = re.compile(r"\b(the|and|you|what|this|that|with|have|are|is|not|for|your|we|they)\b", re.I)
 BAD_SCRIPT = re.compile(r"[Ѐ-ӿ぀-ヿ一-鿿가-힯]")
@@ -39,7 +39,7 @@ SCHEMA = {"type": "object", "properties": {"fixes": {"type": "array", "items": {
     "required": ["fixes"], "additionalProperties": False}
 
 SYSTEM = f"""You are a senior Turkish subtitle editor checking machine translations of video game subtitles.
-{GLOSSARY[game]}
+{GLOSSARY.get(game, f'Game: {game}.')}
 {RULES}
 You get numbered English sentences with their Turkish translation (sometimes marked with automatic warnings).
 Return a fix ONLY for translations that are actually wrong: wrong meaning, a sentence translated as a neighbouring

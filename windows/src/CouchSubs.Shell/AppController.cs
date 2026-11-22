@@ -82,6 +82,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private TextBox? lastSubtitleBox;
     /// <summary>Hatta aynı anda tek kare girer; durdurma ve yeni hat kapıyı sıfırlar, takılan okuma hattı yeniden kurdurur.</summary>
     private readonly FrameGate frameGate = new();
+    /// <summary>Okuma sürerken atlanan son kare; okuma bitince okunur (bkz. <see cref="FrameGate.Leave"/>).</summary>
+    private (Frame Frame, long Arrived)? skippedFrame;
+    private readonly object skippedGate = new();
     private Dubber? dubber;
     private string? updateVersion;
     private bool updating;
@@ -1423,11 +1426,20 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             var version = await services.InstallAndroidAppAsync(host, bundled, open, launch, replaceForeignApp, e => post(() => InstallEvent(e)));
             // TV'nin adresi bundan sonra sürüm denetimi için kullanılır.
             var located = target with { Host = host };
+            var addressChanged = tv?.Host != located.Host;
             tv = located;
             store.Save(StoreKeys.Tv, located);
             store.Save(StoreKeys.TvAppVersion, version);
             Changed(nameof(Tv));
             TvApp = new TvAppState(TvAppKind.UpToDate, version);
+            if (addressChanged && keeper is not null)
+            {
+                // Çeviri sürerken ADB bekçisi eski adresi tutar; yeni TV kaydıyla yeniden kurulur (Mac ile aynı).
+                var stale = keeper;
+                keeper = null;
+                stale.Stop();
+                StartKeeper(refreshApp: false);
+            }
         }
         catch (DevModeException error)
         {
@@ -2281,16 +2293,22 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// TV uygulamasını başlatır ve açık tutar; TV kapalıysa açıldığında bağlanır. Altyazı TV'ye gitmiyorsa ya da TV
     /// yoksa bir şey yapmaz.
     /// </summary>
-    private void StartKeeper()
+    private void StartKeeper(bool refreshApp = true)
     {
         if (keeper is not null || !ShowsOnTv || !HasTv || tv is not { } target) return;
         var running = server;
-        var tvKeeper = services.MakeKeeper(target, store.Load<string>(StoreKeys.TvKey), new Dictionary<string, string> { ["server"] = ServerAddress(target), ["key"] = server.AccessKey },
+        IKeeper? tvKeeper = null;
+        tvKeeper = services.MakeKeeper(target, store.Load<string>(StoreKeys.TvKey), new Dictionary<string, string> { ["server"] = ServerAddress(target), ["key"] = server.AccessKey },
             () => running.ConnectedClients > 0, moved => post(() => TvMoved(moved)), key => post(() => store.Save(StoreKeys.TvKey, key)), () => server.ConsolePort,
-            problem => post(() => OpenResult(problem, target.Brand)));
+            problem => post(() =>
+            {
+                // Yerine yenisi kurulan (eski adresteki) bekçinin geç gelen sonucu yok sayılır.
+                if (!ReferenceEquals(keeper, tvKeeper)) return;
+                OpenResult(problem, target.Brand);
+            }));
         tvKeeper.Start(TimeSpan.FromSeconds(5));
         keeper = tvKeeper;
-        _ = RefreshTvAppAsync();
+        if (refreshApp) _ = RefreshTvAppAsync();
     }
 
     /// <summary>Altyazının yeri değişti: TV seçildiyse TV uygulaması açılır, kaldırıldıysa artık açık tutulmaz.</summary>
@@ -2480,6 +2498,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         UpdateRegionWatcher();
         // Yeni "Başlat" eski oturumdan kalan (belki takılmış) okumayı beklemeden temiz başlar.
         frameGate.Reset();
+        lock (skippedGate) skippedFrame = null;
         activeReader = null;
         screenWork?.Cancel();
         screenWork = null;
@@ -2560,6 +2579,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         old?.Stop();
         old?.Dispose();
         frameGate.Reset();
+        lock (skippedGate) skippedFrame = null;
         framesSince = null;
         IStreamSession stream;
         try
@@ -3237,6 +3257,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         ResetRegionWatcher(discard: true);
         // Eski hatta süren okuma beklenmez; yeni hat ilk karesini hemen alır.
         frameGate.Reset();
+        lock (skippedGate) skippedFrame = null;
         ActiveSourceLanguage = settings.SourceLanguage;
         var reader = services.MakeReader(settings.SourceLanguage, settings.OcrEngine);
         activeReader = reader;
@@ -3853,14 +3874,35 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 post(MakePipeline);
                 return;
             }
-            if (entry.Kind != FrameGate.EntryKind.Enter) return;
-            try
+            if (entry.Kind != FrameGate.EntryKind.Enter)
             {
-                await current.ProcessAsync(frame, settings.Region, arrived);
+                if (entry.Kind == FrameGate.EntryKind.Busy) lock (skippedGate) skippedFrame = (frame, arrived);
+                return;
             }
-            finally
+            lock (skippedGate) skippedFrame = null;
+            var token = entry.Token;
+            var next = (Frame: frame, Arrived: arrived);
+            while (true)
             {
-                frameGate.Leave(entry.Token);
+                bool skipped;
+                try
+                {
+                    await current.ProcessAsync(next.Frame, settings.Region, next.Arrived);
+                }
+                finally
+                {
+                    skipped = frameGate.Leave(token);
+                }
+                // Okuma sürerken atlanan son kare hemen okunur: pencere yakalaması değişmeyen ekranda kare göndermez;
+                // altyazı belirirken gelen son kare atlanınca yeni satır kamera oynatılana dek okunmuyordu (GitHub #1019).
+                (Frame Frame, long Arrived)? waiting;
+                lock (skippedGate) { waiting = skippedFrame; skippedFrame = null; }
+                if (!skipped || waiting is not { } latest) return;
+                if (!ReferenceEquals(pipeline, current) || subtitlesPaused) return;
+                var again = frameGate.TryEnter(Environment.TickCount64);
+                if (again.Kind != FrameGate.EntryKind.Enter) return;
+                token = again.Token;
+                next = latest;
             }
         }
         catch
@@ -4140,33 +4182,68 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         UpdateVersion == version && services.Updater is { } updater ? updater.ReleaseNotesAsync(version)
             : Task.FromResult<IReadOnlyList<ReleaseNoteRun>>([]);
 
+    /// <summary>
+    /// Önceki "Şimdi güncelle" uygulanamadı: uygulama yeniden açıldı ama sürüm değişmedi (çoğunlukla güvenlik yazılımı
+    /// kurulum klasörünü kilitler). Aynı şerit yine gösterilmez; kurulum dosyasını indirmesi istenir.
+    /// </summary>
+    public bool UpdateFailed { get; private set; }
+
+    /// <summary>Güncelleme şeridinin başlığı.</summary>
+    public string UpdateTitle => UpdateFailed
+        ? text.Format("CouchSubs couldn't be updated to %@", UpdateVersion ?? "")
+        : text.Format("A new version of CouchSubs is available: %@", UpdateVersion ?? "");
+
+    /// <summary>Şeridin düğmesi: kendini güncelleyebiliyorsa "Şimdi güncelle", değilse kurulum dosyasını indirme.</summary>
+    public string UpdateButtonText => CanUpdateItself && !UpdateFailed ? text["Update now"] : text["Download Setup File"];
+
+    /// <summary>Şeridin açıklaması: uygulanamayan güncelleme ya da kendini güncelleyemeyen (zip'ten açılmış) kopya.</summary>
+    public string? UpdateHint => UpdateFailed
+        ? text["The update couldn't be applied. Security software may have blocked it; download the setup file from our website and install it."]
+        : services.Updater is { CanUpdateItself: false }
+            ? text["This copy can't update itself. Reinstall it with the setup file."]
+            : null;
+
     /// <summary>Açılışta bir kez; ağ yoksa sessizce geçer.</summary>
     public async Task CheckForUpdateAsync()
     {
         if (services.Updater is not { } updater) return;
-        try { UpdateVersion = await updater.CheckAsync(); }
+        var failed = updater.Attempts?.FailedAttempt();
+        if (failed is not null)
+        {
+            UpdateFailed = true;
+            SubtitleLog.Write($"Güncelleme uygulanamadı: {failed.FromVersion} → {failed.TargetVersion} ({failed.At:yyyy-MM-dd HH:mm}); " +
+                              $"uygulama hâlâ {updater.Attempts!.CurrentVersion}. Velopack günlüğü: {updater.UpdateLogPath ?? "bilinmiyor"}");
+        }
+        string? version = null;
+        try { version = await updater.CheckAsync(); }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException) { }
+        // Ağ yoksa da uygulanamayan güncelleme söylenir.
+        UpdateVersion = version ?? failed?.TargetVersion;
     }
 
     public async Task InstallUpdateAsync()
     {
         if (services.Updater is not { } updater || updating) return;
-        if (!updater.CanUpdateItself)
+        if (!updater.CanUpdateItself || UpdateFailed)
         {
             OpenInBrowser(updater.DownloadPage);
             return;
         }
         Updating = true;
         UpdateError = null;
+        var target = UpdateVersion;
         try
         {
             // Çeviri sürüyorsa önce durur; uygulama güncellenip yeniden açılır.
             Stop();
-            await updater.InstallAsync(new ImmediateProgress(value => post(() => UpdateProgress = value)));
+            await updater.InstallAsync(new ImmediateProgress(value => post(() => UpdateProgress = value)),
+                () => { if (target is not null) updater.Attempts?.Record(target); });
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException
                                           or UnauthorizedAccessException)
         {
+            // Uygulama kapanmadı; deneme sayılmaz.
+            updater.Attempts?.Clear();
             UpdateError = error.Message;
         }
         finally
