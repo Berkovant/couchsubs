@@ -18,7 +18,9 @@ final class SpacingLintTests: XCTestCase {
         "WizardView.swift: StepBody().frame(maxWidth: .infinity, alignment: .topLeading).padding(.bottom, 2)":
             "Kaydırma görünümünün alt kenarı kartın gölgesini kırpmasın.",
     ]
-    static let skipped: Set<String> = ["DS.swift", "DSComponents.swift"]
+    /// Bileşen tanımları: DS.swift, DSComponents.swift ve Perde bileşenleri (Perde.swift; Mac ve iPhone ortak). Bileşen
+    /// kataloğu (PerdeCatalog.swift) bir ekran gibi taranır.
+    static let skipped: Set<String> = ["DS.swift", "DSComponents.swift", "Perde.swift"]
 
     private static let pattern = try! NSRegularExpression(
         pattern: #"spacing:\s*-?[1-9][0-9.]*|\.padding\((\.[a-zA-Z]+,\s*|\[[^\]]*\],\s*)?-?[1-9][0-9.]*\)|Spacer\(minLength:\s*[1-9]"#)

@@ -558,8 +558,8 @@ struct DSErrorBox<Actions: View>: View {
         }
         .padding(DS.space("m"))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsLive.opacity(0.06), in: shape)
-        .overlay(shape.strokeBorder(Color.dsLiveRing))
+        .background(Color.dsLiveSoft, in: shape)
+        .overlay(shape.strokeBorder(Color.dsLiveRing, lineWidth: 1))
     }
 
     private func copyLog() {

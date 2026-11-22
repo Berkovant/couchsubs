@@ -24,6 +24,7 @@ struct WizardView: View {
             }
         }
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: introPlayed)
+        .dsMotionGate(translating: model.isRunning)
         .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .newLook()
     }

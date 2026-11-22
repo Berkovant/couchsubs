@@ -50,6 +50,9 @@ struct AppShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.dsBackground)
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: tab.wrappedValue)
+        // Tek hareket kapısı: çeviri sürerken, hareketi azaltta, Geçiş Animasyonları kapalıyken ya da pencere önde
+        // değilken sürekli animasyonlar durur.
+        .dsMotionGate(translating: model.isRunning)
         .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .overlay {
             if let popupAd {

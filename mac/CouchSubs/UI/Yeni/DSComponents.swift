@@ -43,9 +43,13 @@ struct DSCard<Content: View>: View {
                 if let backdrop { backdrop.clipShape(shape) }
             }
         }
+        // Perde e1: kıl çizgi + koyu temada üst kenar parlaması (gölge yerine ışık).
+        .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [Color.dsTopHighlight, .clear], startPoint: .top, endPoint: .center))
+            .allowsHitTesting(false))
         .overlay(shape.strokeBorder(highlighted ? Color.dsAmber : accent ?? Color.dsBorder,
                                     lineWidth: highlighted ? 2 : accent == nil ? 1 : 1.5))
         .clipShape(shape)
+        .shadow(color: highlighted ? Color.dsAmberGlow.opacity(0.6) : .clear, radius: 11)
     }
 
     private var stack: some View {
@@ -151,19 +155,23 @@ struct DSDivider: View {
 
 // MARK: Düğmeler
 
-/// Düğme türleri: ana (amber, ekranda tek), koyu (kömür), ikincil (yüzey, ince halka), canlı/durdur (kırmızı tonlu,
-/// kare ya da atan nokta), küçük koyu (reklam bandındaki İncele). Hepsi tam yuvarlak, 48 yükseklik, alt çizgisiz.
-/// İşlem sürerken çağıran `.disabled(true)` verir ve "…ıyor…" yazar: düğme soluklaşır, tekrar basılamaz.
+/// Düğme türleri (Perde): ana (amber degrade + ışıma, ekranda tek), koyu (kömür), ikincil (yükseltilmiş yüzey, kıl
+/// çizgi), hayalet (amber yazılı düz), canlı/durdur (kırmızı tonlu; atan nokta ya da kare), tehlikeli, küçük koyu
+/// (reklam bandındaki İncele) ve küçük ikincil (`compact`, 32). Hepsi tam yuvarlak, 48 yükseklik, alt çizgisiz.
+/// İşlem sürerken çağıran `busy: true` + `.disabled(true)` verir ve "…ıyor…" yazar: düğme yükleyici çubukları gösterir,
+/// soluklaşır, tekrar basılamaz. Klavye odağında amber odak halkası.
 struct DSButtonStyle: ButtonStyle {
     /// `compact`: küçük ikincil (32 yükseklik) — başlık satırında "Yeniden Ara", kutunun içinde "Ekle" gibi.
-    enum Kind { case primary, dark, secondary, stop, live, small, danger, compact }
+    enum Kind { case primary, dark, secondary, ghost, stop, live, small, danger, compact }
     var kind: Kind = .secondary
     var fullWidth = false
     /// Yazı ile sağdaki ok arası boşluk (ör. "Altyazı Görünümünü Düzenle →").
     var spread = false
+    /// Sürüyor durumu: yükleyici çubuklar + soluk yazı (çağıran ayrıca `.disabled(true)` verir).
+    var busy = false
 
     func makeBody(configuration: Configuration) -> some View {
-        DSButtonBody(configuration: configuration, kind: kind, fullWidth: fullWidth, spread: spread)
+        DSButtonBody(configuration: configuration, kind: kind, fullWidth: fullWidth, spread: spread, busy: busy)
     }
 }
 
@@ -172,45 +180,97 @@ private struct DSButtonBody: View {
     let kind: DSButtonStyle.Kind
     let fullWidth: Bool
     let spread: Bool
+    let busy: Bool
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var isFocused
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsMotionGate) private var gate
     @State private var hovering = false
 
     var body: some View {
         let pressed = configuration.isPressed
-        let hovered = hovering && isEnabled
+        let hovered = hovering && isEnabled && !busy
+        let shape = Capsule(style: .circular)
         HStack(spacing: kind == .live || kind == .stop ? 10 : DS.space("xs")) {
-            if kind == .stop {
+            if busy {
+                DSBarsLoader(color: kind == .primary ? .dsOnAmber : .dsAmber)
+            } else if kind == .stop {
                 RoundedRectangle(cornerRadius: 2).fill(Color.dsLiveText).frame(width: 10, height: 10).accessibilityHidden(true)
             } else if kind == .live {
-                DSPulseDot(color: .dsLive, size: 8)
+                DSPulseDot(color: .dsLiveDot, size: 8)
             }
             configuration.label
                 .lineLimit(1)
                 .frame(maxWidth: spread ? .infinity : nil, alignment: .leading)
         }
-        .font(kind == .secondary ? .dsButtonSecondary : kind == .small || kind == .compact ? .system(size: 13, weight: .semibold) : .dsButton)
-        .foregroundStyle(foreground)
-        .padding(.horizontal, kind == .compact ? DS.space("s") : kind == .small ? DS.space("m") : kind == .secondary ? 20 : DS.space("l"))
+        .font(font)
+        .foregroundStyle(busy ? Color.dsMuted : kind == .primary && !isEnabled ? Color.dsFaint : foreground)
+        .padding(.horizontal, horizontalPadding)
         .frame(maxWidth: fullWidth || spread ? .infinity : nil)
         .frame(height: kind == .compact ? DS.size("chip") : kind == .small ? DS.size("adCta") : DS.size("button"))
-        .background(background(hovered: hovered, pressed: pressed), in: Capsule(style: .circular))
-        .overlay { ring }
-        .overlay { if isFocused { Capsule(style: .circular).strokeBorder(Color.dsAmberText, lineWidth: 2) } }
-        .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
-        .opacity(isEnabled ? 1 : 0.55)
-        .contentShape(Capsule(style: .circular))
+        .background { background(hovered: hovered, pressed: pressed, shape: shape) }
+        .overlay { ring(hovered: hovered) }
+        .shadow(color: glow(hovered: hovered), radius: hovered ? 17 : 14, y: hovered ? 6 : 8)
+        .scaleEffect(pressed && !gate.reduced ? 0.97 : 1)
+        .opacity(busy ? 0.85 : isEnabled || kind == .primary ? 1 : 0.55)
+        .contentShape(shape)
         .onHover { hovering = $0 }
-        .animation(DS.animation(.short, reduced: reduceMotion), value: pressed)
-        .animation(DS.animation(.short, reduced: reduceMotion), value: hovered)
+        .dsFocusRing(isFocused, in: shape)
+        .animation(DS.animation(.short, gate: gate), value: pressed)
+        .animation(DS.animation(.short, gate: gate), value: hovered)
     }
 
-    @ViewBuilder private var ring: some View {
+    private var font: Font {
         switch kind {
+        case .secondary, .ghost: .dsButtonSecondary
+        case .small, .compact: .system(size: 13, weight: .semibold)
+        default: .dsButton
+        }
+    }
+
+    private var horizontalPadding: CGFloat {
+        switch kind {
+        case .compact: DS.space("s")
+        case .small: DS.space("m")
+        case .secondary: 20
+        case .ghost: DS.space("xs")
+        default: DS.space("l")
+        }
+    }
+
+    /// Ana düğmenin amber ışıması (0 10 28 -8 amberGlow; üzerine gelince güçlenir). Diğerlerinde yok.
+    private func glow(hovered: Bool) -> Color {
+        guard kind == .primary, isEnabled, !busy else { return .clear }
+        return Color.dsAmberGlow.opacity(hovered ? 1 : 0.85)
+    }
+
+    @ViewBuilder private func background(hovered: Bool, pressed: Bool, shape: Capsule) -> some View {
+        if busy && kind != .primary {
+            shape.fill(Color.dsSurfaceRaised)
+        } else if kind == .primary && !isEnabled && !busy {
+            // Pasif ana düğme: soluk amber değil alan zemini + soluk yazı (Perde .bdis).
+            shape.fill(Color.dsField)
+        } else {
+            switch kind {
+            case .primary:
+                shape.fill(LinearGradient(colors: [hovered || pressed ? Color(red: 1, green: 0.835, blue: 0.47) : .dsAmberHover, .dsAmber],
+                                          startPoint: .top, endPoint: .bottom))
+                    // Üst kenarda ince beyaz parlama (inset 0 1 0 #FFFFFF73).
+                    .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .center)))
+            case .dark, .small: shape.fill(Color.dsCharcoal)
+            case .secondary, .compact: shape.fill(hovered || pressed ? Color.dsSurfaceHigh : Color.dsSurfaceRaised)
+            case .ghost: shape.fill(hovered || pressed ? Color.dsField : .clear)
+            case .stop, .live, .danger: shape.fill(hovered || pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
+            }
+        }
+    }
+
+    @ViewBuilder private func ring(hovered: Bool) -> some View {
         // Halka kapsülün içine yarım nokta çekilerek çizilir; kapsül zeminiyle birebir örtüşür (yanlarda taşan dikey çizgi olmaz).
-        case .secondary, .compact: Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsBorder, lineWidth: 1)
-        case .stop, .live, .danger: Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsLiveRing, lineWidth: 1)
+        let shape = Capsule(style: .circular).inset(by: 0.5)
+        switch kind {
+        case .primary: shape.stroke(isEnabled ? Color.dsAmberLine.opacity(0.6) : .clear, lineWidth: 1)
+        case .secondary, .compact: shape.stroke(hovered ? Color.dsBorderStrong : Color.dsBorder, lineWidth: 1)
+        case .stop, .live, .danger: shape.stroke(Color.dsLiveRing, lineWidth: 1)
         default: EmptyView()
         }
     }
@@ -220,16 +280,8 @@ private struct DSButtonBody: View {
         case .primary: .dsOnAmber
         case .dark, .small: .dsOnCharcoal
         case .secondary, .compact: .dsText
+        case .ghost: .dsAmberText
         case .stop, .live, .danger: .dsLiveText
-        }
-    }
-
-    private func background(hovered: Bool, pressed: Bool) -> Color {
-        switch kind {
-        case .primary: hovered || pressed ? .dsAmberHover : .dsAmber
-        case .dark, .small: .dsCharcoal
-        case .secondary, .compact: hovered || pressed ? .dsField : .dsSurface
-        case .stop, .live, .danger: hovered || pressed ? Color.dsLive.opacity(0.18) : .dsLiveSoft
         }
     }
 }
@@ -247,6 +299,7 @@ struct DSSuccessBadge: View {
     let text: LocalizedStringKey
     var fullWidth = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsMotionOff) private var motionOff
     @State private var seated = false
 
     var body: some View {
@@ -262,35 +315,17 @@ struct DSSuccessBadge: View {
         .background(Color.dsSuccessSoft, in: Capsule(style: .circular))
         .overlay(Capsule(style: .circular).strokeBorder(Color.dsSuccessRing))
         .scaleEffect(seated || reduceMotion ? 1 : 0.94)
-        .onAppear { withAnimation(DS.animation(.medium, reduced: reduceMotion)) { seated = true } }
+        .onAppear { withAnimation(DS.spring(reduced: reduceMotion || motionOff)) { seated = true } }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Ataan nokta (canlı/çalışıyor). Azaltılmış harekette sabit.
-struct DSPulseDot: View {
-    var color: Color = .dsLive
-    var size: CGFloat = 8
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dsMotionOff) private var motionOff
-    @State private var dim = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: size, height: size)
-            .opacity(dim ? 0.35 : 1)
-            .onAppear {
-                guard !reduceMotion && !motionOff else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
-            }
-            .accessibilityHidden(true)
-    }
-}
+// Atan nokta (DSPulseDot) Perde.swift'te: halka nabzı, hareket kapısına bağlı.
 
 // MARK: Sekme seçici
 
-/// Tek seçimli seçici, üst menü sekme stilinde: kapsül zemin (alan rengi), seçili sekme yüzey rengi + gölge + halka.
+/// Tek seçimli seçici, üst menü sekme stilinde: bej iz (alan rengi, içe hafif gölge, kıl çizgi), seçili sekme yükselmiş
+/// hap (açıkta beyaz, koyuda #3A3C44) + gölge + güçlü kıl çizgi; hap 250 ms kayar.
 /// `fill` true ise sekmeler genişliği eşit paylaşır (ayar seçicileri); false ise en az 112 genişlikte (üst menü).
 struct DSTabs<Value: Hashable>: View {
     struct Item: Identifiable {
@@ -328,27 +363,45 @@ struct DSTabs<Value: Hashable>: View {
                         .frame(height: DS.size("tab"))
                         .background {
                             if on {
-                                Capsule(style: .circular).fill(Color.dsSurface)
-                                    .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-                                    .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
+                                Capsule(style: .circular).fill(Color.dsSegPill)
+                                    .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
+                                    .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorderStrong))
                                     .matchedGeometryEffect(id: "tab", in: namespace)
                             }
                         }
                         .contentShape(Capsule(style: .circular))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSPlainFocusRingStyle())
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
         }
         .padding(DS.space("xxs"))
         .background(Color.dsField, in: Capsule(style: .circular))
+        // İze içe doğru hafif gölge (inset 0 1 2 #0000001A) ve kıl çizgi.
+        .overlay(Capsule(style: .circular).inset(by: 0.5)
+            .stroke(LinearGradient(colors: [.black.opacity(0.10), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
         .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
+    }
+}
+
+/// Seçici sekmesi ve anahtar: düz; klavye odağında amber odak halkası (fareyle tıklamada görünmez).
+private struct DSPlainFocusRingStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { DSPlainFocusRingBody(configuration: configuration) }
+}
+
+private struct DSPlainFocusRingBody: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isFocused) private var focused
+
+    var body: some View {
+        configuration.label.dsFocusRing(focused, in: Capsule(style: .circular))
     }
 }
 
 // MARK: Anahtar
 
-/// Anahtar: 44 × 26, açıkken amber (yeşil değil), düğmecik beyaz gölgeli; satır başında, yazının solunda durur.
+/// Anahtar: 44 × 26, açıkken amber + hafif amber ışıma (yeşil değil), düğmecik beyaz gölgeli; satır başında, yazının
+/// solunda durur.
 struct DSToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         DSSwitch(isOn: configuration.$isOn)
@@ -368,15 +421,16 @@ struct DSSwitch: View {
             Capsule(style: .circular)
                 .fill(isOn ? Color.dsAmber : Color.dsSwitchOff)
                 .frame(width: width, height: height)
+                .shadow(color: isOn && isEnabled ? Color.dsAmberGlow : .clear, radius: 7)
                 .overlay(alignment: isOn ? .trailing : .leading) {
                     Circle().fill(Color.white)
                         .frame(width: knob, height: knob)
-                        .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 2)
                         .padding(.horizontal, 3)
                 }
                 .contentShape(Capsule(style: .circular))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSPlainFocusRingStyle())
         .opacity(isEnabled ? 1 : 0.5)
         .accessibilityRepresentation { Toggle("", isOn: $isOn) }
     }
@@ -458,6 +512,7 @@ private struct DSOptionBody: View {
     let minHeight: CGFloat
     let radio: Bool
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
@@ -470,9 +525,11 @@ private struct DSOptionBody: View {
         .padding(.horizontal, DS.space("m"))
         .padding(.vertical, DS.space("xs"))
         .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
-        .background(hovering && !selected ? Color.dsField : Color.dsSurface, in: shape)
-        .overlay(selected ? shape.fill(Color.dsAmber.opacity(0.08)) : nil)
-        .overlay(shape.strokeBorder(selected ? Color.dsAmber : hovering ? Color.dsScrollThumb : Color.dsBorder, lineWidth: selected ? 2 : 1))
+        .background(hovering && !selected ? Color.dsSurfaceHigh : Color.dsSurface, in: shape)
+        .overlay(shape.strokeBorder(hovering && !selected ? Color.dsBorderStrong : Color.dsBorder, lineWidth: 1))
+        // Seçili: 2 pt amber iç kenar + amber yumuşak dolgu + hafif ışıma (Perde).
+        .dsSelectedGlow(selected, in: shape)
+        .dsFocusRing(isFocused, in: shape)
         .contentShape(shape)
         .opacity(isEnabled ? 1 : 0.5)
         .onHover { hovering = $0 }
@@ -506,9 +563,19 @@ struct DSAccountCard<Others: View>: View {
             HStack(spacing: DS.space("s")) {
                 Text(verbatim: badge)
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(Color.dsOnCharcoal)
+                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
                     .frame(width: 40, height: 40)
-                    .background(Color.dsCharcoal, in: Circle())
+                    .background {
+                        if signedIn {
+                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } else {
+                            Circle().fill(Color.dsCharcoal)
+                        }
+                    }
+                    // Bağlıyken 3 pt aralıklı amber halka.
+                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
+                    .padding(signedIn ? 4.5 : 0)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.space("line")) {
                     Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
@@ -551,8 +618,7 @@ struct DSAccountCard<Others: View>: View {
                     .transition(.opacity)
             }
         }
-        .background(Color.dsSurface, in: shape)
-        .overlay(shape.strokeBorder(Color.dsBorder))
+        .dsElevation(signedIn ? .raised : .card, in: shape)
     }
 }
 
@@ -611,8 +677,8 @@ struct DSCallout: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(DS.space("m"))
-        .background(Color.dsAmber.opacity(0.10), in: shape)
-        .overlay(shape.strokeBorder(Color.dsAmber.opacity(0.55)))
+        .background(Color.dsAmberSoft, in: shape)
+        .overlay(shape.strokeBorder(Color.dsAmberRing, lineWidth: 1))
     }
 }
 
@@ -646,7 +712,9 @@ struct DSFieldChrome<Field: View, Trailing: View>: View {
         .padding(.trailing, Trailing.self == EmptyView.self ? DS.space("m") : DS.space("xs"))
         .frame(height: DS.size("input"))
         .background(Color.dsField, in: Capsule(style: .circular))
-        .overlay(Capsule(style: .circular).strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 2 : 1))
+        .overlay(Capsule(style: .circular).strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 1.5 : 1))
+        .background(Capsule(style: .circular).inset(by: -4).fill(focused ? Color.dsAmberSoft : .clear))
+        .animation(.easeOut(duration: DS.tokens.motion.short / 1000), value: focused)
     }
 }
 
@@ -757,16 +825,21 @@ struct DSBadge: View {
 struct DSStatusPill: View {
     let text: LocalizedStringKey
     let dot: Color
+    /// Canlı/çalışıyor: nokta nabız atar (hareket kapısına bağlı).
+    var pulse = false
 
     var body: some View {
         HStack(spacing: DS.space("xs")) {
-            Circle().fill(dot).frame(width: DS.size("statusDot"), height: DS.size("statusDot")).accessibilityHidden(true)
+            if pulse {
+                DSPulseDot(color: dot, size: DS.size("statusDot"))
+            } else {
+                Circle().fill(dot).frame(width: DS.size("statusDot"), height: DS.size("statusDot")).accessibilityHidden(true)
+            }
             Text(text).font(.dsSmall).foregroundStyle(Color.dsMuted).lineLimit(1)
         }
         .padding(.horizontal, DS.space("m"))
         .frame(height: DS.size("tab"))
-        .background(Color.dsSurface, in: Capsule(style: .circular))
-        .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
+        .dsElevation(.card, in: Capsule(style: .circular))
         .accessibilityElement(children: .combine)
     }
 }
@@ -877,20 +950,14 @@ struct DSSceneBackground: View {
     }
 }
 
-/// Altyazı kutusu örneği (koyu yarı saydam zemin, beyaz yarı kalın yazı, konuşan adı amber).
+/// Altyazı kutusu örneği (Perde altyazı plakası: her temada aynı koyu plaka, sıcak beyaz yazı, konuşan adı amber).
 struct DSSubtitleSample: View {
     var speaker: String?
     let line: String
     var size: CGFloat = 17
 
     var body: some View {
-        (Text(verbatim: speaker.map { $0 + " " } ?? "").foregroundColor(Color.dsAmber) + Text(verbatim: line).foregroundColor(.white))
-            .font(.system(size: size, weight: .semibold))
-            .lineSpacing(3)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, DS.space("m"))
-            .padding(.vertical, DS.space("s"))
-            .background(Color(red: 0.063, green: 0.063, blue: 0.078).opacity(0.85), in: RoundedRectangle(cornerRadius: DS.radius("control")))
+        DSSubtitlePlate(speaker: speaker, line: line, size: size)
     }
 }
 
@@ -901,8 +968,7 @@ struct DSSubtitleSample: View {
 struct DSLogoMark: View {
     var height: CGFloat = 26
     var breathing = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dsMotionOff) private var motionOff
+    @Environment(\.dsMotionGate) private var gate
     @State private var narrow = false
 
     var body: some View {
@@ -921,10 +987,9 @@ struct DSLogoMark: View {
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
-        .onAppear {
-            guard breathing, !reduceMotion, !motionOff else { return }
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { narrow = true }
-        }
+        // Nefes yalnız hareket kapısı açıkken (çeviri sürerken, hareketi azaltta, arka planda durur).
+        .onAppear { narrow = breathing && gate.ambient }
+        .onChange(of: gate.ambient) { open in narrow = breathing && open }
         .accessibilityHidden(true)
     }
 
@@ -988,16 +1053,18 @@ struct DSSlider: View {
             let travel = max(geometry.size.width - knob, 1)
             let offset = travel * fraction
             ZStack(alignment: .leading) {
-                Capsule(style: .circular).fill(Color.dsSwitchOff)
+                Capsule(style: .circular).fill(Color.dsField)
+                    .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder, lineWidth: 0.5))
                     .frame(width: travel, height: Self.track)
                     .offset(x: knob / 2)
                 Capsule(style: .circular).fill(Color.dsAmber)
                     .frame(width: offset, height: Self.track)
+                    .shadow(color: isEnabled ? Color.dsAmberGlow : .clear, radius: 5)
                     .offset(x: knob / 2)
                 Circle().fill(Color.white)
                     .frame(width: knob, height: knob)
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.06)))
-                    .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                     .scaleEffect(dragging && !reduceMotion ? 1.08 : 1)
                     .offset(x: offset)
             }
@@ -1061,8 +1128,8 @@ struct DSSliderRange: View {
             Spacer()
             Text(verbatim: high)
         }
-        .font(.system(size: 11, design: .monospaced))
-        .foregroundStyle(Color.dsFaint)
+        .font(.system(size: 12, weight: .medium, design: .monospaced).monospacedDigit())
+        .foregroundStyle(Color.dsMuted)
         .padding(.horizontal, DSSlider.knob / 2)
         .accessibilityHidden(true)
     }
@@ -1077,6 +1144,8 @@ struct DSSliderRow: View {
     let range: ClosedRange<Double>
     var step: Double?
     var hint: LocalizedStringKey?
+    /// En küçük / en büyük değer etiketleri (ör. "16" / "50"): çubuğun gerçek uçlarıyla hizalı.
+    var ends: (String, String)?
     var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
@@ -1085,12 +1154,13 @@ struct DSSliderRow: View {
                 Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
                 Spacer(minLength: DS.space("s"))
                 Text(verbatim: valueText)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced).monospacedDigit())
-                    .foregroundStyle(Color.dsText)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced).monospacedDigit())
+                    .foregroundStyle(Color.dsAmberText)
             }
             DSSlider(value: $value, range: range, step: step, onEditingChanged: onEditingChanged)
                 .accessibilityLabel(Text(title))
                 .padding(.top, DS.unitTitleGap)
+            if let ends { DSSliderRange(low: ends.0, high: ends.1) }
             if let hint { Text(hint).dsMuted().padding(.top, DS.unitHintGap) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1196,8 +1266,8 @@ struct DSSelect<Value: Hashable>: View {
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)
             .frame(height: DS.size("tab"))
-            .background(hovering && isEnabled ? Color.dsField : Color.dsSurface, in: shape)
-            .overlay(shape.strokeBorder(Color.dsBorder))
+            .background(hovering && isEnabled ? Color.dsSurfaceHigh : Color.dsSurfaceRaised, in: shape)
+            .overlay(shape.strokeBorder(hovering && isEnabled ? Color.dsBorderStrong : Color.dsBorder))
             .contentShape(shape)
         }
         .buttonStyle(.plain)

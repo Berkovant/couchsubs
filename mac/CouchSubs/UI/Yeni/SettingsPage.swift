@@ -178,18 +178,15 @@ private struct SettingsNav: View {
 /// dolaşır. En çok 15 kare/sn; pencere önde değilken, çeviri sürerken, "Hareketi azalt" ya da Ayarlar › Geçiş
 /// Animasyonları kapalıyken durur (durağan kare). Bulanıklık süzgeci yok, radyal dolgu: işlemciye yük bindirmez.
 struct SettingsNavGlow: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var activeState
+    @Environment(\.dsMotionGate) private var gate
 
     static let period: Double = 24
     static let fps: Double = 15
     /// Yalnız işlemci ölçümü testi için: oynatmayı zorla aç/kapat.
     @MainActor static var forced: Bool?
 
-    var animates: Bool {
-        Self.forced ?? (!reduceMotion && model.settings.transitionAnimations && !model.isRunning && activeState == .key)
-    }
+    /// Tek hareket kapısı (Perde): çeviri, hareketi azalt, Geçiş Animasyonları, pencere önde değil.
+    var animates: Bool { Self.forced ?? gate.ambient }
 
     var body: some View {
         let running = animates

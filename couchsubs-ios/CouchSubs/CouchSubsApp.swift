@@ -330,6 +330,9 @@ struct RootView: View {
         }
         // Ayarlar › Temel › Görünüm: Açık, Koyu (varsayılan, Mac ile aynı) ya da Sisteme Uy; anahtarlar her yerde yeni dilde.
         .preferredColorScheme(model.settings.appearance.colorScheme)
+        // Tek hareket kapısı: çeviri sürerken, hareketi azaltta, Geçiş Animasyonları kapalıyken ya da uygulama arka
+        // plandayken sürekli animasyonlar durur (yalnız kısa geri bildirimler kalır).
+        .dsMotionGate(translating: model.isRunning)
         // Ayarlar › Temel › Geçiş Animasyonları kapalıyken yeni dildeki bileşenler yalnız kısa solma kullanır.
         .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .tint(Mobile.Palette.accent)

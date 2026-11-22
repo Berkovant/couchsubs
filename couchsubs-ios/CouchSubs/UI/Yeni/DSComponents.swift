@@ -8,15 +8,18 @@ import UIKit
 
 // MARK: Düğmeler
 
-/// Düğme türleri: ana (amber, ekranda tek), ikincil (yüzey, ince halka), durdur/tehlikeli (kırmızı tonlu), hayalet (amber
-/// yazılı düz). Hepsi tam yuvarlak, en az 48 yükseklik, alt çizgisiz. İşlem sürerken çağıran `.disabled(true)` verir.
+/// Düğme türleri (Perde; Mac ile aynı adlar): ana (amber degrade + ışıma, ekranda tek), koyu (kömür), ikincil
+/// (yükseltilmiş yüzey, kıl çizgi), hayalet (amber yazılı düz), canlı/durdur (kırmızı tonlu; atan nokta ya da kare),
+/// tehlikeli, küçük ikincil (`compact`, 32+). Hepsi tam yuvarlak, en az 48 yükseklik, alt çizgisiz. İşlem sürerken
+/// çağıran `busy: true` + `.disabled(true)` verir ("…ıyor…"): yükleyici çubuklar, soluk yazı.
 struct DSButtonStyle: ButtonStyle {
-    enum Kind { case primary, dark, secondary, stop, danger, ghost }
+    enum Kind { case primary, dark, secondary, stop, live, danger, ghost, compact }
     var kind: Kind = .secondary
     var fullWidth = true
+    var busy = false
 
     func makeBody(configuration: Configuration) -> some View {
-        DSButtonBody(configuration: configuration, kind: kind, fullWidth: fullWidth)
+        DSButtonBody(configuration: configuration, kind: kind, fullWidth: fullWidth, busy: busy)
     }
 }
 
@@ -24,40 +27,80 @@ private struct DSButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let kind: DSButtonStyle.Kind
     let fullWidth: Bool
+    let busy: Bool
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    /// Ayarlar › Geçiş Animasyonları kapalıyken de yalnız kısa solma.
-    @Environment(\.dsMotionOff) private var motionOff
-    private var reduceMotion: Bool { systemReduceMotion || motionOff }
+    @Environment(\.isFocused) private var isFocused
+    /// Tek hareket kapısı (hareketi azalt ve Geçiş Animasyonları kapalıyken yalnız kısa solma).
+    @Environment(\.dsMotionGate) private var gate
 
     var body: some View {
         let pressed = configuration.isPressed
-        HStack(spacing: DS.space("xs")) {
+        let shape = Capsule()
+        HStack(spacing: kind == .live || kind == .stop ? 10 : DS.space("xs")) {
+            if busy {
+                DSBarsLoader(color: kind == .primary ? .dsOnAmber : .dsAmber)
+            } else if kind == .stop {
+                RoundedRectangle(cornerRadius: 2).fill(Color.dsLiveText).frame(width: 10, height: 10).accessibilityHidden(true)
+            } else if kind == .live {
+                DSPulseDot(color: .dsLiveDot, size: 8)
+            }
             configuration.label
                 .labelStyle(.titleAndIcon)
                 .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
         }
-        .font(kind == .secondary || kind == .ghost ? .dsButtonSecondary : .dsButton)
-        .foregroundStyle(foreground)
-        .padding(.horizontal, kind == .ghost ? DS.space("s") : DS.space("l"))
-        .padding(.vertical, DS.space("xs"))
-        .frame(maxWidth: fullWidth && kind != .ghost ? .infinity : nil)
-        .frame(minHeight: kind == .ghost ? 44 : DS.size("button"))
-        .background(background(pressed: pressed), in: Capsule())
+        .font(font)
+        .foregroundStyle(busy ? Color.dsMuted : kind == .primary && !isEnabled ? Color.dsFaint : foreground)
+        .padding(.horizontal, kind == .ghost || kind == .compact ? DS.space("s") : DS.space("l"))
+        .padding(.vertical, kind == .compact ? DS.space("xxs") : DS.space("xs"))
+        .frame(maxWidth: fullWidth && kind != .ghost && kind != .compact ? .infinity : nil)
+        .frame(minHeight: kind == .ghost ? 44 : kind == .compact ? DS.size("buttonSmall") : DS.size("button"))
+        .background { background(pressed: pressed, shape: shape) }
         .overlay { ring }
-        .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
-        .opacity(isEnabled ? 1 : 0.55)
-        .contentShape(Capsule())
-        .animation(DS.animation(.short, reduced: reduceMotion), value: pressed)
+        .shadow(color: kind == .primary && isEnabled && !busy ? Color.dsAmberGlow.opacity(pressed ? 1 : 0.85) : .clear,
+                radius: 14, y: 8)
+        .scaleEffect(pressed && !gate.reduced ? 0.97 : 1)
+        .opacity(busy ? 0.85 : isEnabled || kind == .primary ? 1 : 0.55)
+        .contentShape(shape)
+        .dsFocusRing(isFocused, in: shape)
+        .animation(DS.animation(.short, gate: gate), value: pressed)
+    }
+
+    private var font: Font {
+        switch kind {
+        case .secondary, .ghost: .dsButtonSecondary
+        case .compact: .system(.footnote, weight: .semibold)
+        default: .dsButton
+        }
+    }
+
+    @ViewBuilder private func background(pressed: Bool, shape: Capsule) -> some View {
+        if busy && kind != .primary {
+            shape.fill(Color.dsSurfaceRaised)
+        } else if kind == .primary && !isEnabled && !busy {
+            // Pasif ana düğme: soluk amber değil alan zemini + soluk yazı (Perde .bdis).
+            shape.fill(Color.dsField)
+        } else {
+            switch kind {
+            case .primary:
+                shape.fill(LinearGradient(colors: [pressed ? .dsAmber : .dsAmberHover, .dsAmber], startPoint: .top, endPoint: .bottom))
+                    // Üst kenarda ince beyaz parlama (inset 0 1 0 #FFFFFF73).
+                    .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .center)))
+            case .dark: shape.fill(Color.dsCharcoal)
+            case .secondary, .compact: shape.fill(pressed ? Color.dsSurfaceHigh : Color.dsSurfaceRaised)
+            case .stop, .live, .danger: shape.fill(pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
+            case .ghost: shape.fill(pressed ? Color.dsField : .clear)
+            }
+        }
     }
 
     @ViewBuilder private var ring: some View {
         switch kind {
-        case .secondary: Capsule().strokeBorder(Color.dsBorder)
-        case .stop, .danger: Capsule().strokeBorder(Color.dsLiveRing)
+        case .primary: Capsule().strokeBorder(isEnabled ? Color.dsAmberLine.opacity(0.6) : .clear)
+        case .secondary, .compact: Capsule().strokeBorder(Color.dsBorder)
+        case .stop, .live, .danger: Capsule().strokeBorder(Color.dsLiveRing)
         default: EmptyView()
         }
     }
@@ -66,19 +109,9 @@ private struct DSButtonBody: View {
         switch kind {
         case .primary: .dsOnAmber
         case .dark: .dsOnCharcoal
-        case .secondary: .dsText
-        case .stop, .danger: .dsLiveText
+        case .secondary, .compact: .dsText
+        case .stop, .live, .danger: .dsLiveText
         case .ghost: .dsAmberText
-        }
-    }
-
-    private func background(pressed: Bool) -> Color {
-        switch kind {
-        case .primary: pressed ? .dsAmberHover : .dsAmber
-        case .dark: .dsCharcoal
-        case .secondary: pressed ? .dsField : .dsSurface
-        case .stop, .danger: pressed ? Color.dsLive.opacity(0.18) : .dsLiveSoft
-        case .ghost: pressed ? .dsField : .clear
         }
     }
 }
@@ -106,38 +139,17 @@ struct DSSuccessBadge: View {
         .background(Color.dsSuccessSoft, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.dsSuccessRing))
         .scaleEffect(seated || reduceMotion ? 1 : 0.94)
-        .onAppear { withAnimation(DS.animation(.medium, reduced: reduceMotion)) { seated = true } }
+        .onAppear { withAnimation(DS.spring(reduced: reduceMotion)) { seated = true } }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Atan nokta (canlı/çalışıyor). Azaltılmış harekette sabit.
-struct DSPulseDot: View {
-    var color: Color = .dsLive
-    var size: CGFloat = 8
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    /// Ayarlar › Geçiş Animasyonları kapalıyken de yalnız kısa solma.
-    @Environment(\.dsMotionOff) private var motionOff
-    private var reduceMotion: Bool { systemReduceMotion || motionOff }
-    @State private var dim = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: size, height: size)
-            .opacity(dim ? 0.35 : 1)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
-            }
-            .accessibilityHidden(true)
-    }
-}
+// Atan nokta (DSPulseDot) Perde.swift'te: halka nabzı, hareket kapısına bağlı.
 
 // MARK: Sekme seçici
 
-/// Tek seçimli seçici (her yerde aynı): bej iz (alan rengi, kapsül, ince halka), seçili sekme yüzey rengi + hafif gölge +
-/// halka ve kayarak geçer. Sekmeler genişliği eşit paylaşır.
+/// Tek seçimli seçici (her yerde aynı): bej iz (alan rengi, kapsül, içe hafif gölge, kıl çizgi), seçili sekme yükselmiş
+/// hap (açıkta beyaz, koyuda #3A3C44) + gölge + güçlü kıl çizgi; hap 250 ms kayar. Sekmeler genişliği eşit paylaşır.
 struct DSTabs<Value: Hashable>: View {
     struct Item: Identifiable {
         let value: Value
@@ -174,9 +186,9 @@ struct DSTabs<Value: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: DS.size("tab"))
                         .background {
                             if on {
-                                Capsule().fill(Color.dsSurface)
-                                    .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-                                    .overlay(Capsule().strokeBorder(Color.dsBorder))
+                                Capsule().fill(Color.dsSegPill)
+                                    .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
+                                    .overlay(Capsule().strokeBorder(Color.dsBorderStrong))
                                     .matchedGeometryEffect(id: "tab", in: namespace)
                             }
                         }
@@ -189,13 +201,15 @@ struct DSTabs<Value: Hashable>: View {
         }
         .padding(DS.space("xxs"))
         .background(Color.dsField, in: Capsule())
+        // İze içe doğru hafif gölge (inset 0 1 2 #0000001A) ve kıl çizgi.
+        .overlay(Capsule().inset(by: 0.5).stroke(LinearGradient(colors: [.black.opacity(0.10), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
         .overlay(Capsule().strokeBorder(Color.dsBorder))
     }
 }
 
 // MARK: Anahtar
 
-/// Anahtar: 44 × 26, açıkken amber (yeşil değil), beyaz gölgeli düğmecik.
+/// Anahtar: 51 × 31 (iPhone), açıkken amber + hafif amber ışıma (yeşil değil), beyaz gölgeli düğmecik.
 struct DSSwitch: View {
     @Binding var isOn: Bool
     @Environment(\.isEnabled) private var isEnabled
@@ -205,15 +219,16 @@ struct DSSwitch: View {
     private var reduceMotion: Bool { systemReduceMotion || motionOff }
 
     var body: some View {
-        let width = DS.size("switchWidth"), height = DS.size("switchHeight"), knob = DS.size("switchKnob")
+        let width = DS.size("switchWidthIOS"), height = DS.size("switchHeightIOS"), knob = height - 4
         Capsule()
             .fill(isOn ? Color.dsAmber : Color.dsSwitchOff)
             .frame(width: width, height: height)
+            .shadow(color: isOn && isEnabled ? Color.dsAmberGlow : .clear, radius: 7)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle().fill(Color.white)
                     .frame(width: knob, height: knob)
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
-                    .padding(.horizontal, 3)
+                    .shadow(color: .black.opacity(0.25), radius: 3, y: 2)
+                    .padding(.horizontal, 2)
             }
             .opacity(isEnabled ? 1 : 0.5)
             .animation(DS.animation(.medium, reduced: reduceMotion), value: isOn)
@@ -239,6 +254,54 @@ struct DSToggleStyle: ToggleStyle {
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+    }
+}
+
+/// Anahtar satırı (bir ayar birimi; Mac DSSwitchRow): solda anahtar, sağında başlık ve altında açıklama; satırın tamamı
+/// dokunulabilir.
+struct DSSwitchRow: View {
+    let title: LocalizedStringKey
+    var subtitle: LocalizedStringKey?
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: DS.unitHintGap) {
+                Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
+                if let subtitle { Text(subtitle).dsMuted() }
+            }
+        }
+        .toggleStyle(DSToggleStyle())
+    }
+}
+
+/// Ayar birimi (Mac DSUnit): başlık üstte, 8 altında denetim (tam genişlik), 6 altında açıklama. Birimler arası 24.
+struct DSUnit<Control: View>: View {
+    var title: LocalizedStringKey?
+    var hint: LocalizedStringKey?
+    @ViewBuilder var control: Control
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, DS.unitTitleGap)
+            }
+            control
+            if let hint { Text(hint).dsMuted().padding(.top, DS.unitHintGap) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Birimleri 24 arayla dizen yığın (Mac DSUnitStack).
+struct DSUnitStack<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.unitGap) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -270,8 +333,10 @@ struct DSOptionStyle: ButtonStyle {
         .padding(.horizontal, DS.space("m"))
         .padding(.vertical, DS.space("s"))
         .frame(maxWidth: .infinity, minHeight: DS.size("option"), alignment: .leading)
-        .background(selected ? Color.dsAmber.opacity(0.08) : configuration.isPressed ? Color.dsField : Color.dsSurface, in: shape)
-        .overlay(shape.strokeBorder(selected ? Color.dsAmber : Color.dsBorder, lineWidth: selected ? 1.5 : 1))
+        .background(configuration.isPressed && !selected ? Color.dsSurfaceHigh : Color.dsSurface, in: shape)
+        .overlay(shape.strokeBorder(Color.dsBorder))
+        // Seçili: 2 pt amber iç kenar + amber yumuşak dolgu + hafif ışıma (Perde).
+        .dsSelectedGlow(selected, in: shape)
         .contentShape(shape)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
@@ -299,7 +364,9 @@ struct DSFieldChrome<Field: View, Trailing: View>: View {
         .padding(.trailing, Trailing.self == EmptyView.self ? DS.space("m") + 4 : DS.space("xxs"))
         .frame(minHeight: DS.size("input"))
         .background(Color.dsField, in: Capsule())
-        .overlay(Capsule().strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 2 : 1))
+        .overlay(Capsule().strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 1.5 : 1))
+        .background(Capsule().inset(by: -4).fill(focused ? Color.dsAmberSoft : .clear))
+        .animation(.easeOut(duration: DS.tokens.motion.short / 1000), value: focused)
     }
 }
 
@@ -427,16 +494,18 @@ struct DSSlider: View {
             let travel = max(geometry.size.width - knob, 1)
             let offset = travel * fraction
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.dsSwitchOff)
+                Capsule().fill(Color.dsField)
+                    .overlay(Capsule().strokeBorder(Color.dsBorder, lineWidth: 0.5))
                     .frame(width: travel, height: Self.track)
                     .offset(x: knob / 2)
                 Capsule().fill(Color.dsAmber)
                     .frame(width: offset, height: Self.track)
+                    .shadow(color: isEnabled ? Color.dsAmberGlow : .clear, radius: 5)
                     .offset(x: knob / 2)
                 Circle().fill(Color.white)
                     .frame(width: knob, height: knob)
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.06)))
-                    .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                     .scaleEffect(dragging && !reduceMotion ? 1.08 : 1)
                     .offset(x: offset)
             }
@@ -500,6 +569,8 @@ struct DSSliderRow: View {
     let range: ClosedRange<Double>
     var step: Double?
     var hint: LocalizedStringKey?
+    /// En küçük / en büyük değer etiketleri (ör. "16" / "50"): çubuğun gerçek uçlarıyla hizalı.
+    var ends: (String, String)?
     var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
@@ -508,14 +579,36 @@ struct DSSliderRow: View {
                 Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: DS.space("s"))
                 Text(verbatim: valueText)
-                    .font(.system(.footnote, design: .monospaced).weight(.medium).monospacedDigit())
-                    .foregroundStyle(Color.dsText)
+                    .font(.system(.footnote, design: .monospaced).weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Color.dsAmberText)
             }
-            DSSlider(value: $value, range: range, step: step, onEditingChanged: onEditingChanged)
-                .accessibilityLabel(Text(title))
+            VStack(spacing: 0) {
+                DSSlider(value: $value, range: range, step: step, onEditingChanged: onEditingChanged)
+                    .accessibilityLabel(Text(title))
+                if let ends { DSSliderRange(low: ends.0, high: ends.1) }
+            }
             if let hint { Text(hint).dsMuted() }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri (Mac DSSliderRange): çubuğun gerçek uçlarıyla hizalı (çubuk
+/// düğmecik yarıçapı kadar içeriden başlar; etiketler de aynı iç boşlukla).
+struct DSSliderRange: View {
+    let low: String
+    let high: String
+
+    var body: some View {
+        HStack {
+            Text(verbatim: low)
+            Spacer()
+            Text(verbatim: high)
+        }
+        .font(.system(.caption, design: .monospaced).weight(.medium).monospacedDigit())
+        .foregroundStyle(Color.dsMuted)
+        .padding(.horizontal, DSSlider.inset)
+        .accessibilityHidden(true)
     }
 }
 
@@ -548,7 +641,7 @@ struct DSSelect<Value: Hashable>: View {
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color.dsSurface, in: shape)
+            .background(Color.dsSurfaceRaised, in: shape)
             .overlay(shape.strokeBorder(Color.dsBorder))
             .contentShape(shape)
         }
@@ -562,6 +655,10 @@ struct DSSelect<Value: Hashable>: View {
 /// CouchSubs logosu, arka plansız: yalnız kanepe ve iki amber altyazı çubuğu (design/logo.svg ile aynı geometri, 640 × 464).
 struct DSLogoMark: View {
     var height: CGFloat = 26
+    /// Çubuklar yavaşça daralıp genişler (yalnız hareket kapısı açıkken; telefonda varsayılan kapalı).
+    var breathing = false
+    @Environment(\.dsMotionGate) private var gate
+    @State private var narrow = false
 
     var body: some View {
         let scale = height / 464
@@ -576,6 +673,8 @@ struct DSLogoMark: View {
             rect(202, 574, 620, 126, 56, .dsLogoSeat, scale)
         }
         .frame(width: 640 * scale, height: height, alignment: .topLeading)
+        .onAppear { narrow = breathing && gate.ambient }
+        .onChange(of: gate.ambient) { open in narrow = breathing && open }
         .accessibilityHidden(true)
     }
 
@@ -590,6 +689,8 @@ struct DSLogoMark: View {
         Capsule()
             .fill(Color.dsAmber)
             .frame(width: w * s, height: h * s)
+            .scaleEffect(x: narrow ? 0.6 : 1, y: 1, anchor: .center)
+            .animation(narrow ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : nil, value: narrow)
             .offset(x: (x - 192) * s, y: (y - 280) * s)
     }
 }
@@ -603,5 +704,256 @@ struct DSBrand: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: "CouchSubs"))
+    }
+}
+
+// MARK: Kart (Mac ile aynı adlar)
+
+/// Kart (Mac DSCard): yüzey zemin, 24 köşe, kıl çizgi + koyu temada üst kenar parlaması (Perde e1). Vurgulu kart komple
+/// saran 1,5 pt renkli kenarlık + %5 aynı renk zemin; seçili/etkin kart 2 pt amber halka + ışıma. İçerik taşarsa kart kendi
+/// içinde kayar (`scrolls`).
+struct DSCard<Content: View>: View {
+    var padding: CGFloat = DS.space("cardPadIOS")
+    var spacing: CGFloat = DS.unitGap
+    var accent: Color?
+    var highlighted = false
+    var scrolls = false
+    var backdrop: AnyView?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous)
+        Group {
+            if scrolls {
+                ViewThatFits(in: .vertical) {
+                    stack
+                    ScrollView(.vertical) { stack }
+                }
+            } else {
+                stack
+            }
+        }
+        .background {
+            ZStack {
+                shape.fill(Color.dsSurface)
+                if let accent { shape.fill(accent.opacity(0.05)) }
+                if let backdrop { backdrop.clipShape(shape) }
+            }
+        }
+        .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [Color.dsTopHighlight, .clear], startPoint: .top, endPoint: .center))
+            .allowsHitTesting(false))
+        .overlay(shape.strokeBorder(highlighted ? Color.dsAmber : accent ?? Color.dsBorder,
+                                    lineWidth: highlighted ? 2 : accent == nil ? 1 : 1.5))
+        .clipShape(shape)
+        .shadow(color: highlighted ? Color.dsAmberGlow.opacity(0.6) : .clear, radius: 11)
+    }
+
+    private var stack: some View {
+        VStack(alignment: .leading, spacing: spacing) { content }
+            .environment(\.csInsideCard, true)
+            .environment(\.dsCardSpacing, spacing)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(padding)
+    }
+}
+
+/// Kart başlığı (Mac DSCardHeader): cümle düzeni, 17 orta kalın; kart başlığı → ilk birim her kartta 24.
+struct DSCardHeader<Trailing: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder var trailing: Trailing
+    @Environment(\.dsCardSpacing) private var cardSpacing
+
+    init(_ title: LocalizedStringKey, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DS.space("s")) {
+            Text(title).font(.dsCardTitle).foregroundStyle(Color.dsText).lineLimit(2).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: DS.space("s"))
+            trailing
+        }
+        .padding(.bottom, max(0, DS.unitGap - cardSpacing))
+    }
+}
+
+extension DSCardHeader where Trailing == EmptyView {
+    init(_ title: LocalizedStringKey) {
+        self.title = title
+        self.trailing = EmptyView()
+    }
+}
+
+/// Yatay ayraç (1 pt, kıl çizgi).
+struct DSDivider: View {
+    var body: some View {
+        Rectangle().fill(Color.dsBorder).frame(height: 1).accessibilityHidden(true)
+    }
+}
+
+// MARK: Uyarı kutusu, durum hapı
+
+/// Önemli uyarı (Mac DSCallout): amber yumuşak zemin, komple saran ince amber kenarlık, solda simge; metin **kalın** destekler.
+struct DSCallout: View {
+    let text: LocalizedStringKey
+    var icon = "exclamationmark.triangle.fill"
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+        HStack(alignment: .top, spacing: DS.space("s")) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.dsAmberText)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.dsSmall)
+                .foregroundStyle(Color.dsText)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(DS.space("m"))
+        .background(Color.dsAmberSoft, in: shape)
+        .overlay(shape.strokeBorder(Color.dsAmberRing, lineWidth: 1))
+    }
+}
+
+/// Durum hapı (Mac DSStatusPill): renkli nokta + kısa durum ("Çeviri Açık", "Hazır"); `pulse` iken nokta nabız atar.
+struct DSStatusPill: View {
+    let text: LocalizedStringKey
+    let dot: Color
+    var pulse = false
+
+    var body: some View {
+        HStack(spacing: DS.space("xs")) {
+            if pulse {
+                DSPulseDot(color: dot, size: DS.size("statusDot"))
+            } else {
+                Circle().fill(dot).frame(width: DS.size("statusDot"), height: DS.size("statusDot")).accessibilityHidden(true)
+            }
+            Text(text).font(.dsSmall).foregroundStyle(Color.dsMuted).lineLimit(1)
+        }
+        .padding(.horizontal, DS.space("m"))
+        .frame(minHeight: DS.size("tab"))
+        .dsElevation(.card, in: Capsule())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Hesap kartı
+
+/// Hesap kartı (Mac DSAccountCard): solda yuvarlak rozet (girişliyse amber halkalı), ortada başlık ve durum, sağda tek
+/// düğme (girişliyse küçük ikincil "Yeniden Giriş Yap", değilse ana "Giriş Yap"). Altta "Diğer Giriş Yolları ›"; açılınca
+/// seçenekler kartın içinde. Girişliyken kart yükseltilmiş (e2).
+struct DSAccountCard<Others: View>: View {
+    let badge: String
+    let title: LocalizedStringKey
+    let signedIn: Bool
+    var detail: String?
+    var busy = false
+    var expanded = false
+    let signIn: () -> Void
+    @ViewBuilder var others: Others
+    @State private var showOthers = false
+    @Environment(\.dsMotionGate) private var gate
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: DS.space("s")) {
+                Text(verbatim: badge)
+                    .font(.caption.weight(.heavy))
+                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
+                    .frame(width: 40, height: 40)
+                    .background {
+                        if signedIn {
+                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } else {
+                            Circle().fill(Color.dsCharcoal)
+                        }
+                    }
+                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
+                    .padding(signedIn ? 4.5 : 0)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.space("line")) {
+                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    HStack(spacing: DS.space("xxs")) {
+                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
+                    }
+                    if let detail { Text(verbatim: detail).font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
+                }
+                Spacer(minLength: DS.space("xs"))
+                if busy { ProgressView() }
+                Button(signedIn ? "Sign In Again" : "Sign In", action: signIn)
+                    .buttonStyle(DSButtonStyle(kind: signedIn ? .compact : .primary, fullWidth: false))
+                    .disabled(busy)
+            }
+            .padding(DS.space("m"))
+            if Others.self != EmptyView.self {
+                DSDivider()
+                Button {
+                    withAnimation(DS.animation(.medium, gate: gate)) { showOthers.toggle() }
+                } label: {
+                    HStack(spacing: DS.space("xxs")) {
+                        Text("Other Sign-In Ways")
+                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(showOthers || expanded ? 90 : 0)).accessibilityHidden(true)
+                        Spacer(minLength: 0)
+                    }
+                    .font(.dsSmall)
+                    .foregroundStyle(Color.dsMuted)
+                    .padding(.horizontal, DS.space("m"))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if showOthers || expanded {
+                    VStack(alignment: .leading, spacing: DS.unitGap) { others }
+                        .padding([.horizontal, .bottom], DS.space("m"))
+                        .transition(.opacity)
+                }
+            }
+        }
+        .dsElevation(signedIn ? .raised : .card, in: shape)
+    }
+}
+
+extension DSAccountCard where Others == EmptyView {
+    init(badge: String, title: LocalizedStringKey, signedIn: Bool, detail: String? = nil, busy: Bool = false, signIn: @escaping () -> Void) {
+        self.init(badge: badge, title: title, signedIn: signedIn, detail: detail, busy: busy, signIn: signIn) { EmptyView() }
+    }
+}
+
+// MARK: Altyazı örneği
+
+/// Altyazı kutusu örneği (Mac DSSubtitleSample): Perde altyazı plakası.
+struct DSSubtitleSample: View {
+    var speaker: String?
+    let line: String
+    var size: CGFloat = 17
+
+    var body: some View {
+        DSSubtitlePlate(speaker: speaker, line: line, size: size)
+    }
+}
+
+// MARK: Bölüm başlığı
+
+/// Başlık + altında açıklama (Mac DSSectionTitle): aralık her yerde `DS.space("titleBody")` (6).
+struct DSSectionTitle: View {
+    let title: LocalizedStringKey
+    var message: LocalizedStringKey?
+    var font: Font = .dsBodyStrong
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.space("titleBody")) {
+            Text(title).font(font).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
+            if let message { Text(message).dsMuted() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

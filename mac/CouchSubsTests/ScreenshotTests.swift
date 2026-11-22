@@ -100,6 +100,78 @@ final class ScreenshotTests: XCTestCase {
         windows.forEach { $0.close() }
     }
 
+    /// Perde tasarım dili: bileşen kataloğu ve ana ekranlar, koyu ve açık temada. `COUCHSUBS_PERDE` (klasör) verilince
+    /// çalışır; dosyalar `mac-<ekran>-<koyu|acik>.png`.
+    func testCapturePerde() async throws {
+        guard let path = ProcessInfo.processInfo.environment["COUCHSUBS_PERDE"] else { throw XCTSkip("COUCHSUBS_PERDE verilmedi") }
+        let folder = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let main = try await mainModel()
+        let size = CGSize(width: DS.size("windowWidth"), height: DS.size("windowHeight"))
+        let screens: [(String, () -> Void)] = [
+            ("ana", { main.showSettings = false; main.showHistory = false }),
+            ("gecmis", { main.showHistory = true }),
+            ("ayarlar-temel", { main.showHistory = false; main.settingsSection = .basics; main.showSettings = true }),
+            ("ayarlar-altyazi", { main.showHistory = false; main.settingsSection = .appearance; main.showSettings = true }),
+        ]
+        for (theme, dark) in [("koyu", true), ("acik", false)] {
+            let catalog = AnyView(ScrollView { PerdeCatalog(columns: 3) }.frame(width: 1280, height: 2560))
+            let window = show(catalog, size: CGSize(width: 1280, height: 2560), offset: 0, dark: dark, unconstrained: true)
+            try await Task.sleep(for: .seconds(2))
+            try capture(window).write(to: folder.appendingPathComponent("mac-katalog-\(theme).png"))
+            window.close()
+            for (name, prepare) in screens {
+                prepare()
+                let window = show(AnyView(RootView().environmentObject(main)), size: size, offset: 0, dark: dark)
+                try await Task.sleep(for: .seconds(1.5))
+                try capture(window).write(to: folder.appendingPathComponent("mac-\(name)-\(theme).png"))
+                window.close()
+            }
+            let setup = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+            setup.accountId = Data(repeating: 1, count: 8)
+            setup.step = .console
+            let wizard = show(AnyView(WizardView().environmentObject(setup)), size: size, offset: 40, dark: dark)
+            try await Task.sleep(for: .seconds(2))
+            try capture(wizard).write(to: folder.appendingPathComponent("mac-kurulum-ps5-\(theme).png"))
+            wizard.close()
+        }
+        windows.forEach { $0.close() }
+    }
+
+    /// Perde'nin boşta süren efektlerinin işlemci maliyeti (hedef ≤ %2): ortam ışığı tek başına (uygulamadaki gerçek boşta
+    /// durumu) ve bütün sürekli efektler birden (katalog; en kötü durum), her biri kapı zorla açık / kapalı 15'er sn.
+    /// `COUCHSUBS_CPU` verilince çalışır; sonuç konsola `CPU_PERDE` satırıyla yazılır.
+    func testPerdeIdleCPU() async throws {
+        guard ProcessInfo.processInfo.environment["COUCHSUBS_CPU"] != nil else { throw XCTSkip("COUCHSUBS_CPU verilmedi") }
+        defer { DSMotionGate.forced = nil }
+        func cpu() -> Double {
+            var usage = rusage()
+            getrusage(RUSAGE_SELF, &usage)
+            return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+        }
+        func measure(_ view: AnyView, size: CGSize, animate: Bool) async throws -> Double {
+            DSMotionGate.forced = animate
+            let window = show(view, size: size, offset: 0, dark: true)
+            try await Task.sleep(for: .seconds(2))
+            let (start, began) = (cpu(), Date())
+            try await Task.sleep(for: .seconds(15))
+            let percent = (cpu() - start) / Date().timeIntervalSince(began) * 100
+            window.close()
+            return percent
+        }
+        try await Task.sleep(for: .seconds(10))
+        let ambient = AnyView(ZStack { Color.dsBackground; DSAmbientGlow(); DSPulseDot() }.frame(width: 1200, height: 760))
+        let ambientStill = try await measure(ambient, size: CGSize(width: 1200, height: 760), animate: false)
+        let ambientMoving = try await measure(ambient, size: CGSize(width: 1200, height: 760), animate: true)
+        let catalog = AnyView(ScrollView { PerdeCatalog(columns: 3) }.frame(width: 1280, height: 900))
+        let catalogStill = try await measure(catalog, size: CGSize(width: 1280, height: 900), animate: false)
+        let catalogMoving = try await measure(catalog, size: CGSize(width: 1280, height: 900), animate: true)
+        print("CPU_PERDE ambient still=\(String(format: "%.2f", ambientStill)) moving=\(String(format: "%.2f", ambientMoving)) " +
+              "cost=\(String(format: "%.2f", ambientMoving - ambientStill)) | catalog still=\(String(format: "%.2f", catalogStill)) " +
+              "moving=\(String(format: "%.2f", catalogMoving)) cost=\(String(format: "%.2f", catalogMoving - catalogStill))")
+        XCTAssertLessThan(ambientMoving - ambientStill, 2)
+    }
+
     /// Ayarlar menüsünün renk geçişinin işlemci maliyeti: aynı pencere önce durağan, sonra oynarken 15'er sn ölçülür;
     /// fark konsola yazılır. `COUCHSUBS_CPU` verilince çalışır; fark %5'i aşarsa başarısız (hedef %2'nin altı).
     func testSettingsNavGlowCPU() async throws {
@@ -169,13 +241,19 @@ final class ScreenshotTests: XCTestCase {
         return model
     }
 
-    private func show(_ view: AnyView, size: CGSize, offset: CGFloat) -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable],
-                              backing: .buffered, defer: false)
+    /// Ekrandan büyük pencere (bileşen kataloğu): sistem pencereyi ekrana sığdırmak için küçültmesin.
+    private final class TallWindow: NSWindow {
+        override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+    }
+
+    private func show(_ view: AnyView, size: CGSize, offset: CGFloat, dark: Bool? = nil, unconstrained: Bool = false) -> NSWindow {
+        let window = (unconstrained ? TallWindow.self : NSWindow.self).init(contentRect: NSRect(origin: .zero, size: size),
+                                                                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.title = "CouchSubs"
         window.titlebarAppearsTransparent = true
-        window.appearance = NSAppearance(named: (ProcessInfo.processInfo.environment["COUCHSUBS_SCREENSHOT_DARK"] ?? "").isEmpty ? .aqua : .darkAqua)
+        let darkMode = dark ?? !(ProcessInfo.processInfo.environment["COUCHSUBS_SCREENSHOT_DARK"] ?? "").isEmpty
+        window.appearance = NSAppearance(named: darkMode ? .darkAqua : .aqua)
         window.backgroundColor = NSColor(Color.dsBackground)
         window.contentView = NSHostingView(rootView: view.appSurface().frame(width: size.width, height: size.height))
         window.setFrameTopLeftPoint(NSPoint(x: 80 + offset, y: (NSScreen.main?.visibleFrame.maxY ?? 900) - 40 - offset))

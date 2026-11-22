@@ -60,7 +60,7 @@ struct DSAdBand: View {
     }
 
     private var band: some View {
-        let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: DS.radius("tile") + 2, style: .continuous)
         return ZStack {
             if let ad = items.indices.contains(index) ? items[index] : items.first {
                 row(ad)
@@ -71,8 +71,7 @@ struct DSAdBand: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 56)
-        .background(Color.dsSurface, in: shape)
-        .overlay(shape.strokeBorder(Color.dsBorder))
+        .dsElevation(.card, in: shape)
         .overlay(alignment: .topTrailing) {
             Text("AD")
                 .font(.dsAdTag)
@@ -104,9 +103,9 @@ struct DSAdBand: View {
                     Color.dsField
                 }
             }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.dsBorder))
+            .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous).strokeBorder(Color.dsBorder))
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: ad.title).font(.system(.footnote, weight: .semibold)).foregroundStyle(Color.dsText).lineLimit(1)
@@ -144,7 +143,7 @@ private struct StoreButton: View {
             .foregroundStyle(url == nil ? Color.dsFaint : Color.dsText)
             .padding(.horizontal, 10)
             .frame(height: 28)
-            .background(Color.dsSurface, in: Capsule())
+            .background(Color.dsSurfaceRaised, in: Capsule())
             .overlay(Capsule().strokeBorder(Color.dsBorder))
             .contentShape(Capsule())
         }

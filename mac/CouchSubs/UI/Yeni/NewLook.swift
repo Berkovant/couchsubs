@@ -36,7 +36,10 @@ struct NewLookButton: View {
 extension View {
     /// Yeni arayüzün ortamı: gömülen eski kartlar yeni dilde çizilir, seçiciler ve kaydırıcılar amber.
     func newLook() -> some View {
-        environment(\.csNewLook, true)
+        // Hareket kapısı (kökte daha önce kurulduysa o geçerli): çeviri sürerken, hareketi azaltta ya da pencere önde
+        // değilken sürekli animasyonlar durur.
+        dsMotionGate()
+            .environment(\.csNewLook, true)
             .tint(Color.dsAmber)
             .foregroundStyle(Color.dsText)
             .font(.dsBody)

@@ -8,46 +8,8 @@ import UIKit
 // gelir; renkler açık ve koyu görünümde ayrı. Adlar Mac'teki DS ile aynıdır (mac/CouchSubs/UI/Yeni/DS.swift). Telefonda
 // yazılar sistemin metin stilleriyle kurulur: varsayılan boyda tablodaki boylara denk düşer, Dinamik Yazı'yla büyür.
 
-struct DSTokens: Decodable {
-    struct ColorPair: Decodable {
-        let light: String
-        let dark: String
-    }
-
-    struct FontToken: Decodable {
-        let size: Double
-        let weight: String
-        let tracking: Double?
-        let design: String?
-    }
-
-    struct Motion: Decodable {
-        let short: Double
-        let medium: Double
-        let page: Double
-        let reduced: Double
-        let enter: [Double]
-        let exit: [Double]
-        let adRotate: Double
-    }
-
-    let color: [String: ColorPair]
-    let font: [String: FontToken]
-    let mutedTracking: Double
-    let space: [String: Double]
-    let radius: [String: Double]
-    let size: [String: Double]
-    let motion: Motion
-
-    /// "#RRGGBB" ya da "#RRGGBBAA" → 0–1 aralığında kırmızı, yeşil, mavi, saydamlık.
-    static func rgba(_ hex: String) -> (Double, Double, Double, Double)? {
-        guard hex.first == "#", hex.count == 7 || hex.count == 9, let value = UInt64(hex.dropFirst(), radix: 16) else { return nil }
-        if hex.count == 7 {
-            return (Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255, 1)
-        }
-        return (Double(value >> 24 & 0xFF) / 255, Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255)
-    }
-}
+// DSTokens (dosyanın okunuşu), Perde belirteçleri, hareket kapısı ve yeni bileşenler Mac'le ortak dosyalarda:
+// mac/CouchSubs/UI/Yeni/DSTokens.swift, Perde.swift, PerdeCatalog.swift.
 
 enum DS {
     static let tokens: DSTokens = {
