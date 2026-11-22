@@ -49,7 +49,7 @@ final class SpeakerColorBookTests: XCTestCase {
         XCTAssertEqual(server.speakerBook.color("Mattia"), "#90CAF9")
         XCTAssertEqual(server.speakerBook.color("Boobie"), "#FFD54F")
         XCTAssertEqual(SpeakerColors.speakers(in: "Boobie: Gel.", book: server.speakerBook).map(\.color), ["#FFD54F"])
-        XCTAssertEqual(SpeakerColors.segments(in: "Mattla: Gidelim.", book: server.speakerBook).map(\.color), ["#90CAF9"])
+        XCTAssertEqual(SpeakerColors.segments(in: "Mattla: Gidelim.", book: server.speakerBook).map(\.color), ["#90CAF9", nil])
     }
 
     /// Altyazı Görünümü › Karakter Adı: "Tek Renk" herkesi aynı renkle, "Karaktere Göre"de seçilen renk otomatik paletin
