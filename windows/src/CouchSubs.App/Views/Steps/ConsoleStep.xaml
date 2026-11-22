@@ -5,38 +5,51 @@
              xmlns:c="clr-namespace:CouchSubs.App.Controls"
              xmlns:t="clr-namespace:CouchSubs.App.Theme"
              xmlns:v="clr-namespace:CouchSubs.App.Views">
-    <c:StepLayout Title="{t:T 'Connect your PS5'}"
-                  Message="{t:T 'Turn on the PS5. As the second user, open Settings › System › Remote Play › Pair Device and enter the 8-digit code shown there.'}">
+    <c:StepLayout Title="{t:T 'Let\'s Connect to the PS5'}"
+                  Message="{t:T 'You signed in with your free second PlayStation account. Now we\'re looking for the PS5 on the same network.'}">
         <StackPanel>
-            <TextBlock x:Name="Done" Style="{StaticResource DoneText}" Margin="0,0,0,12" />
+            <TextBlock x:Name="Done" Style="{StaticResource DoneText}" Margin="{t:Sp '0,0,0,s'}" />
             <c:Card>
                 <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <TextBlock Text="PS5" Style="{StaticResource HeadlineText}" VerticalAlignment="Center" />
-                        <Button x:Name="Search" Content="{t:T 'Search again'}" HorizontalAlignment="Right" Click="OnSearch" />
+                    <Grid Margin="{t:Sp '0,0,0,s'}">
+                        <TextBlock Text="PS5" Style="{StaticResource CardTitleText}" VerticalAlignment="Center" />
+                        <Button x:Name="Search" Content="{t:T 'Search Again'}" Style="{StaticResource CompactButton}" HorizontalAlignment="Right" Click="OnSearch" />
                     </Grid>
-                    <TextBlock x:Name="NotFound" Style="{StaticResource HintText}" Margin="0,0,0,8"
+                    <TextBlock x:Name="NotFound" Style="{StaticResource HintText}" Margin="{t:Sp '0,0,0,xs'}"
                                Text="{t:T 'No PS5 found. Make sure it is on and on the same network, or enter its IP address.'}" />
                     <TextBox x:Name="ManualHost" MaxWidth="320" HorizontalAlignment="Left" Width="320" PreviewKeyDown="OnFieldKeyDown" />
                     <StackPanel x:Name="Consoles" />
                 </StackPanel>
             </c:Card>
-            <TextBlock Text="{t:T '8-digit code'}" Style="{StaticResource HintText}" Margin="0,20,0,6" />
+            <!-- PS5 bulunamadı: denetimler kendiliğinden yapılır; okunamayan madde "Bilinmiyor" (tuval 04). -->
+            <c:Card x:Name="ChecksCard" Kind="Experimental" Margin="{t:Sp '0,l,0,0'}" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock Text="{t:T 'Couldn\'t connect to the PS5'}" Style="{StaticResource CardTitleText}" Foreground="{DynamicResource liveTextBrush}" />
+                    <TextBlock Text="{t:T 'Here\'s What We Checked'}" Style="{StaticResource HeadlineText}" Margin="{t:Sp '0,unitGap,0,0'}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="{t:Sp '0,titleBody,0,m'}"
+                               Text="{t:T 'Fix the item with a problem and press Try Again. Things we couldn\'t read are shown as &quot;Unknown&quot;.'}" />
+                    <StackPanel x:Name="ChecksRows" />
+                    <Button x:Name="TryAgain" Content="{t:T 'Try Again'}" Style="{StaticResource PrimaryButton}" Margin="{t:Sp '0,m,0,0'}" Click="OnSearch" />
+                    <c:SectionTitle Title="{t:T 'Do You Know the PS5\'s Address?'}" Margin="{t:Sp '0,l,0,0'}"
+                                    Text="{t:T 'On the PS5, the IP address is shown in Settings › Network › Connection Status.'}" />
+                </StackPanel>
+            </c:Card>
+            <TextBlock Text="{t:T '8-digit code'}" Style="{StaticResource HintText}" Margin="{t:Sp '0,m,0,titleBody'}" />
             <!-- Enter bağlanır (eskiden kapalı "Devam"a gidip hiçbir şey yapmıyordu); boşluk ve tire için uzunluk payı var. -->
             <TextBox x:Name="Pin" Width="240" HorizontalAlignment="Left" FontSize="{DynamicResource codeFontSize}" FontWeight="SemiBold"
                      MinHeight="52" MaxLength="16" PreviewKeyDown="OnFieldKeyDown" TextChanged="OnPinChanged" />
-            <Button x:Name="Connect" Content="{t:T 'Connect'}" Style="{StaticResource PrimaryButton}" Margin="0,12,0,0"
+            <Button x:Name="Connect" Content="{t:T 'Connect'}" Style="{StaticResource PrimaryButton}" Margin="{t:Sp '0,s,0,0'}"
                     Click="OnConnect" />
-            <TextBlock x:Name="Working" Style="{StaticResource HintText}" Margin="0,12,0,0" Visibility="Collapsed"
+            <TextBlock x:Name="Working" Style="{StaticResource HintText}" Margin="{t:Sp '0,s,0,0'}" Visibility="Collapsed"
                        Text="{t:T 'Connecting to the PS5… This can take up to 30 seconds.'}" />
             <!-- Eşleşme başarılı: düğmenin hemen altında yeşil ileti (üstteki ad kaydırınca görünmüyordu). -->
-            <TextBlock x:Name="Paired" Style="{StaticResource DoneText}" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
-            <TextBlock x:Name="Error" Style="{StaticResource ErrorText}" Margin="0,12,0,0" />
+            <TextBlock x:Name="Paired" Style="{StaticResource DoneText}" TextWrapping="Wrap" Margin="{t:Sp '0,s,0,0'}" Visibility="Collapsed" />
+            <TextBlock x:Name="Error" Style="{StaticResource ErrorText}" Margin="{t:Sp '0,s,0,0'}" />
             <!-- Eşleştirme olmazsa gönderilecek remoteplay.log Dosya Gezgini'nde seçili açılır. -->
-            <Button x:Name="ShowLog" Content="{t:T 'Show log file'}" HorizontalAlignment="Left" Margin="0,8,0,0"
+            <Button x:Name="ShowLog" Content="{t:T 'Show log file'}" HorizontalAlignment="Left" Margin="{t:Sp '0,xs,0,0'}"
                     Visibility="Collapsed" Click="OnShowLog" />
             <!-- Eşleştirme başarısızsa ve güvenlik duvarında izin yoksa -->
-            <v:FirewallCard Margin="0,12,0,0" />
+            <v:FirewallCard Margin="{t:Sp '0,s,0,0'}" />
         </StackPanel>
     </c:StepLayout>
 </UserControl>

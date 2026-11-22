@@ -52,6 +52,18 @@ public partial class App : Application
             // Samsung'un sertifika için giriş sayfası varsayılan tarayıcıda açılır.
             OpenInBrowser = BrowserLauncher.Open,
         };
+        // Yeni arayüz ilk açılışta bir kez (Mac ile aynı): kayıtlı görünüm Koyu ise Açık olur (onaylı tasarım açık), konuşan
+        // rengi yalnız adı boyar (style.nameOnly).
+        if (!UiPreferences.Current.NewLookApplied)
+        {
+            var current = controller.Settings;
+            controller.Settings = current with
+            {
+                Appearance = current.Appearance == AppAppearance.Dark ? AppAppearance.Light : current.Appearance,
+                Style = current.Style with { NameOnly = true },
+            };
+            UiPreferences.Save(UiPreferences.Current with { NewLookApplied = true });
+        }
         // Görünüm (varsayılan koyu) pencere açılmadan uygulanır; ayarlarda değişince anında yenilenir.
         ThemeManager.Use(Resources, controller.Settings.Appearance);
         ThemeManager.Follow(Resources);
@@ -62,8 +74,11 @@ public partial class App : Application
             if (Dispatcher.CheckAccess()) ThemeManager.Use(Resources, appearance);
             else Dispatcher.BeginInvoke(() => ThemeManager.Use(Resources, appearance));
         };
+        Theme.Motion.AnimationsEnabled = controller.Settings.TransitionAnimations;
         var window = new ShellWindow(controller);
         MainWindow = window;
+        // Pencere çizildi: açılış başarılı, kurtarma güncellemesinin işareti silinir.
+        window.ContentRendered += (_, _) => RescueUpdate.Reached();
         window.Show();
     }
 }

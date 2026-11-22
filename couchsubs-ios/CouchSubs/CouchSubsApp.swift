@@ -159,6 +159,10 @@ enum ConnectionAlert {
 
     /// İzin yalnız ilk seferde sorulur; sonra iOS kayıtlı yanıtı döner.
     static func requestPermission() {
+        #if DEBUG
+        // Ekran görüntüsü kipinde (COUCHSUBS_DEMO=1) izin penceresi ekranı kapatmasın.
+        if ProcessInfo.processInfo.environment["COUCHSUBS_DEMO"] == "1" { return }
+        #endif
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
@@ -256,7 +260,7 @@ struct TVPairingBanner: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Mobile.Space.tile)
         .background(Mobile.Palette.surface)
-        .overlay(alignment: .bottom) { Rectangle().fill(Mobile.Palette.accent).frame(height: 1) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Mobile.Palette.accent).frame(height: 1.5) }
     }
 }
 
@@ -282,6 +286,32 @@ struct RootView: View {
             }
         }
         .onChange(of: model.demoMode) { _ in path = [] }
+        #if DEBUG
+        // Hata ayıklama: COUCHSUBS_ROUTE=settings,packs gibi ekranları sırayla açar (simülatör ekran görüntüleri için).
+        .task {
+            // COUCHSUBS_START_DEMO=1: deneme modu (çeviri sürüyor ekranı) kendiliğinden açılır.
+            if ProcessInfo.processInfo.environment["COUCHSUBS_START_DEMO"] == "1" {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await model.startDemo()
+            }
+            // COUCHSUBS_SETUP_STEP=hdmi: kurulumun TV girişi adımı (ekran görüntüsü için).
+            if ProcessInfo.processInfo.environment["COUCHSUBS_SETUP_STEP"] == "hdmi" {
+                welcomeSeen = true
+                model.step = .hdmi
+            }
+            guard let names = ProcessInfo.processInfo.environment["COUCHSUBS_ROUTE"] else { return }
+            // Ana ekran yerleşsin; yığın ilk çizimde değişirse gezinme boş kalıyor.
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            let routes: [String: Route] = ["settings": .settings, "profile": .profile, "packs": .packs, "target": .target,
+                                           "ps5": .ps5, "psn": .psn, "about": .about, "history": .history,
+                                           "platform": .platform, "tvInstall": .tvInstall,
+                                           "basics": .settingsPage(.basics), "appearance": .settingsPage(.appearance),
+                                           "advanced": .settingsPage(.advanced), "area": .settingsPage(.area),
+                                           "dubbing": .settingsPage(.dubbing), "outputs": .settingsPage(.outputs),
+                                           "console": .settingsPage(.console)]
+            path = names.split(separator: ",").compactMap { routes[String($0)] }
+        }
+        #endif
         // TV'nin eşleştirme isteği: onay penceresi en üstteki ekranda açılır (tam ekran altyazı ya da bir sayfa açıkken de)
         // ve istek beklediği sürece her ekranın üstünde onay satırı durur. Eskiden pencere SwiftUI `.alert(item:)` ile kök
         // görünümden sunuluyordu: başka bir ekran sunulmuşken ya da istek değiştiğinde pencere sessizce düşebiliyor,
@@ -298,8 +328,12 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .preferredColorScheme(.dark)
+        // Ayarlar › Temel › Görünüm: Açık, Koyu (varsayılan, Mac ile aynı) ya da Sisteme Uy; anahtarlar her yerde yeni dilde.
+        .preferredColorScheme(model.settings.appearance.colorScheme)
+        // Ayarlar › Temel › Geçiş Animasyonları kapalıyken yeni dildeki bileşenler yalnız kısa solma kullanır.
+        .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .tint(Mobile.Palette.accent)
+        .toggleStyle(DSToggleStyle())
         // Yazılar Dinamik Yazı'yla büyür; en büyük erişilebilirlik boylarında karolar taşmasın diye üst sınır.
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
@@ -336,6 +370,8 @@ struct RootView: View {
             PS5PairScreen(onBack: { model.back() }, onSkip: { model.skipSetup() }, onDone: { model.advance() })
         case .output, .done:
             TargetScreen(onBack: { model.back() }) { model.advance() }
+        case .hdmi:
+            HDMIScreen(onBack: { model.back() }) { model.advance() }
         }
     }
 
@@ -344,11 +380,15 @@ struct RootView: View {
             Group {
                 if model.isRunning { RunningScreen(path: $path) } else { HomeScreen(path: $path) }
             }
+            // Reklam şeridi boştaki ana ekranda; çeviri sürerken (oyun görüntüsü) yok.
+            .environment(\.mobileAdBand, !model.isRunning && !model.demoMode)
             .navigationDestination(for: Route.self) { route in
+                Group {
                 // Ekranlar yığını `removeLast()` ile değil `pop(route)` ile kapatır: kapanma animasyonu sürerken ikinci
                 // dokunuşta yığın boşalmış olur ve `removeLast()` uygulamayı kapatırdı (TestFlight çökmesi, yapı 18).
                 switch route {
                 case .settings: SettingsScreen(path: $path)
+                case .settingsPage(let section): SettingsPageScreen(section: section, path: $path)
                 case .profile: ProfileScreen(path: $path)
                 case .packs: PacksScreen()
                 case .target: TargetScreen(setup: false) { path.pop(route) }
@@ -375,6 +415,8 @@ struct RootView: View {
                 case .tvInstall: TVInstallScreen(onDone: { path.removeAll() })
                 case .tvUpdate: TVInstallScreen(update: model.tvAppUpdate, onDone: { path.removeAll() })
                 }
+                }
+                .environment(\.mobileAdBand, route.showsAdBand && !model.demoMode)
             }
         }
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in

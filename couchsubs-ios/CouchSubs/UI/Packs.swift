@@ -20,16 +20,10 @@ struct PacksScreen: View {
         } content: {
             Text("The pack is chosen by itself when the game opens. Lines not in the pack are translated with the engine you chose.")
                 .font(Mobile.TypeScale.body).foregroundStyle(Mobile.Palette.secondary)
-            Tile {
-                Toggle(isOn: $model.settings.gamePacks) {
-                    VStack(alignment: .leading, spacing: Mobile.Space.hair) {
-                        Text("Use the ready Turkish translations of game packs").font(Mobile.TypeScale.headline)
-                        Text(Self.summary(model.installedPacks) + " · " + String(localized: "offline"))
-                            .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
-                    }
-                }
-                .tint(Mobile.Palette.accent)
-            }
+            // Ayarlar › Oyun Paketleri: Mac'teki anahtarlar kartı (aynı ad, sıra ve açıklama).
+            PackSettingsTile()
+            Text(Self.summary(model.installedPacks) + " · " + String(localized: "offline"))
+                .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
             switch app.packStatus {
             case .downloading:
                 HStack(spacing: Mobile.Space.inline) {
@@ -83,7 +77,7 @@ struct PacksScreen: View {
         .animation(.easeInOut(duration: 0.2), value: updating)
         .alert(result?.title ?? "", isPresented: $showResult, presenting: result) { alert in
             if alert.retry {
-                Button("Try again", action: updateNow)
+                Button("Try Again", action: updateNow)
                 Button("Close", role: .cancel) {}
             } else {
                 Button("OK", role: .cancel) {}

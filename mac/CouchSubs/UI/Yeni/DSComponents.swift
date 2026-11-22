@@ -9,14 +9,18 @@ import SwiftUI
 // MARK: Kart
 
 /// Kart: yüzey zemin, 24 köşe, 1 pt çerçeve halkası, 24 iç boşluk. İçerik taşarsa kart kendi içinde ince çubukla kayar.
+/// Öğeler (ayar birimleri) arası varsayılan `DS.unitGap` (24); kart başlığı → ilk birim de 24.
 struct DSCard<Content: View>: View {
     var padding: CGFloat = DS.space("l")
-    var spacing: CGFloat = DS.space("m")
-    /// Sol kenarda 4 pt renk şeridi (ör. Deneysel kartında kırmızı).
+    var spacing: CGFloat = DS.unitGap
+    /// Vurgulu kart: kartı köşe yarıçapıyla komple saran 1,5 pt renkli kenarlık + %5 aynı renk zemin tonu
+    /// (Deneysel turuncu-kırmızı, uyarı/geliştirici amber). Sol şerit kullanılmaz.
     var accent: Color?
     /// Seçili/etkin kartın 2 pt amber halkası.
     var highlighted = false
     var scrolls = true
+    /// Yüzey ile içerik arasında çizilen zemin (ör. Ayarlar menüsünün hareketli renk geçişi).
+    var backdrop: AnyView?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -32,39 +36,101 @@ struct DSCard<Content: View>: View {
                 stack
             }
         }
-        .background(Color.dsSurface, in: shape)
-        .overlay(alignment: .leading) {
-            if let accent {
-                accent.frame(width: 4).clipShape(shape)
-                    .mask(shape)
-                    .allowsHitTesting(false)
+        .background {
+            ZStack {
+                shape.fill(Color.dsSurface)
+                if let accent { shape.fill(accent.opacity(0.05)) }
+                if let backdrop { backdrop.clipShape(shape) }
             }
         }
-        .overlay(shape.strokeBorder(highlighted ? Color.dsAmber : Color.dsBorder, lineWidth: highlighted ? 2 : 1))
+        .overlay(shape.strokeBorder(highlighted ? Color.dsAmber : accent ?? Color.dsBorder,
+                                    lineWidth: highlighted ? 2 : accent == nil ? 1 : 1.5))
         .clipShape(shape)
     }
 
     private var stack: some View {
         VStack(alignment: .leading, spacing: spacing) { content }
+            .environment(\.csInsideCard, true)
+            .environment(\.dsCardSpacing, spacing)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(padding)
     }
 }
 
-/// Kart başlığı (mono etiket) ile içerik arasında 24 pt kalsın diye etiketin altına 8 pt ek boşluk.
+/// Kart başlığı: sistem yazısı, cümle düzeni ("Başka bir cihazda göster" gibi), 17 orta kalın; içerikle arası 24 pt kalsın
+/// diye altına 8 pt ek boşluk. Mono büyük harf başlık kullanılmaz (Sinan Bey, 22 Kas).
 struct DSCardHeader<Trailing: View>: View {
     let title: LocalizedStringKey
     var color: Color = .dsMuted
     @ViewBuilder var trailing: Trailing
+    @Environment(\.dsCardSpacing) private var cardSpacing
+
+    init(_ title: LocalizedStringKey, color: Color = .dsMuted, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.color = color
+        self.trailing = trailing()
+    }
 
     var body: some View {
         // Başlık + sağda düğme satırında alt boşluk satırın kendisindedir; ikisi dikeyde ortalıdır.
         HStack(alignment: .center, spacing: DS.space("s")) {
-            DSMonoLabel(title, color: color)
+            Text(title)
+                .font(.dsCardTitle)
+                .foregroundStyle(color == .dsMuted ? Color.dsText : color)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
             Spacer(minLength: DS.space("s"))
             trailing
         }
-        .padding(.bottom, DS.space("xs"))
+        // Başlık → ilk birim her kartta 24: kartın öğe aralığı neyse eksiği burada.
+        .padding(.bottom, max(0, DS.unitGap - cardSpacing))
+    }
+}
+
+private struct DSCardSpacingKey: EnvironmentKey {
+    static let defaultValue = DS.space("m")
+}
+
+extension EnvironmentValues {
+    /// İçinde bulunulan kartın öğe aralığı (kart başlığının alt boşluğu buna göre).
+    var dsCardSpacing: CGFloat {
+        get { self[DSCardSpacingKey.self] }
+        set { self[DSCardSpacingKey.self] = newValue }
+    }
+}
+
+// MARK: Ayar birimi
+
+/// Ayar birimi: başlık (üstte) + denetim (altta, tam genişlik) + açıklama (denetimin altında). Birim içi aralıklar sabit:
+/// başlık → denetim `DS.unitTitleGap` (8), denetim → açıklama `DS.unitHintGap` (6). Birimler arası her yerde
+/// `DS.unitGap` (24); bunu birimleri dizen kart (DSCard / Card) ya da `DSUnitStack` verir. Etiket solda, denetim sağda
+/// düzeni kullanılmaz (anahtar satırı ve kaydırıcının değer yazısı hariç).
+struct DSUnit<Control: View>: View {
+    var title: LocalizedStringKey?
+    var hint: LocalizedStringKey?
+    @ViewBuilder var control: Control
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, DS.unitTitleGap)
+            }
+            control
+            if let hint { Text(hint).dsMuted().padding(.top, DS.unitHintGap) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Birimleri kart dışında (ör. kartın bir bölümünde) dizen yığın: aralık her yerde `DS.unitGap`.
+struct DSUnitStack<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.unitGap) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -89,7 +155,8 @@ struct DSDivider: View {
 /// kare ya da atan nokta), küçük koyu (reklam bandındaki İncele). Hepsi tam yuvarlak, 48 yükseklik, alt çizgisiz.
 /// İşlem sürerken çağıran `.disabled(true)` verir ve "…ıyor…" yazar: düğme soluklaşır, tekrar basılamaz.
 struct DSButtonStyle: ButtonStyle {
-    enum Kind { case primary, dark, secondary, stop, live, small }
+    /// `compact`: küçük ikincil (32 yükseklik) — başlık satırında "Yeniden Ara", kutunun içinde "Ekle" gibi.
+    enum Kind { case primary, dark, secondary, stop, live, small, danger, compact }
     var kind: Kind = .secondary
     var fullWidth = false
     /// Yazı ile sağdaki ok arası boşluk (ör. "Altyazı Görünümünü Düzenle →").
@@ -123,17 +190,17 @@ private struct DSButtonBody: View {
                 .lineLimit(1)
                 .frame(maxWidth: spread ? .infinity : nil, alignment: .leading)
         }
-        .font(kind == .secondary ? .dsButtonSecondary : kind == .small ? .system(size: 13, weight: .semibold) : .dsButton)
+        .font(kind == .secondary ? .dsButtonSecondary : kind == .small || kind == .compact ? .system(size: 13, weight: .semibold) : .dsButton)
         .foregroundStyle(foreground)
-        .padding(.horizontal, kind == .small ? DS.space("m") : kind == .secondary ? 20 : DS.space("l"))
+        .padding(.horizontal, kind == .compact ? DS.space("s") : kind == .small ? DS.space("m") : kind == .secondary ? 20 : DS.space("l"))
         .frame(maxWidth: fullWidth || spread ? .infinity : nil)
-        .frame(height: kind == .small ? DS.size("adCta") : DS.size("button"))
-        .background(background(hovered: hovered, pressed: pressed), in: Capsule())
+        .frame(height: kind == .compact ? DS.size("chip") : kind == .small ? DS.size("adCta") : DS.size("button"))
+        .background(background(hovered: hovered, pressed: pressed), in: Capsule(style: .circular))
         .overlay { ring }
-        .overlay { if isFocused { Capsule().strokeBorder(Color.dsAmberText, lineWidth: 2) } }
+        .overlay { if isFocused { Capsule(style: .circular).strokeBorder(Color.dsAmberText, lineWidth: 2) } }
         .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
         .opacity(isEnabled ? 1 : 0.55)
-        .contentShape(Capsule())
+        .contentShape(Capsule(style: .circular))
         .onHover { hovering = $0 }
         .animation(DS.animation(.short, reduced: reduceMotion), value: pressed)
         .animation(DS.animation(.short, reduced: reduceMotion), value: hovered)
@@ -141,8 +208,9 @@ private struct DSButtonBody: View {
 
     @ViewBuilder private var ring: some View {
         switch kind {
-        case .secondary: Capsule().strokeBorder(Color.dsBorder)
-        case .stop, .live: Capsule().strokeBorder(Color.dsLiveRing)
+        // Halka kapsülün içine yarım nokta çekilerek çizilir; kapsül zeminiyle birebir örtüşür (yanlarda taşan dikey çizgi olmaz).
+        case .secondary, .compact: Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsBorder, lineWidth: 1)
+        case .stop, .live, .danger: Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsLiveRing, lineWidth: 1)
         default: EmptyView()
         }
     }
@@ -151,8 +219,8 @@ private struct DSButtonBody: View {
         switch kind {
         case .primary: .dsOnAmber
         case .dark, .small: .dsOnCharcoal
-        case .secondary: .dsText
-        case .stop, .live: .dsLiveText
+        case .secondary, .compact: .dsText
+        case .stop, .live, .danger: .dsLiveText
         }
     }
 
@@ -160,8 +228,8 @@ private struct DSButtonBody: View {
         switch kind {
         case .primary: hovered || pressed ? .dsAmberHover : .dsAmber
         case .dark, .small: .dsCharcoal
-        case .secondary: hovered || pressed ? .dsField : .dsSurface
-        case .stop, .live: hovered || pressed ? Color.dsLive.opacity(0.18) : .dsLiveSoft
+        case .secondary, .compact: hovered || pressed ? .dsField : .dsSurface
+        case .stop, .live, .danger: hovered || pressed ? Color.dsLive.opacity(0.18) : .dsLiveSoft
         }
     }
 }
@@ -191,8 +259,8 @@ struct DSSuccessBadge: View {
         .padding(.horizontal, DS.space("l"))
         .frame(maxWidth: fullWidth ? .infinity : nil)
         .frame(height: DS.size("button"))
-        .background(Color.dsSuccessSoft, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.dsSuccessRing))
+        .background(Color.dsSuccessSoft, in: Capsule(style: .circular))
+        .overlay(Capsule(style: .circular).strokeBorder(Color.dsSuccessRing))
         .scaleEffect(seated || reduceMotion ? 1 : 0.94)
         .onAppear { withAnimation(DS.animation(.medium, reduced: reduceMotion)) { seated = true } }
         .accessibilityElement(children: .combine)
@@ -254,26 +322,27 @@ struct DSTabs<Value: Hashable>: View {
                         .font(.dsTab)
                         .foregroundStyle(on ? Color.dsText : Color.dsMuted)
                         .lineLimit(1)
-                        .padding(.horizontal, DS.space("m"))
-                        .frame(minWidth: fill ? 88 : DS.size("tabMin"), maxWidth: fill ? .infinity : nil)
+                        .minimumScaleFactor(0.85)
+                        .padding(.horizontal, fill ? DS.space("xs") : DS.space("m"))
+                        .frame(minWidth: fill ? 0 : DS.size("tabMin"), maxWidth: fill ? .infinity : nil)
                         .frame(height: DS.size("tab"))
                         .background {
                             if on {
-                                Capsule().fill(Color.dsSurface)
+                                Capsule(style: .circular).fill(Color.dsSurface)
                                     .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-                                    .overlay(Capsule().strokeBorder(Color.dsBorder))
+                                    .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
                                     .matchedGeometryEffect(id: "tab", in: namespace)
                             }
                         }
-                        .contentShape(Capsule())
+                        .contentShape(Capsule(style: .circular))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
         }
         .padding(DS.space("xxs"))
-        .background(Color.dsField, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.dsBorder))
+        .background(Color.dsField, in: Capsule(style: .circular))
+        .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
     }
 }
 
@@ -296,7 +365,7 @@ struct DSSwitch: View {
         Button {
             withAnimation(DS.animation(.medium, reduced: reduceMotion)) { isOn.toggle() }
         } label: {
-            Capsule()
+            Capsule(style: .circular)
                 .fill(isOn ? Color.dsAmber : Color.dsSwitchOff)
                 .frame(width: width, height: height)
                 .overlay(alignment: isOn ? .trailing : .leading) {
@@ -305,7 +374,7 @@ struct DSSwitch: View {
                         .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
                         .padding(.horizontal, 3)
                 }
-                .contentShape(Capsule())
+                .contentShape(Capsule(style: .circular))
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.5)
@@ -313,26 +382,27 @@ struct DSSwitch: View {
     }
 }
 
-/// Anahtar satırı: solda anahtar, sağında başlık ve noktalı açıklama; en az 56 yükseklik, altta ayraç.
+/// Anahtar satırı (bir ayar birimi): solda anahtar, sağında başlık ve altında açıklama. Kendi dikey boşluğu ve ayracı
+/// yok; birimler arası 24'ü onu dizen kart verir (diğer birimlerle aynı aralık). `divider` eski çağrılar içindir, yok sayılır.
 struct DSSwitchRow: View {
     let title: LocalizedStringKey
     var subtitle: LocalizedStringKey?
     @Binding var isOn: Bool
-    var divider = true
+    var divider = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: DS.space("m")) {
-                DSSwitch(isOn: $isOn)
-                    .accessibilityLabel(Text(title))
-                DSTitleBlock(title: title, subtitle: subtitle)
-                    .contentShape(Rectangle())
-                    .onTapGesture { isOn.toggle() }
+        HStack(alignment: subtitle == nil ? .center : .top, spacing: DS.space("m")) {
+            DSSwitch(isOn: $isOn)
+                .accessibilityLabel(Text(title))
+            VStack(alignment: .leading, spacing: DS.unitHintGap) {
+                Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
+                if let subtitle { Text(subtitle).dsMuted() }
             }
-            .padding(.vertical, DS.space("s"))
-            .frame(minHeight: DS.size("row"))
-            if divider { DSDivider() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { isOn.toggle() }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -370,7 +440,8 @@ struct DSRadio: View {
     }
 }
 
-/// Seçenek kartı (tuvaldeki SEL): en az 64 (ya da 72) yükseklik, 16 köşe, seçiliyken 2 pt amber halka; solda radyo.
+/// Seçenek kartı (tuvaldeki SEL): en az 64 (ya da 72) yükseklik, 16 köşe. Tıklanabilir her kart/seçenek böyle görünür:
+/// her zaman 1 pt kenarlık, üzerine gelince alan zemini, seçiliyken 2 pt amber kenarlık + hafif amber dolgu; solda radyo.
 struct DSOptionStyle: ButtonStyle {
     var selected: Bool
     var minHeight: CGFloat = DS.size("option")
@@ -400,12 +471,148 @@ private struct DSOptionBody: View {
         .padding(.vertical, DS.space("xs"))
         .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
         .background(hovering && !selected ? Color.dsField : Color.dsSurface, in: shape)
-        .overlay(shape.strokeBorder(selected ? Color.dsAmber : Color.dsBorder, lineWidth: selected ? 2 : 1))
+        .overlay(selected ? shape.fill(Color.dsAmber.opacity(0.08)) : nil)
+        .overlay(shape.strokeBorder(selected ? Color.dsAmber : hovering ? Color.dsScrollThumb : Color.dsBorder, lineWidth: selected ? 2 : 1))
         .contentShape(shape)
         .opacity(isEnabled ? 1 : 0.5)
         .onHover { hovering = $0 }
         .animation(DS.animation(.short, reduced: reduceMotion), value: selected)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+// MARK: Hesap kartı
+
+/// Hesap kartı (PlayStation / Microsoft): solda yuvarlak rozet, ortada başlık ve durum (yeşil/gri nokta + "Giriş yapıldı"
+/// ya da "Giriş yapılmadı", varsa hesap adı gri), sağda kartın içinde dikey ortalı tek düğme (girişliyse küçük ikincil
+/// "Yeniden Giriş Yap", değilse birincil "Giriş Yap"). Altta ince ayraçtan sonra "Diğer Giriş Yolları ›"; açılınca
+/// seçenekler kartın içinde.
+struct DSAccountCard<Others: View>: View {
+    let badge: String
+    let title: LocalizedStringKey
+    let signedIn: Bool
+    var detail: String?
+    var busy = false
+    /// Diğer yollardan biri sürüyorsa (ör. giriş tarayıcıya geçti) açılır kendiliğinden açık kalır.
+    var expanded = false
+    let signIn: () -> Void
+    @ViewBuilder var others: Others
+    @State private var showOthers = false
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: DS.space("s")) {
+                Text(verbatim: badge)
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(Color.dsOnCharcoal)
+                    .frame(width: 40, height: 40)
+                    .background(Color.dsCharcoal, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.space("line")) {
+                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    HStack(spacing: DS.space("xxs")) {
+                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
+                        if let detail { Text(verbatim: "· \(detail)").font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
+                    }
+                }
+                Spacer(minLength: DS.space("s"))
+                if busy { ProgressView().controlSize(.small) }
+                if signedIn {
+                    Button("Sign In Again", action: signIn).buttonStyle(DSButtonStyle(kind: .compact)).disabled(busy)
+                } else {
+                    Button("Sign In", action: signIn).buttonStyle(DSButtonStyle(kind: .primary)).disabled(busy)
+                }
+            }
+            .padding(DS.space("m"))
+            DSDivider()
+            Button {
+                withAnimation(DS.animation(.medium, reduced: false)) { showOthers.toggle() }
+            } label: {
+                HStack(spacing: DS.space("xxs")) {
+                    Text("Other Sign-In Ways")
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(showOthers || expanded ? 90 : 0)).accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                }
+                .font(.dsSmall)
+                .foregroundStyle(hovering ? Color.dsText : Color.dsMuted)
+                .padding(.horizontal, DS.space("m"))
+                .padding(.vertical, DS.space("s"))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            if showOthers || expanded {
+                VStack(alignment: .leading, spacing: DS.unitGap) { others }
+                    .padding([.horizontal, .bottom], DS.space("m"))
+                    .transition(.opacity)
+            }
+        }
+        .background(Color.dsSurface, in: shape)
+        .overlay(shape.strokeBorder(Color.dsBorder))
+    }
+}
+
+// MARK: Bölüm başlığı
+
+/// Başlık + altında açıklama: aralık her yerde `DS.space("titleBody")` (6). Kart içinde başlık ve açıklama ayrı kardeş
+/// öğe olarak yazılmaz (kartın 24'lük birim aralığı araya girerdi).
+struct DSSectionTitle: View {
+    let title: LocalizedStringKey
+    var message: LocalizedStringKey?
+    var font: Font = .dsBodyStrong
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.space("titleBody")) {
+            Text(title).font(font).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
+            if let message { Text(message).dsMuted() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: Düğme yığını
+
+/// Birbiriyle ilişkili ardışık düğmeler (ör. "Evet, Görüyorum" / "Görmüyorum") ve üstlerindeki soru: aralar 12 (düğme →
+/// açıklama aralığı kadar). Kartın 24'lük birim aralığı bu yığının dışında kalır.
+struct DSButtonStack<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.space("s")) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: Uyarı kutusu
+
+/// Önemli uyarı: ikincil gri metin değil, ince amber kenarlı, açık amber zeminli kutu; solda simge. Metin Markdown
+/// kalın (**ana**) destekler.
+struct DSCallout: View {
+    let text: LocalizedStringKey
+    var icon = "exclamationmark.triangle.fill"
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+        HStack(alignment: .top, spacing: DS.space("s")) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.dsAmberText)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.dsSmall)
+                .foregroundStyle(Color.dsText)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(DS.space("m"))
+        .background(Color.dsAmber.opacity(0.10), in: shape)
+        .overlay(shape.strokeBorder(Color.dsAmber.opacity(0.55)))
     }
 }
 
@@ -438,8 +645,8 @@ struct DSFieldChrome<Field: View, Trailing: View>: View {
         .padding(.leading, DS.space("m"))
         .padding(.trailing, Trailing.self == EmptyView.self ? DS.space("m") : DS.space("xs"))
         .frame(height: DS.size("input"))
-        .background(Color.dsField, in: Capsule())
-        .overlay(Capsule().strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 2 : 1))
+        .background(Color.dsField, in: Capsule(style: .circular))
+        .overlay(Capsule(style: .circular).strokeBorder(focused ? Color.dsAmber : Color.dsBorder, lineWidth: focused ? 2 : 1))
     }
 }
 
@@ -455,11 +662,14 @@ extension DSFieldChrome where Trailing == EmptyView {
 struct DSCopyField: View {
     let text: String
     var display: String?
+    /// Varsayılan mono 13; Xbox kodu gibi büyük değerlerde daha iri.
+    var font: Font?
     @State private var copied = false
 
     var body: some View {
         DSFieldChrome(mono: true) {
             Text(verbatim: display ?? text)
+                .font(font ?? .system(size: 13, weight: .regular, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
@@ -521,7 +731,7 @@ struct DSBadge: View {
             .foregroundStyle(foreground)
             .padding(.horizontal, 10)
             .frame(height: DS.size("badge"))
-            .background(background, in: Capsule())
+            .background(background, in: Capsule(style: .circular))
     }
 
     private var foreground: Color {
@@ -555,8 +765,8 @@ struct DSStatusPill: View {
         }
         .padding(.horizontal, DS.space("m"))
         .frame(height: DS.size("tab"))
-        .background(Color.dsSurface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.dsBorder))
+        .background(Color.dsSurface, in: Capsule(style: .circular))
+        .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
         .accessibilityElement(children: .combine)
     }
 }
@@ -670,11 +880,11 @@ struct DSSceneBackground: View {
 /// Altyazı kutusu örneği (koyu yarı saydam zemin, beyaz yarı kalın yazı, konuşan adı amber).
 struct DSSubtitleSample: View {
     var speaker: String?
-    let text: String
+    let line: String
     var size: CGFloat = 17
 
     var body: some View {
-        (Text(verbatim: speaker.map { $0 + " " } ?? "").foregroundColor(Color.dsAmber) + Text(verbatim: text).foregroundColor(.white))
+        (Text(verbatim: speaker.map { $0 + " " } ?? "").foregroundColor(Color.dsAmber) + Text(verbatim: line).foregroundColor(.white))
             .font(.system(size: size, weight: .semibold))
             .lineSpacing(3)
             .multilineTextAlignment(.center)
@@ -726,7 +936,7 @@ struct DSLogoMark: View {
     }
 
     private func bar(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ s: CGFloat, delay: Double) -> some View {
-        Capsule()
+        Capsule(style: .circular)
             .fill(Color.dsAmber)
             .frame(width: w * s, height: h * s)
             .scaleEffect(x: narrow ? 0.6 : 1, y: 1, anchor: .center)
@@ -754,4 +964,308 @@ extension View {
     func dsScroll() -> some View {
         ScrollView(.vertical) { self }.scrollIndicators(.automatic)
     }
+}
+
+// MARK: Kaydırıcı
+
+/// Kaydırıcı: 4 pt ince iz (kapalı anahtar rengi), dolu kısmı amber, 20 pt beyaz gölgeli düğmecik; nokta (tick) yok.
+/// Tam genişlik; `step` verilirse değer o adıma oturur. Windows: Styles.xaml › Slider (aynı ölçüler).
+struct DSSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double?
+    var onEditingChanged: (Bool) -> Void = { _ in }
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dragging = false
+
+    static let knob: CGFloat = 20
+    private static let track: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geometry in
+            let knob = Self.knob
+            let travel = max(geometry.size.width - knob, 1)
+            let offset = travel * fraction
+            ZStack(alignment: .leading) {
+                Capsule(style: .circular).fill(Color.dsSwitchOff)
+                    .frame(width: travel, height: Self.track)
+                    .offset(x: knob / 2)
+                Capsule(style: .circular).fill(Color.dsAmber)
+                    .frame(width: offset, height: Self.track)
+                    .offset(x: knob / 2)
+                Circle().fill(Color.white)
+                    .frame(width: knob, height: knob)
+                    .overlay(Circle().strokeBorder(Color.black.opacity(0.06)))
+                    .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+                    .scaleEffect(dragging && !reduceMotion ? 1.08 : 1)
+                    .offset(x: offset)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        if !dragging {
+                            dragging = true
+                            onEditingChanged(true)
+                        }
+                        set(fraction: (gesture.location.x - knob / 2) / travel)
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        onEditingChanged(false)
+                    }
+            )
+        }
+        .frame(height: 24)
+        .opacity(isEnabled ? 1 : 0.5)
+        .animation(DS.animation(.short, reduced: reduceMotion), value: dragging)
+        .accessibilityElement()
+        .accessibilityValue(Text(verbatim: value.formatted(.number.precision(.fractionLength(step.map { $0 < 1 ? 1 : 0 } ?? 0)))))
+        .accessibilityAdjustableAction { direction in
+            let delta = step ?? (range.upperBound - range.lowerBound) / 20
+            switch direction {
+            case .increment: value = clamp(value + delta)
+            case .decrement: value = clamp(value - delta)
+            @unknown default: break
+            }
+        }
+    }
+
+    private var fraction: CGFloat {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return CGFloat((clamp(value) - range.lowerBound) / span)
+    }
+
+    private func set(fraction: CGFloat) {
+        let raw = range.lowerBound + Double(min(max(fraction, 0), 1)) * (range.upperBound - range.lowerBound)
+        let snapped = step.map { (raw / $0).rounded() * $0 } ?? raw
+        let next = clamp(snapped)
+        if next != value { value = next }
+    }
+
+    private func clamp(_ x: Double) -> Double { min(max(x, range.lowerBound), range.upperBound) }
+}
+
+/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri: çubuğun gerçek uçlarıyla hizalı (çubuk düğme yarıçapı
+/// kadar içeriden başlar; etiketler de aynı iç boşlukla).
+struct DSSliderRange: View {
+    let low: String
+    let high: String
+
+    var body: some View {
+        HStack {
+            Text(verbatim: low)
+            Spacer()
+            Text(verbatim: high)
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundStyle(Color.dsFaint)
+        .padding(.horizontal, DSSlider.knob / 2)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Kaydırıcı satırı: başlık solda kendi satırında, değer sağda (mono); altında tam genişlikte kaydırıcı, en altta tek
+/// cümlelik açıklama. Ayarlar'daki bütün kaydırıcılar bunu kullanır (Windows: SliderRow, aynı düzen).
+struct DSSliderRow: View {
+    let title: LocalizedStringKey
+    let valueText: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double?
+    var hint: LocalizedStringKey?
+    var onEditingChanged: (Bool) -> Void = { _ in }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.space("s")) {
+                Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                Spacer(minLength: DS.space("s"))
+                Text(verbatim: valueText)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced).monospacedDigit())
+                    .foregroundStyle(Color.dsText)
+            }
+            DSSlider(value: $value, range: range, step: step, onEditingChanged: onEditingChanged)
+                .accessibilityLabel(Text(title))
+                .padding(.top, DS.unitTitleGap)
+            if let hint { Text(hint).dsMuted().padding(.top, DS.unitHintGap) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: Kısayol rozeti
+
+/// Klavye kısayolu rozeti (kbd): mono 12, alan zemini, ince halka, 8 köşe; birden çok tuş "ya da" ile ayrılır.
+struct DSKeys: View {
+    let keys: [String]
+
+    var body: some View {
+        HStack(spacing: DS.space("xxs")) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { index, key in
+                if index > 0 { Text("or").font(.dsCaption).foregroundStyle(Color.dsFaint) }
+                Text(verbatim: key)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Color.dsText)
+                    .lineLimit(1)
+                    .padding(.horizontal, DS.space("xs"))
+                    .frame(height: 24)
+                    .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("chip"), style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: DS.radius("chip"), style: .continuous).strokeBorder(Color.dsBorder))
+            }
+        }
+        .fixedSize()
+    }
+}
+
+// MARK: Küçük metin düğmesi
+
+/// Küçük metin düğmesi (ör. ek alandaki Kaldır): simge + yazı, gri; üzerine gelince `hoverTint` renginde ve açık zeminli.
+struct DSTextButtonStyle: ButtonStyle {
+    var hoverTint: Color = .dsLiveText
+    var hoverFill: Color = .dsLiveSoft
+
+    func makeBody(configuration: Configuration) -> some View {
+        DSTextButtonBody(configuration: configuration, hoverTint: hoverTint, hoverFill: hoverFill)
+    }
+}
+
+private struct DSTextButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let hoverTint: Color
+    let hoverFill: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
+
+    var body: some View {
+        let active = hovering || configuration.isPressed
+        configuration.label
+            .font(.dsRow)
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(active ? hoverTint : Color.dsMuted)
+            .padding(.horizontal, DS.space("s"))
+            .frame(height: DS.size("chip"))
+            .background(active ? hoverFill : Color.clear, in: Capsule(style: .circular))
+            .contentShape(Capsule(style: .circular))
+            .onHover { hovering = $0 }
+            .animation(DS.animation(.short, reduced: reduceMotion), value: active)
+    }
+}
+
+// MARK: Vurgu şeridi
+
+extension View {
+    /// Vurgulu kart/karo (Deneysel turuncu-kırmızı, bildirim amber): sol şerit yerine kartı köşe yarıçapıyla komple saran
+    /// 1,5 pt renkli kenarlık ve %5 aynı renk zemin tonu.
+    func dsAccentBorder(_ color: Color, cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return background(shape.fill(color.opacity(0.05)))
+            .overlay(shape.strokeBorder(color, lineWidth: 1.5).allowsHitTesting(false))
+    }
+}
+
+// MARK: Açılır seçim kutusu
+
+/// Açılır seçim kutusu (selectbox): giriş kutusu yüzeyi (yüzey zemini, ince halka, 12 köşe, 40 yükseklik), koyu yazı,
+/// sağda tek küçük aşağı ok; tıklanınca sistemin kendi menüsü açılır, seçili satır tikli. Ayarlar'daki bütün açılır
+/// seçimler bunu kullanır (eski Picker'ın soluk sarı görünümü yerine).
+struct DSSelect<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(Value, String)]
+    @State private var anchor = DSMenuAnchor()
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("control"), style: .continuous)
+        Button(action: open) {
+            HStack(spacing: DS.space("xs")) {
+                Text(verbatim: options.first { $0.0 == selection }?.1 ?? "")
+                    .font(.dsBody)
+                    .foregroundStyle(Color.dsText)
+                    .lineLimit(1)
+                Spacer(minLength: DS.space("xs"))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.dsMuted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .frame(height: DS.size("tab"))
+            .background(hovering && isEnabled ? Color.dsField : Color.dsSurface, in: shape)
+            .overlay(shape.strokeBorder(Color.dsBorder))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.5)
+        .onHover { hovering = $0 }
+        .background(DSMenuAnchorView(anchor: anchor))
+        .accessibilityValue(Text(verbatim: options.first { $0.0 == selection }?.1 ?? ""))
+    }
+
+    private func open() {
+        guard let view = anchor.view else { return }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        var current: NSMenuItem?
+        for (value, title) in options {
+            let item = DSMenuAnchor.Item(title: title) { selection = value }
+            item.state = value == selection ? .on : .off
+            if value == selection { current = item }
+            menu.addItem(item)
+        }
+        menu.minimumWidth = view.bounds.width
+        // Seçili satır kutunun üstüne gelir (sistem açılır menüsü gibi).
+        menu.popUp(positioning: current, at: NSPoint(x: 0, y: view.isFlipped ? view.bounds.height - 4 : 4), in: view)
+    }
+}
+
+/// Başlıklı seçim kutusu: başlık üstte (15 orta kalın), 8 pt altında kutu; isteğe bağlı tek cümle açıklama.
+struct DSSelectRow<Value: Hashable>: View {
+    let title: LocalizedStringKey
+    @Binding var selection: Value
+    let options: [(Value, String)]
+    var hint: LocalizedStringKey?
+
+    var body: some View {
+        DSUnit(title: title, hint: hint) {
+            DSSelect(selection: $selection, options: options).accessibilityLabel(Text(title))
+        }
+    }
+}
+
+/// Menünün açılacağı görünüm (AppKit) ve menü satırının eylemi.
+final class DSMenuAnchor {
+    weak var view: NSView?
+
+    final class Item: NSMenuItem {
+        private let handler: () -> Void
+
+        init(title: String, handler: @escaping () -> Void) {
+            self.handler = handler
+            super.init(title: title, action: #selector(run), keyEquivalent: "")
+            target = self
+        }
+
+        @available(*, unavailable)
+        required init(coder: NSCoder) { fatalError("init(coder:) kullanılmaz") }
+
+        @objc private func run() { handler() }
+    }
+}
+
+private struct DSMenuAnchorView: NSViewRepresentable {
+    let anchor: DSMenuAnchor
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        anchor.view = view
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) { anchor.view = view }
 }

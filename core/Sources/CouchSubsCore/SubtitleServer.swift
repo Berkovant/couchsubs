@@ -29,6 +29,11 @@ public enum SubtitleTextColor: String, Codable, CaseIterable, Sendable {
     case yellow
 }
 
+/// Karakter adının rengi (Altyazı Görünümü › Karakter Adı): yazıyla aynı, herkes tek renk ya da karaktere göre.
+public enum NameColorMode: String, Codable, CaseIterable, Sendable {
+    case text, single, speaker
+}
+
 /// Android TV'de PS5 görüntüsünün nasıl gösterildiği (Windows TvDisplayMode, Android TvDisplayMode ile aynı).
 ///
 /// Ham değer hem kayıtta hem TV'ye giden `displayMode` alanındadır. Eskiden varsayılan "uygulama içinde"ydi ve "inApp"
@@ -62,9 +67,29 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
     /// Hızlı konuşmada önceki satır(lar) yeni satırın üstünde kısa süre soluk kalsın mı; kapalıysa yeni satır eskisinin
     /// yerine geçer. TV uygulaması 0.9.16 ve sonrası tanır (Windows: SubtitleStyle.StackPrevious).
     public var stackPrevious: Bool
+    /// Zeminin rengi ("#RRGGBB"); koyuluğu `background`. TV'ye `backgroundColor` olarak gider; eski TV uygulaması siyah çizer.
+    public var backgroundColor: String
+    /// Yazının rengi ("#RRGGBB"); nil ise `textColor` (beyaz/sarı). TV'ye `textHex` olarak gider, `textColor` da en yakın
+    /// eski renkle gönderilir.
+    public var textHex: String?
+    /// Karakter adının rengi; `speaker` ve `single`da satırın `speakers` alanı dolar (bkz. `SpeakerColorBook.configure`).
+    public var nameColorMode: NameColorMode
+    /// "Tek Renk"te adların rengi.
+    public var nameHex: String?
+    /// "Karaktere Göre"de kullanıcının seçtiği renkler (küçük harfli ad → "#RRGGBB").
+    public var characterColors: [String: String]
+    /// Konuşan rengi yalnız adı boyar (yeni arayüz); false ise eski davranış: ad ve satır o renkte. TV'ye `nameOnly`.
+    public var nameOnly: Bool
+    /// Kurulumda seçilen TV girişi (HDMI 1–4); TV uygulaması değer değişince o girişi açar (TV'de elle seçilen giriş,
+    /// aynı değer yeniden gelince ezilmez). nil: seçilmedi. TV'ye `hdmiInput`.
+    public var hdmiInput: Int?
+
+    public static let defaultBackgroundColor = "#101014"
 
     public init(fontSize: Int = 46, bottomPercent: Int = 7, placement: SubtitlePlacement = .cover, background: Int = 90, backgroundShape: SubtitleBackgroundShape = .fit, bold: Bool = false,
-                textColor: SubtitleTextColor = .white, displayMode: TVDisplayMode = .auto, stackPrevious: Bool = true) {
+                textColor: SubtitleTextColor = .white, displayMode: TVDisplayMode = .auto, stackPrevious: Bool = true,
+                backgroundColor: String = SubtitleStyle.defaultBackgroundColor, textHex: String? = nil, nameColorMode: NameColorMode = .speaker,
+                nameHex: String? = nil, characterColors: [String: String] = [:], nameOnly: Bool = false, hdmiInput: Int? = nil) {
         self.fontSize = fontSize
         self.bottomPercent = bottomPercent
         self.placement = placement
@@ -74,9 +99,19 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
         self.textColor = textColor
         self.displayMode = displayMode
         self.stackPrevious = stackPrevious
+        self.backgroundColor = backgroundColor
+        self.textHex = textHex
+        self.nameColorMode = nameColorMode
+        self.nameHex = nameHex
+        self.characterColors = characterColors
+        self.nameOnly = nameOnly
+        self.hdmiInput = hdmiInput
     }
 
-    private enum CodingKeys: String, CodingKey { case fontSize, bottomPercent, placement, background, backgroundShape, bold, textColor, displayMode, stackPrevious }
+    private enum CodingKeys: String, CodingKey {
+        case fontSize, bottomPercent, placement, background, backgroundShape, bold, textColor, displayMode, stackPrevious
+        case backgroundColor, textHex, nameColorMode, nameHex, characterColors, nameOnly, hdmiInput
+    }
 
     /// Eski sürümün kaydettiği ayarlarda yeni alanlar yoktur; eksikler varsayılanla dolar.
     public init(from decoder: Decoder) throws {
@@ -91,13 +126,30 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
         textColor = (try? values.decodeIfPresent(SubtitleTextColor.self, forKey: .textColor)) ?? defaults.textColor
         displayMode = (try? values.decodeIfPresent(TVDisplayMode.self, forKey: .displayMode)) ?? defaults.displayMode
         stackPrevious = try values.decodeIfPresent(Bool.self, forKey: .stackPrevious) ?? defaults.stackPrevious
+        backgroundColor = Self.hex((try? values.decodeIfPresent(String.self, forKey: .backgroundColor)) ?? nil) ?? defaults.backgroundColor
+        textHex = Self.hex((try? values.decodeIfPresent(String.self, forKey: .textHex)) ?? nil)
+        nameColorMode = (try? values.decodeIfPresent(NameColorMode.self, forKey: .nameColorMode)) ?? defaults.nameColorMode
+        nameHex = Self.hex((try? values.decodeIfPresent(String.self, forKey: .nameHex)) ?? nil)
+        characterColors = ((try? values.decodeIfPresent([String: String].self, forKey: .characterColors)) ?? nil)?
+            .compactMapValues { Self.hex($0) } ?? [:]
+        nameOnly = (try? values.decodeIfPresent(Bool.self, forKey: .nameOnly)) ?? defaults.nameOnly
+        hdmiInput = ((try? values.decodeIfPresent(Int.self, forKey: .hdmiInput)) ?? nil).flatMap { (1...4).contains($0) ? $0 : nil }
+    }
+
+    /// Geçerli "#RRGGBB" ise büyük harfle; değilse nil.
+    public static func hex(_ value: String?) -> String? {
+        guard let value, value.count == 7, value.first == "#", UInt32(value.dropFirst(), radix: 16) != nil else { return nil }
+        return value.uppercased()
     }
 
     /// TV'ye giden `style` olayının gövdesi.
     var json: [String: Any] {
         ["fontSize": fontSize, "bottomPercent": bottomPercent, "placement": placement.rawValue,
          "background": max(0, min(100, background)), "backgroundShape": backgroundShape.rawValue, "bold": bold, "textColor": textColor.rawValue,
-         "displayMode": displayMode.rawValue, "stackPrevious": stackPrevious]
+         "displayMode": displayMode.rawValue, "stackPrevious": stackPrevious,
+         "backgroundColor": backgroundColor, "nameOnly": nameOnly]
+            .merging(textHex.map { ["textHex": $0] } ?? [:]) { $1 }
+            .merging(hdmiInput.map { ["hdmiInput": $0] } ?? [:]) { $1 }
     }
 }
 
@@ -627,6 +679,8 @@ public final class SubtitleServer: @unchecked Sendable {
 
     public func sendStyle(_ style: SubtitleStyle) {
         queue.async { self.lastStyle = style }
+        speakerBook.configure(fixed: style.nameColorMode == .single ? style.nameHex : nil,
+                              overrides: style.nameColorMode == .speaker ? style.characterColors : [:])
         var json = style.json
         json["setApart"] = setApart
         broadcast(event: "style", json: json)

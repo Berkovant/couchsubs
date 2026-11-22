@@ -591,8 +591,9 @@ extension AppAppearance {
 @MainActor
 final class AppModel: ObservableObject {
     enum Step: Int, CaseIterable {
-        /// `betterTranslation`: isteğe bağlı ücretsiz Gemini anahtarı; atlanabilir.
-        case welcome, secondAccount, psnLogin, console, tv, test, betterTranslation, done
+        /// `betterTranslation`: isteğe bağlı ücretsiz Gemini anahtarı; atlanabilir. Yeni arayüzün sırası (onaylı tuval):
+        /// konsol, hesap, PS5, TV, TV girişi (HDMI; yalnız TV eşleştiyse), daha iyi çeviri, deneme.
+        case welcome, secondAccount, psnLogin, console, tv, hdmi, betterTranslation, test, done
     }
 
     @Published var step: Step {
@@ -784,12 +785,28 @@ final class AppModel: ObservableObject {
         get { framePreview.image }
         set { framePreview.image = newValue }
     }
+    /// Gelen kare sayısı ve son karenin anı (ana ekrandaki "Kare/sn" ve "Görüntü Durdu"); yayınlanmaz, ekran saniyede
+    /// bir okur.
+    private(set) var frameCount = 0
+    private(set) var lastFrameAt: Date?
     @Published var showAbout = false
+    /// Uygulama menüsündeki "Sürüm Notları".
+    @Published var showReleaseNotes = false
     @Published var showSettings = false {
         didSet { if showSettings, !oldValue { usage.record(.screen("settings")) } }
     }
     /// Ayarlar açılınca gösterilen bölüm (ana ekrandaki "Çeviri" satırı Çeviri'yi açar); sayfa kapanınca başa döner.
-    @Published var settingsSection: SettingsSection = .appearance
+    @Published var settingsSection: SettingsSection = .basics
+
+    /// Yeni arayüz ilk kez açıldı (bir kez): onaylı tasarım açık temalıdır, eski varsayılan koyu tema açığa çevrilir
+    /// (kullanıcı sonra Ayarlar › Temel › Görünüm'den değiştirebilir); konuşan rengi yeni dildeki gibi yalnız adı boyar.
+    func adoptNewDesign() {
+        let key = "newDesignAdopted"
+        guard !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
+        if settings.appearance == .dark { settings.appearance = .light }
+        settings.style.nameOnly = true
+    }
 
     /// Ayarları verilen bölümle açar.
     func openSettings(_ section: SettingsSection) {
@@ -1314,7 +1331,7 @@ final class AppModel: ObservableObject {
 
     var canAdvance: Bool {
         switch step {
-        case .welcome, .secondAccount, .test, .betterTranslation: true
+        case .welcome, .secondAccount, .test, .betterTranslation, .hdmi: true
         case .psnLogin: isXbox ? xboxSignedIn : accountId != nil
         case .console: isXbox ? xboxConsole != nil : console != nil
         case .tv: hasTV || !settings.output.showsOnTV
@@ -1323,15 +1340,23 @@ final class AppModel: ObservableObject {
     }
 
     func advance() {
-        guard canAdvance, let next = Step(rawValue: step.rawValue + 1) else { return }
+        guard canAdvance, var next = Step(rawValue: step.rawValue + 1) else { return }
         // Xbox'ta "İkinci hesap" adımı yoktur: karşılamadan Microsoft girişine geçilir.
-        step = next == .secondAccount && isXbox ? .psnLogin : next
+        if next == .secondAccount && isXbox { next = .psnLogin }
+        // TV girişi (HDMI) yalnız TV eşleştiyse ve altyazı TV'de gösterilecekse sorulur.
+        if next == .hdmi && !asksTVInput { next = .betterTranslation }
+        step = next
     }
 
     func back() {
-        guard let previous = Step(rawValue: step.rawValue - 1) else { return }
-        step = previous == .secondAccount && isXbox ? .welcome : previous
+        guard var previous = Step(rawValue: step.rawValue - 1) else { return }
+        if previous == .secondAccount && isXbox { previous = .welcome }
+        if previous == .hdmi && !asksTVInput { previous = .tv }
+        step = previous
     }
+
+    /// Kurulumda TV girişi (HDMI) adımı gösterilir mi (Android TV girişi kendi seçer; görüntü modu ayrı).
+    var asksTVInput: Bool { hasTV && settings.output.showsOnTV && tv?.brand != .androidTV }
 
     // MARK: - Xbox (Beta)
 
@@ -3304,6 +3329,8 @@ final class AppModel: ObservableObject {
 
     private func handle(_ frame: CGImage, capturedAt: Int) async {
         lastFrame = frame
+        frameCount &+= 1
+        lastFrameAt = Date()
         subtitleOffTip.frameArrived(at: Date(), streaming: sessionState == .streaming)
         updateSubtitleOffTip()
         // Num 0 ile duraklatıldı: altyazı da ek alanlar da okunmaz (kare yine alınır: kısayolla tek seferlik okuma ve

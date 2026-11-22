@@ -438,6 +438,10 @@ public sealed record UserSettings
     public bool SpeakerColors { get; init; } = true;
     /// <summary>Koyu, açık ya da sistemle aynı. Eski ayar dosyalarında yoktur; onlar da koyu açılır.</summary>
     public AppAppearance Appearance { get; init; } = AppAppearance.Dark;
+    /// <summary>Ayarlar › Temel › Açılış Sesi: ilk kurulumun açılış adımındaki marka sesi (design/yeni-arayuz/METINLER.md). Eski ayar dosyalarında yoktur; açık.</summary>
+    public bool StartupSound { get; init; } = true;
+    /// <summary>Ayarlar › Temel › Geçiş Animasyonları: kapalıyken yeni arayüzde yalnız kısa solma. Eski ayar dosyalarında yoktur; açık.</summary>
+    public bool TransitionAnimations { get; init; } = true;
     /// <summary>Görüntü PS5 bağlantısından mı, bu bilgisayardaki Remote Play penceresinden mi okunur.</summary>
     public FrameSource FrameSource { get; init; } = FrameSource.Ps5;
     /// <summary>Xbox seçiliyken görüntü Xbox bağlantısından mı, seçilen pencereden mi okunur (bkz. <see cref="Shell.XboxFrameSource"/>).</summary>
@@ -674,14 +678,20 @@ public sealed record AreaSet(CropRegion Region, AreaPreset AreaPreset, IReadOnly
 /// <param name="Target">Kısayolla bir kez okununca sonucun gösterildiği yer.</param>
 public sealed record ExtraArea(string Id, string Name, CropRegion Region, bool Enabled = true, ResultTarget Target = ResultTarget.Tv)
 {
-    /// <summary>En çok bu kadar ek alan tanımlanır (her biri saniyede bir okunur; kısayolları Num 1-3).</summary>
-    public const int MaxCount = 3;
+    /// <summary>
+    /// En çok 50 ek alan (yeni arayüz, METINLER.md; eskiden 3): her alan saniyede bir okunur. Yalnız ilk
+    /// <see cref="ShortcutCount"/> alanın kısayolu vardır (Num 1-3 / Ctrl+Shift+1-3); sonrakiler kısayolsuzdur.
+    /// </summary>
+    public const int MaxCount = 50;
+
+    /// <summary>Kısayolu olan ilk ek alanların sayısı.</summary>
+    public const int ShortcutCount = 3;
 
     /// <summary>Hazır seçimle yeni alan (yeni kimlik).</summary>
     public static ExtraArea Create(string name, CropRegion region) => new(Guid.NewGuid().ToString(), name, region);
 
     /// <summary>Ekranda ve günlükte görünen ad: verilen ad, yoksa "Alan 1".</summary>
-    public string DisplayName(int number) => string.IsNullOrWhiteSpace(Name) ? Localizer.Current[$"Area {number}"] : Name;
+    public string DisplayName(int number) => string.IsNullOrWhiteSpace(Name) ? Localizer.Current.Format("Area %lld", number) : Name;
 
     /// <summary>Elle değiştirilmiş ya da bozuk kayıt: eksik kimlik/ad/bölge tamamlanır, yinelenen kimlik ve fazlası atılır.</summary>
     internal static IReadOnlyList<ExtraArea> Sanitize(IReadOnlyList<ExtraArea>? areas)
@@ -980,8 +990,12 @@ public sealed record SamsungPreflight(SamsungDeveloperInfo? Info, string? Comput
 /// <summary>Durum noktasının rengi: bağlı (yeşil), sorun var (turuncu), boşta (gri).</summary>
 public enum StatusTone { Idle, Warning, Good }
 
-/// <summary><c>BetterTranslation</c>: isteğe bağlı ücretsiz Gemini anahtarı; atlanabilir (Mac'teki betterTranslation).</summary>
-public enum OnboardingStep { Welcome, SecondAccount, PsnLogin, Console, Tv, Translation, Test, BetterTranslation, Done }
+/// <summary>
+/// <c>BetterTranslation</c>: isteğe bağlı ücretsiz Gemini anahtarı; atlanabilir (Mac'teki betterTranslation).
+/// <c>Hdmi</c>: TV Girişi (yalnız TV eşleştiyse ve Android TV değilse); seçilen giriş <c>style.hdmiInput</c> ile TV'ye gider.
+/// Sıra Mac'teki yeni kurulumla aynı: deneme en sonda, Daha İyi Çeviri'den sonra.
+/// </summary>
+public enum OnboardingStep { Welcome, SecondAccount, PsnLogin, Console, Tv, Hdmi, Translation, BetterTranslation, Test, Done }
 
 public enum AppError
 {

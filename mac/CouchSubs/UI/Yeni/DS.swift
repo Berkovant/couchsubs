@@ -82,6 +82,10 @@ enum DS {
     static func space(_ name: String) -> CGFloat { CGFloat(tokens.space[name] ?? 0) }
     static func radius(_ name: String) -> CGFloat { CGFloat(tokens.radius[name] ?? 0) }
     static func size(_ name: String) -> CGFloat { CGFloat(tokens.size[name] ?? 0) }
+    /// Dikey ritim (tasarim.json › space): ayar biriminde başlık → denetim 8, denetim → açıklama 6; birimler arası 24.
+    static var unitTitleGap: CGFloat { space("unitTitle") }
+    static var unitHintGap: CGFloat { space("unitHint") }
+    static var unitGap: CGFloat { space("unitGap") }
     static var mutedTracking: CGFloat { CGFloat(tokens.mutedTracking) }
 
     // MARK: Hareket
@@ -142,6 +146,11 @@ extension Color {
     static let dsLiveDot = DS.color("liveDot")
     static let dsScreenFrame = DS.color("screenFrame")
     static let dsScrim = DS.color("scrim")
+    static let dsPeach = DS.color("peach")
+    static let dsOlive = DS.color("olive")
+    static let dsTeal = DS.color("teal")
+    static let dsPlum = DS.color("plum")
+    static let dsSky = DS.color("sky")
 }
 
 extension Font {
@@ -149,6 +158,8 @@ extension Font {
     static let dsH2 = DS.font("h2")
     static let dsH3 = DS.font("h3")
     static let dsSubtitle = DS.font("subtitle")
+    static let dsCardTitle = DS.font("cardTitle")
+    static let dsLabel = DS.font("label")
     static let dsBody = DS.font("body")
     static let dsBodyStrong = DS.font("bodyStrong")
     static let dsButton = DS.font("button")
@@ -216,7 +227,8 @@ extension View {
     }
 }
 
-/// Kart içi bölüm etiketi: mono, büyük harf, 12 pt, +0.08em; altındaki içerikle arası en az 24 (kart boşluğu + 8).
+/// Küçük bölüm etiketi (tablo sütunu, kart üstü küçük ad): sistem yazısı 13 orta kalın, cümle düzeni, gri. Adı eski;
+/// mono büyük harf artık kullanılmaz (mono yalnız kısayol rozeti ve teknik değerde).
 struct DSMonoLabel: View {
     let text: LocalizedStringKey
     var color: Color = .dsMuted
@@ -228,8 +240,7 @@ struct DSMonoLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.dsMono)
-            .tracking(DS.tracking("mono"))
+            .font(.dsLabel)
             .foregroundStyle(color)
             .lineLimit(1)
             .accessibilityAddTraits(.isHeader)
@@ -261,8 +272,7 @@ struct DSPageTitle: View {
         VStack(alignment: .leading, spacing: DS.space("xxs")) {
             if let eyebrow {
                 Text(verbatim: eyebrow)
-                    .font(.dsMono)
-                    .tracking(DS.tracking("mono"))
+                    .font(.dsLabel)
                     .foregroundStyle(Color.dsMuted)
                     .padding(.bottom, DS.space("xxs"))
             }

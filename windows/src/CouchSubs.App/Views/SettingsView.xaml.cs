@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Diagnostics;
+using CouchSubs.App.Theme;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,7 +21,7 @@ namespace CouchSubs.App.Views;
 /// <summary>Ayarların doğrudan açılabilen bölümleri.</summary>
 public enum SettingsSection { Appearance, Translation, PictureSource }
 
-public partial class SettingsWindow : Window
+public partial class SettingsView : UserControl
 {
     private static readonly (string Code, string Name)[] Languages =
         [("en", "English"), ("ja", "Japanese"), ("de", "German"), ("fr", "French"), ("es", "Spanish")];
@@ -36,12 +37,12 @@ public partial class SettingsWindow : Window
     /// <summary>Kısayollar'daki düğmeler: iş ve yuvaya göre.</summary>
     private readonly Dictionary<(HotkeyAction, int), Button> shortcutButtons = [];
 
-    internal SettingsWindow(AppController controller)
+    internal SettingsView(AppController controller)
     {
         this.controller = controller;
         controller.NoteScreen("settings");
         InitializeComponent();
-        InstalledVersion.Text = Localizer.Current.Format("Installed version: %@", AppVersion.Current(typeof(SettingsWindow).Assembly));
+        InstalledVersion.Text = Localizer.Current.Format("Installed version: %@", AppVersion.Current(typeof(SettingsView).Assembly));
         var settings = controller.Settings;
         DataContext = controller;
         GeminiPaidTier.IsChecked = settings.GeminiPaidTier;
@@ -78,14 +79,14 @@ public partial class SettingsWindow : Window
         ShowGameProfiles();
         // Num 8: oyunun o anki görüntüsü önizlemeye alınır.
         controller.SnapshotRequested += OnSnapshot;
-        Closed += (_, _) => controller.SnapshotRequested -= OnSnapshot;
+        Unloaded += (_, _) => controller.SnapshotRequested -= OnSnapshot;
         Dubbing.Attach(controller);
         FirewallSettings.Attach(controller);
         OutputCard.Attach(controller);
         SecondScreenCard.Attach(controller);
         ShowStyleTitle();
         controller.PropertyChanged += OnControllerChanged;
-        Closed += (_, _) => controller.PropertyChanged -= OnControllerChanged;
+        Unloaded += (_, _) => controller.PropertyChanged -= OnControllerChanged;
         Engine.SelectedItem = Engine.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Engine.ToString());
         TranslationDeviceChoice.SelectedItem = TranslationDeviceChoice.Items.Cast<ComboBoxItem>()
             .First(item => (string)item.Tag == settings.TranslationDevice.ToString());
@@ -119,7 +120,17 @@ public partial class SettingsWindow : Window
         SetTextApart.IsChecked = settings.SetTextApart;
         GameAreaPresets.IsChecked = settings.GameAreaPresets;
         ShowPacks();
-        AppearanceChoice.SelectedItem = AppearanceChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.Appearance.ToString());
+        (settings.Appearance switch { AppAppearance.Light => AppearanceLight, AppAppearance.System => AppearanceSystem, _ => AppearanceDark }).IsChecked = true;
+        StartupSound.IsChecked = settings.StartupSound;
+        TransitionAnimations.IsChecked = settings.TransitionAnimations;
+        ShowPace();
+        ShowMiniSubtitle();
+        ShowTvStatus();
+        Sections.SelectedIndex = 0;
+        // Yazı boyutu, koyuluk ve yazı rengi artık düzenleyicide; eski satırlar gizlenir (ayarın kendisi aynı).
+        AppearanceHost.Content = new AppearanceEditor(controller);
+        foreach (var old in new FrameworkElement[] { TextSizeUnit, BackgroundUnit, TextColorUnit })
+            old.Visibility = Visibility.Collapsed;
         RemotePlayAppChoice.SelectedItem = RemotePlayAppChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.RemotePlayApp.ToString());
         XboxAudioOnComputer.IsChecked = settings.XboxAudioOnComputer;
         XboxLegacyFrameRate.IsChecked = settings.XboxLegacyFrameRate;
@@ -129,9 +140,12 @@ public partial class SettingsWindow : Window
         ShowShortcutTexts();
         PreviewKeyDown += OnShortcutKey;
         ShowStreamWindowToggle();
-        // Akış penceresi kendi düğmesiyle kapanmış olabilir; Ayarlar öne gelince düğme güncellenir.
-        Activated += (_, _) => ShowStreamWindowToggle();
-        Closed += (_, _) => StopRecording();
+        // Akış penceresi kendi düğmesiyle kapanmış olabilir; Ayarlar açılınca düğme güncellenir.
+        Loaded += (_, _) => ShowStreamWindowToggle();
+        Glow.Paused = controller.IsRunning;
+        Loaded += (_, _) => MoveSelection(false);
+        NavHost.SizeChanged += (_, _) => MoveSelection(false);
+        Unloaded += (_, _) => StopRecording();
         loading = false;
     }
 
@@ -202,12 +216,38 @@ public partial class SettingsWindow : Window
         loading = true;
         (xbox ? ConsoleXbox : ConsolePlayStation).IsChecked = true;
         loading = wasLoading;
-        ConsoleCard.Visibility = controller.XboxAvailable ? Visibility.Visible : Visibility.Collapsed;
+        // Kart her zaman görünür (Mac ConsoleSettingsCard); Xbox kapalıysa yalnız PS5 ↔ Xbox seçici gizlenir.
+        ConsoleTabs.Visibility = controller.XboxAvailable ? Visibility.Visible : Visibility.Collapsed;
         ConsolePlayStationHint.Visibility = xbox ? Visibility.Collapsed : Visibility.Visible;
+        var text = Localizer.Current;
+        if (controller.Console is { } ps5)
+        {
+            ConsolePs5Row.Title = string.IsNullOrEmpty(ps5.Name) ? "PS5" : ps5.Name;
+            ConsolePs5Row.Text = ps5.Host;
+            ConsolePs5Badge.Content = text["Connected"];
+            ConsolePs5Badge.Tone = Controls.PillTone.Success;
+        }
+        else
+        {
+            ConsolePs5Row.Title = "PS5";
+            ConsolePs5Row.Text = text["With Remote Play and a second PSN account."];
+            ConsolePs5Badge.Content = text["Not Set Up"];
+            ConsolePs5Badge.Tone = Controls.PillTone.Idle;
+        }
         ConsoleXboxPanel.Visibility = xbox ? Visibility.Visible : Visibility.Collapsed;
         ConsoleXboxName.Text = controller.SelectedXboxConsole is { } console ? "  ·  " + (string.IsNullOrEmpty(console.Name) ? "Xbox" : console.Name) : "";
-        ConsoleXboxLink.Content = Localizer.Current[controller.HasXboxAccount ? "Choose your Xbox" : "Sign in with Microsoft"];
-        ConsoleXboxLink.Style = (Style)FindResource(controller.NeedsXboxLink ? "PrimaryButton" : "SecondaryButton");
+        // Microsoft hesap kartı (Mac DSAccountCard): girişliyse "Yeniden Giriş Yap" ve Diğer Giriş Yolları'nda Xbox seçimi ve çıkış.
+        MicrosoftAccount.SignedIn = controller.HasXboxAccount;
+        MicrosoftAccount.HasOthers = controller.HasXboxAccount;
+        if (controller.HasXboxAccount && controller.NeedsXboxLink) MicrosoftAccount.Expanded = true;
+        // TV girişi kartı: PS5'te ve HDMI'ye bağlı TV eşleşmişken (kurulumdaki TV Girişi adımı ile aynı koşul).
+        HdmiCard.Visibility = !xbox && controller.NeedsHdmiStep ? Visibility.Visible : Visibility.Collapsed;
+        var hdmiLoading = loading;
+        loading = true;
+        foreach (var input in new[] { Hdmi1, Hdmi2, Hdmi3, Hdmi4 })
+            input.IsChecked = (string)input.Tag == controller.Settings.Style.HdmiInput?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        loading = hdmiLoading;
+        ConsoleXboxLink.Content = Localizer.Current["Choose your Xbox"];
         ConsoleXboxSignedIn.Visibility = controller.HasXboxAccount ? Visibility.Visible : Visibility.Collapsed;
         ShowFrameSource();
         PasscodeTab.Visibility = xbox ? Visibility.Collapsed : Visibility.Visible;
@@ -223,7 +263,7 @@ public partial class SettingsWindow : Window
     private void OnLinkXbox(object sender, RoutedEventArgs e)
     {
         controller.LinkXbox();
-        Close();
+        Leave();
     }
 
     private void OnSignOutXbox(object sender, RoutedEventArgs e)
@@ -235,7 +275,7 @@ public partial class SettingsWindow : Window
     private void OnLinkPs5(object sender, RoutedEventArgs e)
     {
         controller.LinkPs5Account();
-        Close();
+        Leave();
     }
 
     private void OnFrameSource(object sender, SelectionChangedEventArgs e)
@@ -284,6 +324,20 @@ public partial class SettingsWindow : Window
                 CaptureWindowChoice.Items.Insert(0, selected);
             }
             CaptureWindowChoice.SelectedItem = selected;
+            // Görünen liste: her pencere bir seçenek kartı (ad kalın, altında uygulama); seçili olan amber çerçeveli.
+            CaptureWindowCards.Children.Clear();
+            foreach (ComboBoxItem item in CaptureWindowChoice.Items)
+            {
+                if (item.Tag is not WindowCaptureTarget target) continue;
+                var card = new Controls.OptionCard
+                {
+                    Content = target.Title, Description = item == selected && !windows.Contains(target)
+                        ? $"{target.ProcessName} · {Localizer.Current["Not currently open"]}" : target.ProcessName,
+                    GroupName = "captureWindow", IsChecked = item == selected, Margin = Sp.T("0", "0", "0", "xs"), MinHeight = 64,
+                };
+                card.Checked += (_, _) => { if (!refreshingCaptureWindows) CaptureWindowChoice.SelectedItem = item; };
+                CaptureWindowCards.Children.Add(card);
+            }
             CaptureWindowEmpty.Visibility = windows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateSourceProjectorHint(saved);
         }
@@ -306,14 +360,18 @@ public partial class SettingsWindow : Window
     private void UpdateSourceProjectorHint(WindowCaptureTarget? target) =>
         SourceProjectorHint.Visibility = ObsProjector.NeedsSourceProjectorHint(target) ? Visibility.Visible : Visibility.Collapsed;
 
-    private void OnAppearance(object sender, SelectionChangedEventArgs e)
+    private void OnAppearance(object sender, RoutedEventArgs e)
     {
-        if (AppearanceChoice.SelectedItem is ComboBoxItem { Tag: string tag })
+        if (sender is RadioButton { Tag: string tag })
             Update(s => s with { Appearance = Enum.Parse<AppAppearance>(tag) });
     }
 
     private void OnControllerChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(AppController.TvStatusText) or nameof(AppController.TvClients) or nameof(AppController.TvReconnecting))
+            Dispatcher.BeginInvoke(ShowTvStatus);
+        // Menü arkasındaki renk geçişi çeviri sürerken durur (işlemci oyuna kalsın).
+        if (e.PropertyName == nameof(AppController.IsRunning)) Dispatcher.BeginInvoke(() => Glow.Paused = controller.IsRunning);
         if (e.PropertyName is nameof(AppController.ObsAddress) or nameof(AppController.NetworkObsAddress) or nameof(AppController.LegacyTvWarning))
         {
             ObsAddress.Text = controller.ObsAddress;
@@ -383,23 +441,23 @@ public partial class SettingsWindow : Window
         var active = controller.Settings.ActiveAreaProfile;
         foreach (var profile in controller.GameProfiles)
         {
-            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 4), LastChildFill = true };
+            var row = new DockPanel { Margin = Sp.T("0", "xxs", "0", "xxs"), LastChildFill = true };
             var buttons = new StackPanel { Orientation = Orientation.Horizontal };
             DockPanel.SetDock(buttons, Dock.Right);
-            void AddButton(string title, Action run, double left = 8)
+            void AddButton(string title, Action run, string left = "xs")
             {
-                var button = new Button { Content = text[title], Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(left, 0, 0, 0) };
+                var button = new Button { Content = text[title], Padding = Sp.T("s", "0", "s", "0"), Margin = Sp.T(left, "0", "0", "0") };
                 button.Click += (_, _) => run();
                 buttons.Children.Add(button);
             }
             var key = profile.Key;
             var game = profile.Game;
-            if (key != active) AddButton("Use", () => controller.UseAreaProfile(key), 0);
+            if (key != active) AddButton("Use", () => controller.UseAreaProfile(key), "0");
             AddButton("Rename", () => BeginProfileEdit((key, false), game));
             AddButton("Duplicate", () => BeginProfileEdit((key, true), ""));
             AddButton("Delete profile", () =>
             {
-                if (MessageBox.Show(this, text.Format("Delete the saved areas for %@?", game), text["Delete profile"], MessageBoxButton.YesNo,
+                if (MessageBox.Show(Host, text.Format("Delete the saved areas for %@?", game), text["Delete profile"], MessageBoxButton.YesNo,
                                     MessageBoxImage.Question) == MessageBoxResult.Yes)
                     controller.DeleteAreaProfile(key);
             });
@@ -473,7 +531,7 @@ public partial class SettingsWindow : Window
     {
         if (controller.AreaProfileGame is not { } game) return;
         var text = Localizer.Current;
-        if (MessageBox.Show(this, text.Format("Delete the saved areas for %@?", game), text["Delete profile"], MessageBoxButton.YesNo,
+        if (MessageBox.Show(Host, text.Format("Delete the saved areas for %@?", game), text["Delete profile"], MessageBoxButton.YesNo,
                             MessageBoxImage.Question) == MessageBoxResult.Yes)
             controller.DeleteAreaProfile();
     }
@@ -481,7 +539,7 @@ public partial class SettingsWindow : Window
     private async void OnOpenTvPairing(object sender, RoutedEventArgs e)
     {
         try { await controller.OpenTvPairingAsync(); }
-        catch (Exception error) { MessageBox.Show(this, error.Message, "CouchSubs"); }
+        catch (Exception error) { MessageBox.Show(Host, error.Message, "CouchSubs"); }
     }
 
     private void OnRenewAccessKey(object sender, RoutedEventArgs e) => controller.RotateSubtitleKey();
@@ -504,7 +562,7 @@ public partial class SettingsWindow : Window
     /// <summary>Altyazı bilgisayar ekranında da gösteriliyorsa görünüm kartı yalnız TV'ye ait değildir.</summary>
     private void ShowStyleTitle()
     {
-        StyleCard.Title = Localizer.Current[controller.Settings.Output == SubtitleOutput.Tv ? "On the TV" : "Subtitle appearance"];
+        // Başlıksız kart (Mac AppearanceCard); TV ya da OBS yokken yalnız bilgisayar ekranı yer düğmesi kalır.
         // Görüntü modu yalnız Android TV uygulamasında var.
         DisplayModePanel.Visibility = controller.ShowsOnTv && controller.Tv?.Brand == TvBrand.AndroidTv
             ? Visibility.Visible : Visibility.Collapsed;
@@ -533,7 +591,7 @@ public partial class SettingsWindow : Window
             PackList.Items.Add(new TextBlock
             {
                 Text = text["No game pack is installed."], Style = (Style)FindResource("HintText"), TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(8),
+                Margin = Sp.T("xs"),
             });
             return;
         }
@@ -587,7 +645,7 @@ public partial class SettingsWindow : Window
         {
             Style = (Style)FindResource("IconButton"), Width = 52, Height = 52, Padding = new Thickness(0),
             BorderThickness = new Thickness(0), Background = Brushes.Transparent,
-            Content = badge, Margin = new Thickness(0, 0, 16, 0), ToolTip = CoverText("Choose game cover…", "Oyun kapağı seç…"),
+            Content = badge, Margin = Sp.T("0", "0", "m", "0"), ToolTip = CoverText("Choose game cover…", "Oyun kapağı seç…"),
         };
         System.Windows.Automation.AutomationProperties.SetName(coverButton,
             CoverText("Choose game cover…", "Oyun kapağı seç…") + " " + pack.Title);
@@ -603,7 +661,7 @@ public partial class SettingsWindow : Window
             try { GameCoverStore.Remove(pack.Id); ShowPacks(); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                MessageBox.Show(this, CoverText("The game cover could not be saved.", "Oyun kapağı kaydedilemedi."), text["Game packs"],
+                MessageBox.Show(Host, CoverText("The game cover could not be saved.", "Oyun kapağı kaydedilemedi."), text["Game packs"],
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         };
@@ -611,12 +669,12 @@ public partial class SettingsWindow : Window
 
         var name = new TextBlock { Text = pack.Title, Style = (Style)FindResource("HeadlineText") };
         var count = new TextBlock { Text = lines, Style = (Style)FindResource("CaptionText"),
-            Margin = new Thickness(0, 4, 0, 0) };
+            Margin = Sp.T("0", "xxs", "0", "0") };
         var row = new DockPanel();
         DockPanel.SetDock(coverButton, Dock.Left);
         row.Children.Add(coverButton);
         row.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { name, count } });
-        return new Controls.Card { Content = row, Margin = new Thickness(8) };
+        return new Controls.Card { Content = row, Margin = Sp.T("xs") };
     }
 
     /// <summary>Import and center-crop one cover to a 128px PNG; no network or image dependency is needed.</summary>
@@ -629,7 +687,7 @@ public partial class SettingsWindow : Window
             Title = CoverText("Choose game cover…", "Oyun kapağı seç…"), CheckFileExists = true,
             Filter = $"{CoverText("Images", "Görseller")} (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",
         };
-        if (picker.ShowDialog(this) != true) return;
+        if (picker.ShowDialog(Host) != true) return;
         try
         {
             if (new FileInfo(picker.FileName).Length > 8 * 1024 * 1024)
@@ -660,7 +718,7 @@ public partial class SettingsWindow : Window
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
             or InvalidDataException or ArgumentException or FormatException or NotSupportedException)
         {
-            MessageBox.Show(this, CoverText("The game cover could not be saved.", "Oyun kapağı kaydedilemedi."), text["Game packs"],
+            MessageBox.Show(Host, CoverText("The game cover could not be saved.", "Oyun kapağı kaydedilemedi."), text["Game packs"],
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -702,10 +760,10 @@ public partial class SettingsWindow : Window
             if (outcome is null || !IsLoaded) return;
             if (outcome.Result != PackUpdateOutcome.Kind.Failed)
             {
-                MessageBox.Show(this, outcome.Message(text), outcome.Title(text), MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Host, outcome.Message(text), outcome.Title(text), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            var again = MessageBox.Show(this, outcome.Message(text) + "\n\n" + text["Try again"] + "?", outcome.Title(text),
+            var again = MessageBox.Show(Host, outcome.Message(text) + "\n\n" + text["Try again"] + "?", outcome.Title(text),
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (again != MessageBoxResult.Yes) return;
         }
@@ -719,7 +777,7 @@ public partial class SettingsWindow : Window
             Title = text["Import game pack"],
             Filter = $"{text["Translation files"]} (*.json, *.txt, *.srt)|*.json;*.txt;*.srt",
         };
-        if (picker.ShowDialog(this) != true) return;
+        if (picker.ShowDialog(Host) != true) return;
 
         var sourcePath = picker.FileName;
         ImportPack.IsEnabled = false;
@@ -735,14 +793,14 @@ public partial class SettingsWindow : Window
         catch (InvalidDataException)
         {
             if (IsLoaded)
-                MessageBox.Show(this, text["The translation file could not be imported. Check its format and encoding."],
+                MessageBox.Show(Host, text["The translation file could not be imported. Check its format and encoding."],
                     picker.Title, MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             if (IsLoaded)
-                MessageBox.Show(this, text["The translation file could not be read."], picker.Title,
+                MessageBox.Show(Host, text["The translation file could not be read."], picker.Title,
                     MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
@@ -751,7 +809,7 @@ public partial class SettingsWindow : Window
             ImportPack.IsEnabled = true;
         }
 
-        if (IsLoaded && new GamePackImportWindow(preview, sourcePath) { Owner = this }.ShowDialog() == true)
+        if (IsLoaded && new GamePackImportWindow(preview, sourcePath) { Owner = Host }.ShowDialog() == true)
             controller.ReloadGamePacks();
     }
 
@@ -799,10 +857,29 @@ public partial class SettingsWindow : Window
         ShowEngine();
     }
 
+    /// <summary>Ayarlar › Konsol › TV girişi: seçilen giriş kaydedilir ve TV'de deneme altyazısı gösterilir (Mac ile aynı).</summary>
+    private void OnHdmiInput(object sender, RoutedEventArgs e)
+    {
+        if (loading || sender is not FrameworkElement { Tag: string tag } || !int.TryParse(tag, out var input)) return;
+        if (controller.Settings.Style.HdmiInput == input) return;
+        controller.TryHdmiInput(input, confirmed: true);
+        controller.SendTestSubtitle();
+    }
+
+    /// <summary>Motor seçenek kartı seçildi: gizli Engine kutusu da aynı motora geçer (OnEngine kaydeder).</summary>
+    private void OnEngineOption(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string tag }) return;
+        var item = Engine.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == tag);
+        if (item is not null && !ReferenceEquals(Engine.SelectedItem, item)) Engine.SelectedItem = item;
+    }
+
     private void ShowEngine()
     {
         var text = Localizer.Current;
         var engine = SelectedEngine;
+        foreach (var option in EngineOptions.Children.OfType<Controls.OptionCard>())
+            option.IsChecked = (string)option.Tag == engine.ToString();
         EngineHint.Text = text[engine switch
         {
             TranslationEngine.Free => "Free. The translation model built into CouchSubs runs on this computer; subtitle text never leaves it.",
@@ -1114,25 +1191,167 @@ public partial class SettingsWindow : Window
     private void OnLink(object sender, RequestNavigateEventArgs e) =>
         Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
 
-    public static void Open(Window? owner, AppController controller) =>
-        OwnedWindow.Show(owner, () => new SettingsWindow(controller));
+    /// <summary>Ayarların sahibi olan pencere (ileti kutuları ve dosya seçicileri bunun üstünde açılır).</summary>
+    private Window? Host => Window.GetWindow(this) ?? Application.Current?.MainWindow;
+
+    /// <summary>Ayarlardan bir işe geçilince (Xbox bağla, yeniden kur …) ana ekrana dönülür; eskiden ayar penceresi kapanırdı.</summary>
+    private void Leave() => ShellWindow.Navigate(ShellTab.Home);
+
+    /// <summary>Ayarlar sekmesini açar.</summary>
+    public static void Open(Window? owner, AppController controller) => ShellWindow.Navigate(ShellTab.Settings);
 
     /// <summary>Ayarları belli bir bölümde açar (ana ekrandaki bilgi karosunun "Çeviri" satırı).</summary>
-    public static void Open(Window? owner, AppController controller, SettingsSection section)
+    public static void Open(Window? owner, AppController controller, SettingsSection section) => ShellWindow.Navigate(ShellTab.Settings, section);
+
+    /// <summary>Kabuk Ayarlar sekmesini açınca istenen bölüm seçilir.</summary>
+    internal void Show(SettingsSection? section)
     {
-        var window = OwnedWindow.Show(owner, () => new SettingsWindow(controller));
-        window.Sections.SelectedItem = section switch
+        if (section is not { } wanted) return;
+        Sections.SelectedItem = wanted switch
         {
-            SettingsSection.Translation => window.TranslationSection,
-            SettingsSection.PictureSource => window.PictureSourceSection,
-            _ => window.Sections.SelectedItem,
+            SettingsSection.Appearance => AppearanceSection,
+            SettingsSection.Translation => TranslationSection,
+            SettingsSection.PictureSource => PictureSourceSection,
+            _ => Sections.SelectedItem,
         };
     }
 
     private void Update(Func<UserSettings, UserSettings> change)
     {
-        if (!loading) controller.Settings = change(controller.Settings);
+        if (loading) return;
+        controller.Settings = change(controller.Settings);
+        ShowPace();
+        ShowMiniSubtitle();
     }
+
+    // ───── Yeni arayüz: gezinme, Temel sayfası ─────
+
+    /// <summary>Soldaki gezinme satırı seçilince o sayfa açılır.</summary>
+    /// <summary>Menüdeki sırasıyla sayfa açar (0 Temel … 8 Konsol ve Kaynak); ekran görüntüsü aracı için.</summary>
+    public void ShowPage(int index) => Sections.SelectedIndex = index;
+
+    private void OnNav(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string tag } && int.TryParse(tag, out var index) && Sections.SelectedIndex != index)
+            Sections.SelectedIndex = index;
+    }
+
+    /// <summary>Sayfa başka yoldan (ana ekrandaki satır, "Altyazı Görünümünü Düzenle") açılınca gezinme de seçilir.</summary>
+    private void OnSection(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.OriginalSource != Sections) return;
+        foreach (var item in Nav.Children.OfType<Controls.NavItem>())
+            item.IsChecked = item.Tag is string tag && tag == Sections.SelectedIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        MoveSelection(true);
+        if (Sections.SelectedContent is FrameworkElement page) Theme.Motion.EnterFrom(page, 8, Theme.Motion.Medium);
+    }
+
+    private void OnEditAppearance(object sender, RoutedEventArgs e) => Sections.SelectedItem = AppearanceSection;
+
+    /// <summary>
+    /// Seçim hapını seçili menü satırına taşır (Mac matchedGeometryEffect): konum ve yükseklik giriş eğrisiyle orta sürede
+    /// kayar; hareket azaltılmışsa ya da Geçiş Animasyonları kapalıysa kısa sürede.
+    /// </summary>
+    private void MoveSelection(bool animate)
+    {
+        var item = Nav.Children.OfType<Controls.NavItem>().FirstOrDefault(i => i.IsChecked == true);
+        if (item is null || !item.IsLoaded || item.ActualHeight <= 0)
+        {
+            Selection.Visibility = Visibility.Hidden;
+            return;
+        }
+        var top = item.TranslatePoint(new Point(0, 0), NavHost).Y;
+        var height = item.ActualHeight;
+        var wasHidden = Selection.Visibility != Visibility.Visible;
+        Selection.Visibility = Visibility.Visible;
+        if (!animate || wasHidden)
+        {
+            SelectionOffset.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, null);
+            Selection.BeginAnimation(HeightProperty, null);
+            SelectionOffset.Y = top;
+            Selection.Height = height;
+            return;
+        }
+        SelectionOffset.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, Theme.Motion.To(top, Theme.Motion.Medium));
+        Selection.BeginAnimation(HeightProperty, Theme.Motion.To(height, Theme.Motion.Medium));
+    }
+
+    /// <summary>
+    /// Çeviri hızı: Hızlı (kötü okunan satır beklenmez), Dengeli (önerilen bekleme süreleri), Doğru (cümle tamamlanana
+    /// dek daha uzun beklenir). Gelişmiş'teki iki kaydırıcının hazır değerleridir; onlar elle değişince seçim kalkar.
+    /// </summary>
+    private static readonly (string Tag, int Misread, int Partial, string Hint)[] Paces =
+    [
+        ("Fast", 400, 0, "Subtitles arrive as fast as possible; you may rarely see half a sentence."),
+        ("Balanced", 800, 300, "Recommended for most games. Speed and accuracy balanced."),
+        ("Accurate", 1000, 800, "Translated once the sentence is complete; arrives about half a second later."),
+    ];
+
+    private void OnPace(object sender, RoutedEventArgs e)
+    {
+        if (loading || sender is not RadioButton { Tag: string tag }) return;
+        var pace = Paces.First(p => p.Tag == tag);
+        MisreadWait.Value = pace.Misread / 1000.0;
+        PartialWait.Value = pace.Partial / 1000.0;
+        ShowPace();
+    }
+
+    private void ShowPace()
+    {
+        var settings = controller.Settings;
+        var match = Paces.FirstOrDefault(p => p.Misread == settings.MisreadWaitMs && p.Partial == settings.PartialWaitMs);
+        var was = loading;
+        loading = true;
+        PaceFast.IsChecked = match.Tag == "Fast";
+        PaceBalanced.IsChecked = match.Tag == "Balanced";
+        PaceAccurate.IsChecked = match.Tag == "Accurate";
+        loading = was;
+        PaceHint.Text = match.Tag is null ? "" : Localizer.Current[match.Hint];
+        PaceHint.Visibility = match.Tag is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnStartupSound(object sender, RoutedEventArgs e)
+    {
+        Update(s => s with { StartupSound = StartupSound.IsChecked == true });
+    }
+
+    private void OnTransitionAnimations(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        var on = TransitionAnimations.IsChecked == true;
+        Update(s => s with { TransitionAnimations = on });
+        Theme.Motion.AnimationsEnabled = on;
+    }
+
+    /// <summary>Deneysel ayarlar kapanır (ekran yazısı ve GTA 6 telefonu).</summary>
+    private void OnExperimentalDefaults(object sender, RoutedEventArgs e)
+    {
+        AutoScreenText.IsChecked = false;
+        AutoReadGamePhone.IsChecked = false;
+    }
+
+    /// <summary>TV durumu noktası: bağlı yeşil, yeniden bağlanıyor amber, bekliyor gri.</summary>
+    private void ShowTvStatus() =>
+        TvStatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,
+            controller.TvClients > 0 ? "successBrush" : controller.TvReconnecting ? "accentBrush" : "textTertiaryBrush");
+
+    /// <summary>Temel sayfasındaki küçük altyazı önizlemesi: yazı boyu, zemin koyuluğu ve yazı rengi.</summary>
+    private void ShowMiniSubtitle()
+    {
+        var style = controller.Settings.Style;
+        var alpha = (byte)Math.Round(Math.Clamp(style.Background, 0, 100) / 100.0 * 255);
+        MiniSubtitle.Background = new SolidColorBrush(SpeakerText.Rgb(style.BackgroundRgb, alpha));
+        MiniSubtitleText.Foreground = new SolidColorBrush(SpeakerText.Rgb(style.TextRgb));
+        // Kaydırıcıdaki boy (16–50) yarıya (Mac ile aynı önizleme).
+        MiniSubtitleText.FontSize = Math.Clamp(Math.Round((16 + (style.FontSize - 16) * 34.0 / 74) * 0.5), 8, 25);
+        MiniSubtitleText.TextWrapping = TextWrapping.NoWrap;
+        MiniSubtitleText.Inlines.Clear();
+        var name = new System.Windows.Documents.Run("Jason: ");
+        name.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "accentBrush");
+        MiniSubtitleText.Inlines.Add(name);
+        MiniSubtitleText.Inlines.Add(new System.Windows.Documents.Run(Localizer.Current.Language == "tr" ? "Tamam. Gidelim." : "Okay. Let's go."));
+    }
+
 
     private void OnTextSize(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -1467,39 +1686,18 @@ public partial class SettingsWindow : Window
 
     private void OnTest(object sender, RoutedEventArgs e) => controller.SendTestSubtitle();
 
-    private void OnAbout(object sender, RoutedEventArgs e) => AboutWindow.Open(this);
+    private void OnAbout(object sender, RoutedEventArgs e) => AboutWindow.Open(Host);
 
     private void OnReset(object sender, RoutedEventArgs e)
     {
         var text = Localizer.Current;
-        var answer = MessageBox.Show(this, text["The saved PS5, account and TV connection will be removed."], text["Set up again?"],
+        var answer = MessageBox.Show(Host, text["The saved PS5, account and TV connection will be removed."], text["Set up again?"],
             MessageBoxButton.OKCancel, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.OK) return;
         controller.ResetSetup();
-        Close();
+        Leave();
     }
 
-    private void OnDone(object sender, RoutedEventArgs e) => Close();
-
-    private void OnObsCopy(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Clipboard.SetText(ObsAddress.Text);
-            ObsCopy.Content = Localizer.Current["Copied"];
-        }
-        catch (System.Runtime.InteropServices.COMException) { }
-    }
-
-    private void OnNetworkObsCopy(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Clipboard.SetText(NetworkObsAddress.Text);
-            NetworkObsCopy.Content = Localizer.Current["Copied"];
-        }
-        catch (System.Runtime.InteropServices.COMException) { }
-    }
 
     private void OnStreamBackground(object sender, SelectionChangedEventArgs e)
     {
@@ -1522,6 +1720,12 @@ public partial class SettingsWindow : Window
     private void ShowAreaHint()
     {
         if (area == 0) return;
+        if (area > ExtraArea.ShortcutCount)
+        {
+            // Dördüncü ve sonraki alanların kısayolu yok: yalnız sürekli okunur.
+            AreaHint.Text = Localizer.Current["No Shortcut"] + " · " + Localizer.Current["Also reads small text next to the subtitle, such as objectives, phone messages or notifications. Each area is read once a second and translated again when the text changes; the translation appears on the TV next to that text."];
+            return;
+        }
         var action = HotkeyTable.AreaActions[Math.Clamp(area, 1, HotkeyTable.AreaActions.Count) - 1];
         AreaHint.Text = HotkeyText.Sentence(controller.Settings, action,
             "Draw the area to translate, for example a quest panel. While you play, press its shortcut (%@) to read and translate it once. Choose where the result shows. It works even when CouchSubs is in the background.");
@@ -1559,13 +1763,13 @@ public partial class SettingsWindow : Window
                 Text = HotkeyText.Name(action),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 16, 8),
+                Margin = Sp.T("0", "0", "m", "xs"),
             };
             Grid.SetRow(name, row);
             ShortcutGrid.Children.Add(name);
             for (var slot = 0; slot < HotkeyTable.SlotCount; slot++)
             {
-                var button = new Button { MinWidth = 160, Margin = new Thickness(slot == 0 ? 0 : 8, 0, 0, 8), Tag = (action, slot) };
+                var button = new Button { MinWidth = 160, Margin = new Thickness(slot == 0 ? 0 : Sp.V("xs"), 0, 0, Sp.V("xs")), Tag = (action, slot) };
                 button.Click += OnShortcutClick;
                 button.LostKeyboardFocus += (_, _) => { if (recording?.Button == button) StopRecording(); };
                 Grid.SetRow(button, row);
@@ -1640,7 +1844,7 @@ public partial class SettingsWindow : Window
     {
         var text = Localizer.Current;
         // Kısayollar bırakılmışken denenir: alınamıyorsa tuşu başka bir uygulama tutuyordur.
-        var busy = key is not null && !GlobalHotkeys.IsAvailable(new WindowInteropHelper(this).Handle, key);
+        var busy = key is not null && !GlobalHotkeys.IsAvailable(new WindowInteropHelper(Host).Handle, key);
         var choices = HotkeyTable.Assign(controller.Settings.Hotkeys, target.Action, target.Slot, key, out var displaced);
         recording = null;
         controller.Settings = controller.Settings with { Hotkeys = choices };

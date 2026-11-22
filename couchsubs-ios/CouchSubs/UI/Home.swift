@@ -14,6 +14,19 @@ enum Route: Hashable {
     case platform
     /// TV uygulamasını bu telefondan kurmak; `tvUpdate` ana ekrandaki güncellemeyi kendiliğinden başlatır.
     case tvInstall, tvUpdate
+    /// Ayarlar'ın bölümleri (Mac'teki Ayarlar menüsüyle aynı sıra).
+    case settingsPage(PhoneSettingsSection)
+}
+
+extension Route {
+    /// Sayfanın altında reklam şeridi: uygulama ve ayar sayfalarında var; kurulum adımlarında (konsol, giriş, eşleme, TV
+    /// kurulumu) yok.
+    var showsAdBand: Bool {
+        switch self {
+        case .settings, .profile, .packs, .target, .about, .history, .settingsPage: true
+        case .ps5, .psn, .platform, .tvInstall, .tvUpdate: false
+        }
+    }
 }
 
 extension Array where Element == Route {
@@ -52,8 +65,8 @@ struct HomeHeader: View {
 
     var body: some View {
         HStack(spacing: Mobile.Space.gap) {
-            LogoView(size: 36)
-            Spacer()
+            DSBrand()
+            Spacer(minLength: Mobile.Space.inline)
             IconButton(symbol: "clock.arrow.circlepath", label: "History") { path.append(.history) }
             IconButton(symbol: "gearshape", label: "Settings") { path.append(.settings) }
             AvatarButton(initials: "") { path.append(.profile) }
@@ -154,7 +167,7 @@ struct HomeScreen: View {
                 TVAppUpdateTile(update: update) { path.append(.tvUpdate) }
             } else if model.tvAppMissing {
                 Button { path.append(.tvInstall) } label: {
-                    InfoTile(symbol: "arrow.down.app", title: "Install the TV app from this phone", caption: "Samsung · LG · Android TV")
+                    InfoTile(symbol: "arrow.down.app", title: "Install the TV app from this phone", caption: "Samsung · LG · Android TV", chevron: true)
                 }
                 .buttonStyle(.plain)
             }
@@ -168,13 +181,14 @@ struct HomeScreen: View {
             if model.translatorStatus == .unsupported, !Translator.isAvailable {
                 MobileNote(text: String(localized: "Apple's free translation needs iOS 26 or later. Game packs, DeepL and AI translation work on this device."))
             }
+            LogShareButton()
             DeveloperSignature()
         } bottom: {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 Task { await model.start() }
             } label: {
-                Label("Start translating", systemImage: "play.fill")
+                Label("Start Translating", systemImage: "play.fill")
             }
             .buttonStyle(.mobilePrimary)
             .disabled(model.isStarting || !model.canStart)
@@ -233,7 +247,10 @@ struct HomeScreen: View {
 
 struct RunningScreen: View {
     @EnvironmentObject private var model: PhoneModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    /// Ayarlar › Geçiş Animasyonları kapalıyken de yalnız kısa solma.
+    @Environment(\.dsMotionOff) private var motionOff
+    private var reduceMotion: Bool { systemReduceMotion || motionOff }
     @Binding var path: [Route]
     @State private var showSubtitles = false
 
@@ -288,7 +305,7 @@ struct RunningScreen: View {
                 if let current = model.recentLines.first {
                     Text(verbatim: current.translation)
                         .font(Mobile.TypeScale.subtitle(landscape: false, scale: scale))
-                        .foregroundStyle(Mobile.Palette.accent)
+                        .foregroundStyle(Mobile.Palette.text)
                         .fixedSize(horizontal: false, vertical: true)
                         // Azaltılmış harekette yalnız solarak gelir.
                         .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.move(edge: .bottom).combined(with: .opacity))
@@ -371,8 +388,9 @@ struct RunningScreen: View {
                 BackgroundPiPTile()
             } else {
                 Text("Keep CouchSubs open on the screen while you play, or turn on “Keep translating in the background” in Profile. iOS stops the connection when the app goes to the background; the screen stays on while translating.")
-                    .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
+                    .dsMuted()
             }
+            LogShareButton()
         } bottom: {
             // İkincil eylemler tek satırda küçük düğmeler; "Çeviriyi durdur" altta tam genişlikte.
             if model.settings.output.showsOnComputer || model.settings.output.showsOnTV || model.sessionState == .streaming {
@@ -395,9 +413,9 @@ struct RunningScreen: View {
                 if model.demoMode { model.exitDemo() } else { model.stop() }
             } label: {
                 if model.demoMode {
-                    Label("Exit demo mode", systemImage: "xmark")
+                    Label("Exit Demo Mode", systemImage: "xmark")
                 } else {
-                    Label("Stop translating", systemImage: "stop.fill")
+                    Label("Stop Translating", systemImage: "stop.fill")
                 }
             }
             .buttonStyle(.mobileDestructive)
@@ -492,6 +510,7 @@ struct SubtitleScreen: View {
                     Self.subtitleText(wrapped.text, colored: model.settings.speakerColors && !previous && !line.paragraphs,
                                       base: previous ? Mobile.Palette.secondary : textColor, book: model.speakerBook)
                         .font(Mobile.TypeScale.subtitle(landscape: true, scale: scale * CGFloat(wrapped.scale)))
+                        .fontWeight(model.settings.style.bold ? .bold : nil)
                         .opacity(line.fading ? 0.4 : 1)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.5)
@@ -513,7 +532,7 @@ struct SubtitleScreen: View {
                     Text(verbatim: region.text)
                         .font(Mobile.TypeScale.caption)
                         .foregroundStyle(Mobile.Palette.text)
-                        .padding(6)
+                        .padding(Mobile.Space.titleToBody)
                         .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
                         .frame(maxWidth: max(120, proxy.size.width * (box.right - box.left)), alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -551,7 +570,7 @@ struct SubtitleScreen: View {
                         .font(.system(size: size, weight: item.look?.bold == true ? .bold : .semibold))
                         .foregroundStyle(Self.screenColor(item.style?.foreground) ?? Mobile.Palette.text)
                         .multilineTextAlignment(alignment)
-                        .padding(4)
+                        .padding(Mobile.Space.hair)
                         .frame(width: width, alignment: frameAlignment)
                         .frame(minHeight: backdrop ? height : 0)
                         .background((Self.screenColor(item.style?.background) ?? .black).opacity(item.look == nil && item.style == nil ? 0.85 : 1),
@@ -562,7 +581,7 @@ struct SubtitleScreen: View {
                 }
             }
             .allowsHitTesting(false)
-            VStack(spacing: 2) {
+            VStack(spacing: Mobile.Space.micro) {
                 Text("Drag the subtitle up or down; pinch to change the text size.")
                 Text("The screen stays on · brightness is lowered automatically")
             }
@@ -614,6 +633,8 @@ struct SubtitleScreen: View {
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
+        // Altyazı ekranı siyah zeminde: açık görünümde de yazı ve düğmeler koyu dilde çizilir.
+        .environment(\.colorScheme, .dark)
         .onAppear {
             landscape = true
             orientationToken = Orientation.hold()
@@ -642,11 +663,9 @@ struct SubtitleScreen: View {
         return Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 
+    /// Ayarlar › Altyazı Görünümü › Yazı Rengi (TV ile aynı renk; eski kayıtta beyaz ya da sarı).
     private var textColor: Color {
-        switch model.settings.style.textColor {
-        case .yellow: Mobile.Palette.accent
-        case .white: Mobile.Palette.text
-        }
+        SubtitlePalette.color(SubtitlePalette.textHex(model.settings.style)) ?? Mobile.Palette.text
     }
 
     /// Konuşana göre renkli altyazı: adlı satır (bölünmüş devamıyla) konuşanın renginde, diğerleri `base` renginde.

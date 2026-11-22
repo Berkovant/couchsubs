@@ -36,14 +36,19 @@ class RequestBudget(perMinute: Int, private val now: () -> Long = System::curren
 
         private val registry = ConcurrentHashMap<String, RequestBudget>()
 
-        /** API anahtarı ve model için ortak hak (Google sınırı proje ve model başına sayar); sınır yoksa null. */
-        fun shared(provider: AiProvider, model: AiModel, apiKey: String = ""): RequestBudget? {
-            val perMinute = model.requestsPerMinute ?: return null
+        /**
+         * API anahtarı ve model için ortak hak (Google sınırı proje ve model başına sayar); modelin sınırı yoksa null.
+         * [paidTier]: "Ücretli Gemini API anahtarı kullanıyorum" (Mac/iPhone geminiPaidTier): ücretsiz katmanın tahmini sınırı
+         * uygulanmaz, hak yine tutulur; Google'ın bildirdiği gerçek sınır onu düşürür.
+         */
+        fun shared(provider: AiProvider, model: AiModel, apiKey: String = "", paidTier: Boolean = false): RequestBudget? {
+            val paid = paidTier && provider == AiProvider.GEMINI
+            val perMinute = if (paid) Int.MAX_VALUE else model.requestsPerMinute ?: return null
             // Different keys may belong to different projects. Never keep the raw secret in the registry.
             val keyHash = MessageDigest.getInstance("SHA-256")
                 .digest(apiKey.trim().toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-            return registry.getOrPut("${AiTranslator.engineId(provider, model)}:$keyHash") {
+            return registry.getOrPut("${AiTranslator.engineId(provider, model)}:$keyHash" + if (paid) ":paid" else ":free") {
                 RequestBudget(perMinute)
             }
         }
