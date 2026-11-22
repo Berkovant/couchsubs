@@ -124,7 +124,7 @@ private struct StatusChips: View {
 
     private var tvDetail: String? {
         if case .upToDate(let version) = model.tvApp { return version }
-        return model.tvClients > 0 ? nil : String(localized: "Waiting")
+        return model.tvClients > 0 ? nil : model.tvStatusText
     }
 
     private var shortState: String? {

@@ -810,7 +810,7 @@ private struct OutputSettings: View {
         if model.tvClients > 0, case .upToDate(let version) = model.tvApp {
             return LocalizedStringKey(String(format: String(localized: "TV app %@ · Connected."), version))
         }
-        return model.tvClients > 0 ? "Connected" : "TV app · Waiting for connection."
+        return model.tvClients > 0 ? "Connected" : LocalizedStringKey(model.tvStatusText)
     }
 }
 

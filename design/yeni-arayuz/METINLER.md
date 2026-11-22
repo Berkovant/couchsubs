@@ -841,7 +841,7 @@ TV'ye giden `style` olayına (`SubtitleStyle`) eklenen alanlar; eski TV uygulama
 | `backgroundColor` | `"#RRGGBB"`, varsayılan `"#101014"` | Altyazı zemininin rengi; koyuluğu `background` (0–100). |
 | `textHex` | `"#RRGGBB"` ya da yok | Yazı rengi; varsa `textColor`'ın yerine geçer (`textColor` eski TV için white/yellow olarak da gönderilir). |
 | `nameOnly` | Bool | true: konuşan rengi yalnız adı boyar (yeni arayüz); false/yok: eski davranış (ad ve satır). |
-| `hdmiInput` | 1–4 ya da yok | Kurulumun TV Girişi adımında seçilen giriş; TV uygulaması (0.9.76+) değer değişince o girişi açar, aynı değer yeniden gelince TV'de elle seçilen girişi ezmez. |
+| `hdmiInput` | 1–4 ya da yok | Kurulumun TV Girişi adımında seçilen giriş; TV uygulaması (0.9.77+) değer değişince o girişi açar, aynı değer yeniden gelince TV'de elle seçilen girişi ezmez. |
 
 Kayıtta (`SubtitleStyle`) tutulan, TV'ye ayrıca gitmeyen alanlar: `nameColorMode` (`text`/`single`/`speaker`), `nameHex`
 (Tek Renk), `characterColors` (küçük harfli ad → renk). Sunucu bunları `SpeakerColorBook.configure` ile uygular;
@@ -860,5 +860,5 @@ Eşleşme kodu (TV'de görünen kod) mevcut `SubtitlePairing` biletinde zaten va
 - "Oyun Penceresi" seçilirse görüntü seçilen pencereden okunur ve kurulum biter (pencere Ayarlar › Konsol ve Kaynak'ta).
 - Açılış animasyonu yalnız ilk kurulumda (`introPlayed`); ses tuvaldeki Web Audio tarifinin aynısı uygulamada üretilir
   (dosya yok). TV eşleşme kodu sihirbazda kartta gösterilir ("TV'de Bu Kodu Görüyorum"), ana pencerede onay penceresi.
-- TV uygulaması 0.9.76: `backgroundColor`, `textHex`, `nameOnly`, `hdmiInput` alanlarını uygular (OBS katmanı ve ikinci
+- TV uygulaması 0.9.77 (main'deki 0.9.76 = TV alındısı ve yeniden bağlanma, #1017; yeni-arayuz ikisini birlikte taşır, Windows da bu numarayı kullanır): `backgroundColor`, `textHex`, `nameOnly`, `hdmiInput` alanlarını uygular (OBS katmanı ve ikinci
   ekran sayfası da renkleri).

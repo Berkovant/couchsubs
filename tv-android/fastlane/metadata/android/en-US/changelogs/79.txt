@@ -1,1 +1,1 @@
-0.9.76: Subtitles can use the background, text and character name colors chosen on the computer; the character color can color only the name. The TV input chosen during setup opens by itself.
+0.9.76: The TV app now confirms to your computer or phone that subtitles arrive; if the connection silently drops, CouchSubs stops showing "Connected" and reconnects by itself, so subtitles no longer stop reaching the TV during long sessions.

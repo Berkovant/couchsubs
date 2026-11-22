@@ -243,7 +243,7 @@ struct HomeNotices: View {
                     .disabled(model.tvAppUpdating && model.tvApp == .working)
             }
         case .tvReinstall:
-            NoticeCard(text: String(localized: "Waiting for the TV app")) {
+            NoticeCard(text: model.tvStatusText) {
                 Button("Reinstall the TV App") { Task { await model.updateTVApp() } }
                     .buttonStyle(.dsSecondary)
                     .disabled(model.tvAppUpdating && model.tvApp == .working)
