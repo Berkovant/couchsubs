@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import QuartzCore
 import SwiftUI
 #if os(iOS)
 import UIKit
+#else
+import AppKit
 #endif
 
 // Perde tasarım dili (23 Kas 2026; tuval DL-* panoları, design/yeni-arayuz/tasarim.json v2). Mac ve iPhone aynı dosyayı
@@ -256,60 +259,264 @@ struct DSProjectorLight: View {
     }
 }
 
-/// Ortam ışığı: amber, şeftali ve gök mavisi üç yumuşak leke 24 sn'lik döngüde çok yavaş süzülür. En çok 15 kare/sn;
-/// kapı kapalıyken (çeviri, hareketi azalt, arka plan) durağan kare. Bulanıklık süzgeci yok, radyal dolgu.
+/// Ortam ışığı: amber, şeftali ve gök mavisi üç yumuşak leke 24 sn'lik döngüde çok yavaş süzülür (Core Animation);
+/// kapı kapalıyken (çeviri, hareketi azalt, arka plan) durağan. Bulanıklık süzgeci yok, radyal degrade.
 struct DSAmbientGlow: View {
     var intensity: Double = 1
     @Environment(\.dsMotionGate) private var gate
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        DSClock(running: gate.ambient, fps: DS.effect("ambientBlobs", "maxFps", 15)) { time in
-            Canvas(rendersAsynchronously: true) { canvas, size in
-                Self.draw(&canvas, size: size, time: time ?? 0, intensity: intensity)
+        Group {
+            if gate.ambient {
+                DSAmbientLayers(intensity: intensity, dark: scheme == .dark, running: true).id(scheme)
+            } else {
+                // Durağan: aynı lekeler düz SwiftUI degradesiyle (katman yok).
+                GeometryReader { geometry in
+                    let size = geometry.size
+                    let span = max(size.width, size.height)
+                    ZStack {
+                        ForEach(Array(DSAmbientLayers.blobs.enumerated()), id: \.offset) { _, blob in
+                            let (name, x, y, scale, alpha, _, _) = blob
+                            RadialGradient(colors: [DS.color(name).opacity(alpha * intensity), DS.color(name).opacity(0)],
+                                           center: UnitPoint(x: x, y: y), startRadius: 0, endRadius: span * scale)
+                        }
+                    }
+                }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+}
 
-    static func draw(_ canvas: inout GraphicsContext, size: CGSize, time: Double, intensity: Double) {
-        let period = DS.tokens.motion.ambient / 1000
-        let phase = time.truncatingRemainder(dividingBy: period) / period * 2 * .pi
-        let blobs: [(Color, CGFloat, CGFloat, CGFloat, Double, Double)] = [
-            (.dsAmber, 0.25, 0.2, 0.42, 0.18, 0),
-            (.dsPeach, 0.8, 0.1, 0.36, 0.12, 2.1),
-            (.dsSky, 0.7, 0.9, 0.42, 0.06, 4.2),
-        ]
-        let span = max(size.width, size.height)
-        for (color, x, y, scale, alpha, offset) in blobs {
-            let radius = span * scale
-            let center = CGPoint(x: size.width * (x + 0.04 * CGFloat(sin(phase + offset))),
-                                 y: size.height * (y + 0.03 * CGFloat(cos(phase + offset * 0.7))))
-            let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-            canvas.fill(Path(ellipseIn: rect), with: .radialGradient(Gradient(colors: [color.opacity(alpha * intensity), color.opacity(0)]),
-                                                                     center: center, startRadius: 0, endRadius: radius))
-        }
+// MARK: Core Animation katmanları
+
+// Sürekli efektler (ortam ışığı, canlı nabız) Core Animation ile: hareketi pencere sunucusu çizer, uygulamanın işlemcisi
+// kare başına çalışmaz (TimelineView'da ortam ışığı tek başına ~%5 tutuyordu). Kapı kapanınca animasyonlar kaldırılır.
+
+#if os(macOS)
+typealias DSPlatformView = NSView
+#else
+typealias DSPlatformView = UIView
+#endif
+
+/// Kendi katmanını boyutuna göre kuran düz görünüm.
+final class DSLayerView: DSPlatformView {
+    let root = CALayer()
+    var onLayout: ((CALayer, CGSize) -> Void)?
+    private var laidOut = CGSize.zero
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        #if os(macOS)
+        wantsLayer = true
+        layer?.addSublayer(root)
+        #else
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.addSublayer(root)
+        #endif
+        root.masksToBounds = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) kullanılmaz") }
+
+    #if os(macOS)
+    override var isFlipped: Bool { true }
+    override func layout() {
+        super.layout()
+        relayout()
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    #else
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        relayout()
+    }
+    #endif
+
+    func relayout(force: Bool = false) {
+        guard force || bounds.size != laidOut else { return }
+        laidOut = bounds.size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        root.frame = bounds
+        onLayout?(root, bounds.size)
+        CATransaction.commit()
     }
 }
 
+extension DS {
+    /// tasarim.json rengi, verilen temada Core Animation rengi olarak.
+    static func cgColor(_ name: String, dark: Bool, alpha: Double = 1) -> CGColor {
+        let pair = tokens.color[name]
+        let (r, g, b, a) = DSTokens.rgba((dark ? pair?.dark : pair?.light) ?? "#000000") ?? (0, 0, 0, 1)
+        return CGColor(srgbRed: r, green: g, blue: b, alpha: a * alpha)
+    }
+}
+
+/// Ortam ışığı lekeleri: radyal degrade katmanları, 24 sn'lik döngüde (gidiş-dönüş) birkaç yüzde kayar.
+private struct DSAmbientLayers {
+    let intensity: Double
+    let dark: Bool
+    let running: Bool
+
+    static let blobs: [(String, CGFloat, CGFloat, CGFloat, Double, CGFloat, CGFloat)] = [
+        ("amber", 0.25, 0.2, 0.42, 0.18, 0.04, 0.03),
+        ("peach", 0.8, 0.1, 0.36, 0.12, -0.04, 0.03),
+        ("sky", 0.7, 0.9, 0.42, 0.06, 0.04, -0.03),
+    ]
+
+    func make() -> DSLayerView {
+        let view = DSLayerView(frame: .zero)
+        configure(view)
+        return view
+    }
+
+    func configure(_ view: DSLayerView) {
+        let (dark, intensity, running) = (dark, intensity, running)
+        view.onLayout = { root, size in
+            root.sublayers?.forEach { $0.removeFromSuperlayer() }
+            let span = max(size.width, size.height)
+            let half = DS.tokens.motion.ambient / 2000
+            for (index, blob) in Self.blobs.enumerated() {
+                let (name, x, y, scale, alpha, dx, dy) = blob
+                let radius = span * scale
+                let layer = CAGradientLayer()
+                layer.type = .radial
+                layer.colors = [DS.cgColor(name, dark: dark, alpha: alpha * intensity), DS.cgColor(name, dark: dark, alpha: 0)]
+                layer.startPoint = CGPoint(x: 0.5, y: 0.5)
+                layer.endPoint = CGPoint(x: 1, y: 1)
+                layer.bounds = CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2)
+                let start = CGPoint(x: size.width * x, y: size.height * y)
+                layer.position = start
+                if running {
+                    let move = CABasicAnimation(keyPath: "position")
+                    move.fromValue = NSValue(dsPoint: start)
+                    move.toValue = NSValue(dsPoint: CGPoint(x: start.x + size.width * dx, y: start.y + size.height * dy))
+                    move.duration = half
+                    move.autoreverses = true
+                    move.repeatCount = .infinity
+                    move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    move.timeOffset = half * Double(index) * 0.66
+                    layer.add(move, forKey: "drift")
+                }
+                root.addSublayer(layer)
+            }
+        }
+        view.relayout(force: true)
+    }
+}
+
+/// Canlı nabız katmanları: dolu nokta + 1,6 sn'de bir dışa yayılıp sönen halka.
+private struct DSPulseLayers {
+    let color: Color
+    let size: CGFloat
+    let running: Bool
+
+    func make() -> DSLayerView {
+        let view = DSLayerView(frame: .zero)
+        configure(view)
+        return view
+    }
+
+    func configure(_ view: DSLayerView) {
+        #if os(macOS)
+        var fill = NSColor(color).cgColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { fill = NSColor(color).cgColor }
+        #else
+        let fill = UIColor(color).resolvedColor(with: view.traitCollection).cgColor
+        #endif
+        let (size, running) = (size, running)
+        view.onLayout = { root, area in
+            root.sublayers?.forEach { $0.removeFromSuperlayer() }
+            let center = CGPoint(x: area.width / 2, y: area.height / 2)
+            let ring = CALayer()
+            ring.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            ring.position = center
+            ring.cornerRadius = size / 2
+            ring.backgroundColor = fill
+            ring.opacity = 0
+            let dot = CALayer()
+            dot.bounds = ring.bounds
+            dot.position = center
+            dot.cornerRadius = size / 2
+            dot.backgroundColor = fill
+            root.addSublayer(ring)
+            root.addSublayer(dot)
+            guard running else { return }
+            let period = DS.tokens.motion.livePulse / 1000
+            let grow = CABasicAnimation(keyPath: "transform.scale")
+            grow.fromValue = 1
+            grow.toValue = (size + 2 * DS.effect("livePulse", "ring", 6)) / size
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.55
+            fade.toValue = 0
+            for part in [grow, fade] {
+                part.duration = period * 0.7
+                part.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            }
+            let group = CAAnimationGroup()
+            group.animations = [grow, fade]
+            group.duration = period
+            group.repeatCount = .infinity
+            ring.add(group, forKey: "pulse")
+        }
+        view.relayout(force: true)
+    }
+}
+
+private extension NSValue {
+    convenience init(dsPoint point: CGPoint) {
+        #if os(macOS)
+        self.init(point: point)
+        #else
+        self.init(cgPoint: point)
+        #endif
+    }
+}
+
+#if os(macOS)
+extension DSAmbientLayers: NSViewRepresentable {
+    func makeNSView(context: Context) -> DSLayerView { make() }
+    func updateNSView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+
+extension DSPulseLayers: NSViewRepresentable {
+    func makeNSView(context: Context) -> DSLayerView { make() }
+    func updateNSView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+#else
+extension DSAmbientLayers: UIViewRepresentable {
+    func makeUIView(context: Context) -> DSLayerView { make() }
+    func updateUIView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+
+extension DSPulseLayers: UIViewRepresentable {
+    func makeUIView(context: Context) -> DSLayerView { make() }
+    func updateUIView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+#endif
+
 // MARK: Canlı nokta
 
-/// Canlı/çalışıyor noktası: 1,6 sn'de bir dışa yayılan halka (nabız). Çeviri sürerken de atar; hareket azaltılmışken ya
-/// da arka planda sabit nokta.
+/// Canlı/çalışıyor noktası: 1,6 sn'de bir dışa yayılan halka (nabız; Core Animation, işlemciye yük bindirmez). Çeviri
+/// sürerken de atar; hareket azaltılmışken ya da arka planda sabit nokta.
 struct DSPulseDot: View {
     var color: Color = .dsLiveDot
     var size: CGFloat = 8
     @Environment(\.dsMotionGate) private var gate
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        DSClock(running: gate.live) { time in
-            let period = DS.tokens.motion.livePulse / 1000
-            let progress = time.map { $0.truncatingRemainder(dividingBy: period) / period } ?? 1
-            let ring = min(progress / 0.7, 1)
-            ZStack {
-                Circle().fill(color.opacity(0.55 * (1 - ring)))
-                    .frame(width: size + 2 * DS.effect("livePulse", "ring", 6) * ring, height: size + 2 * DS.effect("livePulse", "ring", 6) * ring)
-                Circle().fill(color).frame(width: size, height: size)
+        Group {
+            if gate.live {
+                // Halka noktanın dışına taşar; katman kırpılmaz.
+                DSPulseLayers(color: color, size: size, running: true).id(scheme)
+            } else {
+                Circle().fill(color)
             }
         }
         .frame(width: size, height: size)
@@ -500,64 +707,144 @@ struct DSBarsLoader: View {
     var scale: CGFloat = 1
     var color: Color = .dsAmber
     @Environment(\.dsMotionGate) private var gate
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        DSClock(running: gate.ambient) { time in
-            let period = DS.effect("barsLoader", "period", 1200) / 1000
-            VStack(spacing: 3 * scale) {
-                bar(width: 18, time: time, delay: 0, period: period)
-                bar(width: 12, time: time, delay: 0.18, period: period)
-            }
-        }
-        .frame(width: 18 * scale, height: 11 * scale)
-        .accessibilityHidden(true)
-    }
-
-    private func bar(width: CGFloat, time: Double?, delay: Double, period: Double) -> some View {
-        let squeeze: Double = time.map { t in
-            let p = ((t - delay).truncatingRemainder(dividingBy: period) + period).truncatingRemainder(dividingBy: period) / period
-            return 0.5 - 0.5 * cos(p * 2 * .pi)
-        } ?? 0
-        return Capsule(style: .circular).fill(color)
-            .frame(width: width * scale, height: 4 * scale)
-            .scaleEffect(x: 1 - 0.55 * squeeze, y: 1)
-    }
-}
-
-/// Arama halkası dalgası: merkezdeki ışımalı amber noktadan üç halka 0,8 sn arayla dışa yayılır (2,4 sn). Kapı
-/// kapalıyken tek durağan halka.
-struct DSSearchRings: View {
-    var size: CGFloat = 56
-    @Environment(\.dsMotionGate) private var gate
-
-    var body: some View {
-        DSClock(running: gate.ambient) { time in
-            Canvas { canvas, area in
-                let center = CGPoint(x: area.width / 2, y: area.height / 2)
-                let period = DS.effect("searchRings", "period", 2400) / 1000
-                let stagger = DS.effect("searchRings", "stagger", 800) / 1000
-                let count = Int(DS.effect("searchRings", "count", 3))
-                let phases: [Double] = time.map { t in
-                    (0..<count).map { ((t - Double($0) * stagger).truncatingRemainder(dividingBy: period) + period).truncatingRemainder(dividingBy: period) / period }
-                } ?? [0.55]
-                for p in phases {
-                    // Giriş eğrisi: hızlı açılır, yavaşça söner.
-                    let eased = 1 - pow(1 - p, 3)
-                    let radius = area.width / 2 * (0.3 + 0.95 * eased)
-                    let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-                    canvas.stroke(Path(ellipseIn: rect.insetBy(dx: 1, dy: 1)), with: .color(Color.dsAmber.opacity(0.9 * (1 - p))), lineWidth: 2)
+        Group {
+            if gate.ambient {
+                DSLoaderLayers(kind: .bars(scale), color: color, running: true).id(scheme)
+            } else {
+                VStack(spacing: 3 * scale) {
+                    Capsule(style: .circular).fill(color).frame(width: 18 * scale, height: 4 * scale)
+                    Capsule(style: .circular).fill(color).frame(width: 12 * scale, height: 4 * scale)
                 }
             }
         }
-        .overlay {
-            Circle().fill(Color.dsAmber)
-                .frame(width: size - 36, height: size - 36)
-                .shadow(color: Color.dsAmberGlow, radius: 8)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+            .frame(width: 18 * scale, height: 11 * scale)
+            .accessibilityHidden(true)
     }
 }
+
+/// Arama halkası dalgası: merkezdeki ışımalı amber noktadan üç halka 0,8 sn arayla dışa yayılır (2,4 sn; Core Animation).
+/// Kapı kapalıyken tek durağan halka.
+struct DSSearchRings: View {
+    var size: CGFloat = 56
+    @Environment(\.dsMotionGate) private var gate
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Group {
+            if gate.ambient {
+                DSLoaderLayers(kind: .rings, color: .dsAmber, running: true).id(scheme)
+            } else {
+                Circle().strokeBorder(Color.dsAmber.opacity(0.5), lineWidth: 2).scaleEffect(0.82)
+            }
+        }
+            .overlay {
+                Circle().fill(Color.dsAmber)
+                    .frame(width: size - 36, height: size - 36)
+                    .shadow(color: Color.dsAmberGlow, radius: 8)
+            }
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Yükleyici katmanları (çubuklar, arama halkaları).
+private struct DSLoaderLayers {
+    enum Kind { case bars(CGFloat), rings }
+    let kind: Kind
+    let color: Color
+    let running: Bool
+
+    func make() -> DSLayerView {
+        let view = DSLayerView(frame: .zero)
+        configure(view)
+        return view
+    }
+
+    func configure(_ view: DSLayerView) {
+        #if os(macOS)
+        var fill = NSColor(color).cgColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { fill = NSColor(color).cgColor }
+        #else
+        let fill = UIColor(color).resolvedColor(with: view.traitCollection).cgColor
+        #endif
+        let (kind, running) = (kind, running)
+        view.onLayout = { root, area in
+            root.sublayers?.forEach { $0.removeFromSuperlayer() }
+            switch kind {
+            case let .bars(scale):
+                let period = DS.effect("barsLoader", "period", 1200) / 1000
+                for (index, width) in [CGFloat(18), 12].enumerated() {
+                    let bar = CALayer()
+                    bar.bounds = CGRect(x: 0, y: 0, width: width * scale, height: 4 * scale)
+                    bar.cornerRadius = 2 * scale
+                    bar.backgroundColor = fill
+                    bar.position = CGPoint(x: area.width / 2, y: (2 + CGFloat(index) * 7) * scale)
+                    if running {
+                        let squeeze = CABasicAnimation(keyPath: "transform.scale.x")
+                        squeeze.fromValue = 1
+                        squeeze.toValue = 0.45
+                        squeeze.duration = period / 2
+                        squeeze.autoreverses = true
+                        squeeze.repeatCount = .infinity
+                        squeeze.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                        squeeze.timeOffset = index == 0 ? 0 : period - 0.18
+                        bar.add(squeeze, forKey: "squeeze")
+                    }
+                    root.addSublayer(bar)
+                }
+            case .rings:
+                let period = DS.effect("searchRings", "period", 2400) / 1000
+                let stagger = DS.effect("searchRings", "stagger", 800) / 1000
+                let count = running ? Int(DS.effect("searchRings", "count", 3)) : 1
+                for index in 0..<count {
+                    let ring = CALayer()
+                    ring.bounds = CGRect(origin: .zero, size: area)
+                    ring.position = CGPoint(x: area.width / 2, y: area.height / 2)
+                    ring.cornerRadius = area.width / 2
+                    ring.borderWidth = 2
+                    ring.borderColor = fill
+                    if running {
+                        ring.opacity = 0
+                        let grow = CABasicAnimation(keyPath: "transform.scale")
+                        grow.fromValue = 0.3
+                        grow.toValue = 1.25
+                        let fade = CABasicAnimation(keyPath: "opacity")
+                        fade.fromValue = 0.9
+                        fade.toValue = 0
+                        let group = CAAnimationGroup()
+                        group.animations = [grow, fade]
+                        group.duration = period
+                        group.repeatCount = .infinity
+                        // Giriş eğrisi (0.05, 0.7, 0.1, 1): hızlı açılır, yavaşça söner.
+                        group.timingFunction = CAMediaTimingFunction(controlPoints: 0.05, 0.7, 0.1, 1)
+                        group.timeOffset = period - Double(index) * stagger
+                        ring.add(group, forKey: "ring")
+                    } else {
+                        ring.opacity = 0.5
+                        ring.transform = CATransform3DMakeScale(0.82, 0.82, 1)
+                    }
+                    root.addSublayer(ring)
+                }
+            }
+        }
+        view.relayout(force: true)
+    }
+}
+
+#if os(macOS)
+extension DSLoaderLayers: NSViewRepresentable {
+    func makeNSView(context: Context) -> DSLayerView { make() }
+    func updateNSView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+#else
+extension DSLoaderLayers: UIViewRepresentable {
+    func makeUIView(context: Context) -> DSLayerView { make() }
+    func updateUIView(_ view: DSLayerView, context: Context) { configure(view) }
+}
+#endif
 
 // MARK: İlerleme çubuğu
 

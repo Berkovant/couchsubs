@@ -160,9 +160,15 @@ final class ScreenshotTests: XCTestCase {
             return percent
         }
         try await Task.sleep(for: .seconds(10))
-        let ambient = AnyView(ZStack { Color.dsBackground; DSAmbientGlow(); DSPulseDot() }.frame(width: 1200, height: 760))
-        let ambientStill = try await measure(ambient, size: CGSize(width: 1200, height: 760), animate: false)
-        let ambientMoving = try await measure(ambient, size: CGSize(width: 1200, height: 760), animate: true)
+        let window = CGSize(width: 1200, height: 760)
+        let ambient = AnyView(ZStack { Color.dsBackground; DSAmbientGlow() }.frame(width: 1200, height: 760))
+        let ambientStill = try await measure(ambient, size: window, animate: false)
+        let ambientMoving = try await measure(ambient, size: window, animate: true)
+        let pulse = AnyView(ZStack { Color.dsBackground; DSStatusPill(text: "Çeviri Açık", dot: .dsLiveDot, pulse: true) }.frame(width: 1200, height: 760))
+        let pulseStill = try await measure(pulse, size: window, animate: false)
+        let pulseMoving = try await measure(pulse, size: window, animate: true)
+        print("CPU_PERDE pulse still=\(String(format: "%.2f", pulseStill)) moving=\(String(format: "%.2f", pulseMoving)) " +
+              "cost=\(String(format: "%.2f", pulseMoving - pulseStill))")
         let catalog = AnyView(ScrollView { PerdeCatalog(columns: 3) }.frame(width: 1280, height: 900))
         let catalogStill = try await measure(catalog, size: CGSize(width: 1280, height: 900), animate: false)
         let catalogMoving = try await measure(catalog, size: CGSize(width: 1280, height: 900), animate: true)
