@@ -160,13 +160,15 @@ struct PromoOverlay: View {
                 let size = imageSize(in: geometry.size)
                 VStack(spacing: 0) {
                     // Mac ve Windows'taki açılır reklamla aynı etiket (REKLAM).
+                    // Perde: cam hap içinde mono REKLAM etiketi.
                     Text("AD")
-                        .font(Mobile.TypeScale.caption)
-                        .foregroundStyle(Mobile.Palette.text)
+                        .font(Font.dsAdTag)
+                        .tracking(1)
+                        .foregroundStyle(Color.white.opacity(0.85))
                         .lineLimit(1)
                         .padding(.horizontal, Mobile.Space.gap)
-                        .padding(.vertical, Mobile.Space.titleToBody)
-                        .background(Mobile.Palette.surface2, in: Capsule())
+                        .padding(.vertical, Mobile.Space.hair)
+                        .dsGlass(in: Capsule(style: .circular))
                         .frame(height: badge)
                     Button {
                         if let url = PromoPolicy.webURL(ready.popup.link) { openURL(url) }
@@ -177,6 +179,8 @@ struct PromoOverlay: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(width: size.width, height: size.height)
                             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
+                            .shadow(color: .black.opacity(0.5), radius: 30, y: 18)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ready.popup.alt.isEmpty ? Text("Open link") : Text(verbatim: ready.popup.alt))
@@ -185,9 +189,9 @@ struct PromoOverlay: View {
                         Button(action: onDismiss) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Mobile.Palette.onAccent)
+                                .foregroundStyle(Color.white)
                                 .frame(width: closeDot, height: closeDot)
-                                .background(Mobile.Palette.text, in: Circle())
+                                .dsGlass(in: Circle())
                                 .frame(width: closeTouch, height: closeTouch)
                                 .contentShape(Circle())
                         }

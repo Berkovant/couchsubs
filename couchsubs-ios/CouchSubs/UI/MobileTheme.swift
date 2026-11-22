@@ -189,37 +189,11 @@ struct IconButton: View {
                 .font(.system(.body, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: Mobile.Control.icon, height: Mobile.Control.icon)
-                .background(Mobile.Palette.surface, in: Circle())
-                .overlay(Circle().strokeBorder(Mobile.Palette.border))
+                .dsGlass(in: Circle())
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSFocusPlainStyle(cornerRadius: Mobile.Control.icon / 2))
         .accessibilityLabel(Text(label))
-    }
-}
-
-/// Profil (Cihazlarım) düğmesi: simge düğmesiyle aynı görünüm; baş harf varsa simgenin yerine.
-struct AvatarButton: View {
-    let initials: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Group {
-                if initials.isEmpty {
-                    Image(systemName: "person").font(.system(.body, weight: .medium))
-                } else {
-                    Text(verbatim: initials).font(Mobile.TypeScale.caption.weight(.semibold))
-                }
-            }
-            .foregroundStyle(Mobile.Palette.text)
-            .frame(width: Mobile.Control.icon, height: Mobile.Control.icon)
-            .background(Mobile.Palette.surface, in: Circle())
-            .overlay(Circle().strokeBorder(Mobile.Palette.border))
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("Profile"))
     }
 }
 
@@ -243,11 +217,15 @@ struct Tile<Content: View>: View {
             // altta yalnız küçük pay kalır.
             .padding(.horizontal, Mobile.Space.tile)
             .padding(.vertical, spacing == 0 ? Mobile.Space.hair : Mobile.Space.tile)
-            .background {
-                shape.fill(Mobile.Palette.surface)
-                    .overlay(shape.fill(tint))
+            // Perde e1: yüzey + kıl çizgi + koyu temada üst kenar parlaması; vurguda tonlu zemin ve komple saran halka.
+            .background(shape.fill(tint))
+            .dsElevation(.card, in: shape)
+            .overlay {
+                if emphasis != .none {
+                    shape.strokeBorder(ring, lineWidth: emphasis == .selected ? 2 : 1.5).allowsHitTesting(false)
+                }
             }
-            .overlay(shape.strokeBorder(ring, lineWidth: emphasis == .none ? 1 : 1.5))
+            .shadow(color: emphasis == .selected ? Color.dsAmberGlow.opacity(0.6) : .clear, radius: 11)
     }
 
     private var ring: Color {
@@ -261,7 +239,8 @@ struct Tile<Content: View>: View {
     private var tint: Color {
         switch emphasis {
         case .none: .clear
-        case .selected, .warning: Color.dsAmber.opacity(0.06)
+        case .selected: Color.dsAmber.opacity(0.08)
+        case .warning: Color.dsAmber.opacity(0.06)
         case .danger: Color.dsLive.opacity(0.05)
         }
     }
@@ -334,17 +313,32 @@ struct StatTile: View {
     let value: String
     var live = false
     var chevron = false
+    /// Değerin altında durum hapı (Perde: "Bağlı", "LG · Hazır"); verilmezse `live` iken yalnız yeşil nokta.
+    var status: String?
+    var statusOK = true
 
     var body: some View {
         Tile(spacing: Mobile.Space.gap) {
             HStack(spacing: Mobile.Space.inline) {
-                MobileTileIcon(symbol: symbol, tint: tint)
+                DSIconSquare(symbol: symbol, tone: iconTone, size: 26)
                 Text(label).font(Font.dsLabel).foregroundStyle(Mobile.Palette.secondary).lineLimit(1)
                 Spacer(minLength: 0)
-                if live { MobileLiveDot(pulses: false) }
+                if live && status == nil { MobileLiveDot(pulses: false) }
                 if chevron { RowChevron() }
             }
             Text(verbatim: value).font(Mobile.TypeScale.title).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            if let status {
+                DSStatusChip(LocalizedStringKey(status), tone: statusOK ? .ok : .muted)
+            }
+        }
+    }
+
+    private var iconTone: DSIconSquare.Tone {
+        switch tint {
+        case .neutral: .gray
+        case .ok: live ? .teal : .gray
+        case .accent, .pro: .amber
+        case .danger: .peach
         }
     }
 }
@@ -479,27 +473,14 @@ struct MobileLiveDot: View {
     /// Ayarlar › Geçiş Animasyonları kapalıyken de yalnız kısa solma.
     @Environment(\.dsMotionOff) private var motionOff
     private var reduceMotion: Bool { systemReduceMotion || motionOff }
-    @State private var pulse = false
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .overlay {
-                if pulses && !reduceMotion {
-                    Circle()
-                        .stroke(color, lineWidth: 2)
-                        .frame(width: 16, height: 16)
-                        .scaleEffect(pulse ? 1.2 : 0.5)
-                        .opacity(pulse ? 0 : 0.7)
-                }
-            }
-            .onAppear {
-                guard pulses, !reduceMotion else { return }
-                // ai-design-check-ignore-next-line pulse-for-live-only -- yalnız canlı çeviride atar; azaltılmış harekette durur
-                withAnimation(.easeOut(duration: 2).repeatForever(autoreverses: false)) { pulse = true }
-            }
-            .accessibilityHidden(true)
+        // Perde canlı nabzı (Core Animation; hareket kapısı kapalıyken sabit nokta).
+        if pulses && !reduceMotion {
+            DSPulseDot(color: color, size: 8)
+        } else {
+            Circle().fill(color).frame(width: 8, height: 8).accessibilityHidden(true)
+        }
     }
 }
 
@@ -591,8 +572,18 @@ struct RowDivider: View {
 
 /// Ekran zemini: düz krem (koyu görünümde kömür).
 struct MobileBackground: View {
+    @Environment(\.perdeAmbient) private var ambient
+
     var body: some View {
-        Mobile.Palette.bg.ignoresSafeArea()
+        ZStack {
+            Mobile.Palette.bg
+            // Perde ortam ışığı: üstten sızan amber projeksiyon ışığı + çok yavaş süzülen sıcak lekeler (yalnız boşta).
+            if ambient {
+                DSAmbientGlow(intensity: 0.8)
+                DSProjectorLight()
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -617,6 +608,7 @@ struct MobileScreen<Header: View, Content: View, Bottom: View>: View {
     @ViewBuilder var content: Content
     @ViewBuilder var bottom: Bottom
     @Environment(\.mobileAdBand) private var adBand
+    @Environment(\.perdeTabBar) private var tabBar
 
     var body: some View {
         ScrollView {
@@ -638,9 +630,11 @@ struct MobileScreen<Header: View, Content: View, Bottom: View>: View {
             VStack(spacing: Mobile.Space.gap) {
                 bottom
                 if adBand { DSAdBand() }
+                // Perde cam sekme çubuğu: reklam şeridinin altında, ekranın en altında.
+                if let tabBar { PerdeTabBar(active: tabBar.active, select: tabBar.select) }
             }
             .padding(.horizontal, Mobile.Space.screen)
-            .padding(.bottom, adBand ? Mobile.Space.inline : Mobile.Space.screen)
+            .padding(.bottom, tabBar != nil ? Mobile.Space.hair : adBand ? Mobile.Space.inline : Mobile.Space.screen)
         }
         .foregroundStyle(Mobile.Palette.text)
         .background(MobileBackground())
@@ -719,11 +713,17 @@ struct BackHeader<Trailing: View>: View {
     let title: LocalizedStringKey
     @ViewBuilder var trailing: Trailing
     @Environment(\.dismiss) private var dismiss
+    /// Gezinme yığınının kökünde (sekme sayfası: Geçmiş, Ayarlar) false: geri düğmesi yok, büyük sayfa başlığı.
+    @Environment(\.isPresented) private var isPresented
 
     var body: some View {
         HStack(spacing: Mobile.Space.gap) {
-            IconButton(symbol: "chevron.left", label: "Back") { dismiss() }
-            Text(title).font(Font.dsH3).lineLimit(1).minimumScaleFactor(0.8)
+            if isPresented {
+                IconButton(symbol: "chevron.left", label: "Back") { dismiss() }
+                Text(title).font(Font.dsH3).lineLimit(1).minimumScaleFactor(0.8)
+            } else {
+                PerdeLargeTitle(title: title)
+            }
             Spacer()
             trailing
         }

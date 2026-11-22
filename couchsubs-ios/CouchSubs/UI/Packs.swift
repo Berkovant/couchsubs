@@ -27,7 +27,7 @@ struct PacksScreen: View {
             switch app.packStatus {
             case .downloading:
                 HStack(spacing: Mobile.Space.inline) {
-                    ProgressView().tint(Mobile.Palette.pro)
+                    DSBarsLoader()
                     Text("Updating the packs…").font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
                 }
             case .failed(let reason): MobileNote(text: reason, tone: Mobile.Palette.secondary)
@@ -37,9 +37,12 @@ struct PacksScreen: View {
                 Text("Tap a game to turn its pack on or off.")
                     .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
             }
-            BentoGrid {
-                ForEach(GameCatalog.packShelf(model.installedPacks)) { pack in
-                    packTile(pack)
+            // Perde kapak rafı: yatay kayan 3:4 kapaklar; oynanan paketin kapağı amber halka ve kendi renginden ışıma.
+            if !model.installedPacks.isEmpty {
+                DSCoverShelf(title: "Installed packs") {
+                    ForEach(GameCatalog.packShelf(model.installedPacks)) { pack in
+                        packTile(pack)
+                    }
                 }
             }
             ImportedPacksSection()
@@ -64,11 +67,11 @@ struct PacksScreen: View {
                 ZStack {
                     Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
                     VStack(spacing: Mobile.Space.gap) {
-                        ProgressView().controlSize(.large).tint(Mobile.Palette.pro)
+                        DSBarsLoader(scale: 2)
                         Text("Updating the packs…").font(Mobile.TypeScale.headline).foregroundStyle(Mobile.Palette.text)
                     }
                     .padding(Mobile.Space.tile * 1.5)
-                    .background(Mobile.Palette.surface2.opacity(0.9), in: RoundedRectangle(cornerRadius: Mobile.Radius.tile))
+                    .dsGlass(in: RoundedRectangle(cornerRadius: Mobile.Radius.tile, style: .continuous))
                     .accessibilityElement(children: .combine)
                 }
                 .transition(.opacity)
@@ -108,25 +111,21 @@ struct PacksScreen: View {
     private func packTile(_ pack: PackShelfItem) -> some View {
         let on = pack.packIds.allSatisfy { !model.disabledPacks.contains($0) }
         let playing = model.isRunning && model.packInUse.map { pack.titles.contains($0) } == true
-        return Button { model.setPacks(pack.packIds, on: !on) } label: {
-            Tile(emphasis: playing ? .selected : .none) {
-                HStack(alignment: .top) {
-                    GameMonogram(code: Self.code(pack.title))
-                    Spacer(minLength: Mobile.Space.inline)
-                    if playing {
-                        MobilePill(text: String(localized: "Now playing"), dot: true, compact: true)
-                    } else if !on {
-                        MobilePill(text: String(localized: "Off"), compact: true)
-                    }
-                }
-                Spacer(minLength: Mobile.Space.inline)
-                Text(verbatim: pack.title).font(Mobile.TypeScale.headline).lineLimit(2)
+        return Button {
+            Haptics.selection()
+            model.setPacks(pack.packIds, on: !on)
+        } label: {
+            VStack(alignment: .leading, spacing: Mobile.Space.titleToBody) {
+                DSGameCover(title: pack.title, status: playing ? "Now playing" : on ? "Installed" : "Off", selected: playing)
                 Text(Self.linesText(pack.entries)).font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
             }
+            .frame(width: DS.size("coverWidthRail"), alignment: .leading)
             .opacity(on && model.settings.gamePacks ? 1 : 0.5)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("cover")))
         .accessibilityValue(Text(on ? "On" : "Off"))
     }
 

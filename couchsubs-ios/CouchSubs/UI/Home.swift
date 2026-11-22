@@ -59,18 +59,16 @@ extension View {
     }
 }
 
-/// Ana ekranın ortak üst satırı: logo, geçmiş, ayarlar, profil.
-struct HomeHeader: View {
-    @Binding var path: [Route]
+/// Ana ekranın ortak üst satırı: logo ve sağda durum hapı (Hazır, Çeviri sürüyor · süre). Geçmiş ve Ayarlar alttaki cam
+/// sekme çubuğunda (Perde).
+struct HomeHeader<Status: View>: View {
+    @ViewBuilder var status: Status
 
     var body: some View {
         HStack(spacing: Mobile.Space.gap) {
             DSBrand()
             Spacer(minLength: Mobile.Space.inline)
-            IconButton(symbol: "clock.arrow.circlepath", label: "History") { path.append(.history) }
-            IconButton(symbol: "gearshape", label: "Settings") { path.append(.settings) }
-            AvatarButton(initials: "") { path.append(.profile) }
-                .tourTarget(.profile)
+            status
         }
         .frame(height: Mobile.Control.icon)
     }
@@ -127,29 +125,43 @@ struct HomeScreen: View {
 
     var body: some View {
         MobileScreen {
-            HomeHeader(path: $path)
+            HomeHeader {
+                DSStatusChip(model.canStart ? "Ready" : "Almost ready", tone: model.canStart ? .ok : .amber)
+            }
         } content: {
             ScreenTitle(title: model.canStart ? "Ready" : "Almost ready",
                         message: model.canStart ? "Open the game on the PS5, then start." : "Finish the setup to start translating.")
+            // Perde: TV önizlemesi kahraman alan; altyazının nerede görüneceğini gösterir, dokununca hedef seçilir.
+            Button { path.append(.target) } label: {
+                DSPerdePreview(line: String(localized: "Subtitles will appear here while you play.")) {
+                    DSStatusChip(LocalizedStringKey(targetName), tone: .glass, dot: false,
+                                 icon: model.settings.output == .computer ? "iphone" : "tv")
+                }
+            }
+            .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("preview")))
+            .accessibilityLabel(Text("Subtitles"))
+            .accessibilityValue(Text(verbatim: targetName))
             BentoGrid {
                 // PS5 karosu eşlemeyi açar; kurulum atlandıysa buradan eşlenir (PSN girişi yoksa önce giriş).
                 Button { path.append(.ps5) } label: {
                     if model.isXbox {
+                        let ready = model.xboxConsole != nil && model.xboxSignedIn
                         StatTile(symbol: "gamecontroller.fill", tint: .ok, label: "Xbox · Beta",
                                  value: model.xboxConsole.map { $0.name.isEmpty ? "Xbox" : $0.name } ?? String(localized: "Choose your Xbox"),
-                                 live: model.xboxConsole != nil && model.xboxSignedIn, chevron: true)
+                                 live: ready, status: ready ? "Ready" : "Not set up", statusOK: ready)
                     } else {
                         StatTile(symbol: "gamecontroller.fill", tint: .ok, label: "PS5",
                                  value: model.console.map { $0.name.isEmpty ? "PS5" : $0.name } ?? String(localized: "Pair the PS5"),
-                                 live: model.console != nil, chevron: true)
+                                 live: model.console != nil, status: model.console != nil ? "Paired" : "Not set up",
+                                 statusOK: model.console != nil)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSFocusPlainStyle())
                 Button { path.append(.target) } label: {
                     StatTile(symbol: model.settings.output == .computer ? "iphone" : "tv", tint: .accent, label: "Subtitles",
-                             value: targetName, chevron: true)
+                             value: targetName, status: targetReady ? "Ready" : "Not set up", statusOK: targetReady)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSFocusPlainStyle())
                 .tourTarget(.target)
                 packsTile
                     .bentoWide()
@@ -196,6 +208,7 @@ struct HomeScreen: View {
             // Kurulum bitmeden de uygulama örnek görüntülerle denenebilir.
             if !model.canStart { DemoModeButton(kind: .ghost) }
         }
+        .perdeAmbient()
         .task {
             app.analytics.screen("home")
             await model.refreshTranslatorStatus()
@@ -209,7 +222,8 @@ struct HomeScreen: View {
         Button { path.append(.packs) } label: {
             Tile {
                 HStack(spacing: Mobile.Space.gap) {
-                    MobileTileIcon(symbol: "shippingbox", tint: .pro)
+                    // Perde kapak yığını: oyun enerjisi kapaklarda.
+                    PerdeCoverStack(titles: coverTitles)
                     VStack(alignment: .leading, spacing: Mobile.Space.hair) {
                         Text("Instant subtitles with ready packs").font(Mobile.TypeScale.headline).lineLimit(1)
                         Text(model.installedPacks.isEmpty ? String(localized: "GTA V, RDR2, Mafia and 3 more games")
@@ -223,7 +237,18 @@ struct HomeScreen: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSFocusPlainStyle())
+    }
+
+    /// Kapak yığınının oyunları: kurulu paketler, yoksa uygulamayla gelen ilk üç oyun.
+    private var coverTitles: [String] {
+        let shelf = GameCatalog.packShelf(model.installedPacks).map(\.title)
+        return shelf.isEmpty ? ["Grand Theft Auto V", "Red Dead Redemption 2", "Mafia"] : shelf
+    }
+
+    /// Altyazının gideceği yer hazır mı (TV seçiliyse eşlenmiş TV var mı).
+    private var targetReady: Bool {
+        model.settings.output == .computer || model.settings.output == .obs || model.hasTV
     }
 
     private var targetName: String {
@@ -253,17 +278,21 @@ struct RunningScreen: View {
     private var reduceMotion: Bool { systemReduceMotion || motionOff }
     @Binding var path: [Route]
     @State private var showSubtitles = false
+    @State private var flash = false
 
     var body: some View {
         MobileScreen {
-            HomeHeader(path: $path)
-        } content: {
-            HStack(spacing: Mobile.Space.inline) {
+            HomeHeader {
+                // Canlı = kırmızı nabız (ekrandaki tek sürekli animasyon); bağlanırken amber.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
-                    MobilePill(text: String(format: String(localized: "Translating · %@"), elapsed(at: context.date)),
-                         live: model.sessionState == .streaming)
+                    DSStatusChip(LocalizedStringKey(String(format: String(localized: "Translating · %@"), elapsed(at: context.date))),
+                                 tone: model.sessionState == .streaming ? .live : .amber)
+                        .monospacedDigit()
                 }
-                if model.packsActive && !model.demoMode { MobilePill(text: String(localized: "Ready translation"), kind: .pro) }
+            }
+        } content: {
+            if model.packsActive && !model.demoMode {
+                MobilePill(text: String(localized: "Ready translation"), kind: .pro)
             }
             if model.demoMode {
                 DemoModeHeader()
@@ -328,7 +357,19 @@ struct RunningScreen: View {
                     Text("Subtitles will appear here while you play.").font(Mobile.TypeScale.body).foregroundStyle(Mobile.Palette.secondary)
                 }
             }
+            // Yeni satır: amber vurgu kısa sürede söner (hareket azaltılmışken yok).
+            .overlay {
+                RoundedRectangle(cornerRadius: Mobile.Radius.tile, style: .continuous)
+                    .strokeBorder(Color.dsAmber, lineWidth: 1.5)
+                    .opacity(flash ? 0.9 : 0)
+                    .allowsHitTesting(false)
+            }
             .animation(.easeOut(duration: 0.18), value: model.recentLines.first?.id)
+            .onChange(of: model.recentLines.first?.id) { _ in
+                guard !reduceMotion else { return }
+                flash = true
+                withAnimation(.easeOut(duration: 0.9)) { flash = false }
+            }
             if model.recentLines.count > 1 {
                 Tile(spacing: 0) {
                     ForEach(Array(model.recentLines.dropFirst().prefix(8).enumerated()), id: \.element.id) { index, line in
@@ -354,7 +395,7 @@ struct RunningScreen: View {
             BentoGrid {
                 Tile {
                     Text("From ready translation").font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
-                    Text(verbatim: "\(model.sessionPackLines) / \(model.sessionLines)").font(Mobile.TypeScale.title)
+                    Text(verbatim: "\(model.sessionPackLines) / \(model.sessionLines)").font(Font.dsMonoValue)
                 }
                 Tile {
                     Text(model.settings.output.showsOnTV ? "TV" : "Screen").font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
@@ -415,10 +456,11 @@ struct RunningScreen: View {
                 if model.demoMode {
                     Label("Exit Demo Mode", systemImage: "xmark")
                 } else {
-                    Label("Stop Translating", systemImage: "stop.fill")
+                    // Perde: kırmızı yumuşak hap + nabız noktası.
+                    Text("Stop Translating")
                 }
             }
-            .buttonStyle(.mobileDestructive)
+            .buttonStyle(DSButtonStyle(kind: model.demoMode ? .stop : .live))
         }
         .fullScreenCover(isPresented: $showSubtitles) { SubtitleScreen() }
         // Deneme modunda örnek görüntü bu ekranda görünsün diye altyazı ekranı kendiliğinden açılmaz.
