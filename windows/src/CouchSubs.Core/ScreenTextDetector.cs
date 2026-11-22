@@ -111,6 +111,17 @@ public sealed class ScreenTextDetector
     private long? lastSample;
     private int counter;
     private bool menu;
+    /// <summary>Menüye girildiği örnekteki bileşenlerin karoları: menü bunlar yerinde durdukça sürer (<see cref="IsMenu"/>).</summary>
+    private HashSet<int> menuAnchors = [];
+    /// <summary>Menüye girilen an ve süresi dolan menünün bittiği an (bundan önce belirmiş yazılar yeniden menü sayılmaz).</summary>
+    private long menuEnteredAt;
+    private long? menuFloor;
+
+    /// <summary>
+    /// Menüde hiçbir yazı değişmeden bu kadar süre geçince menü durumu biter. Karanlık sahnede birlikte beliren sabit HUD
+    /// yazıları da menü sanılabiliyor; menü durumu altyazıyı en çok bu kadar susturur (Mac/iPhone, Android ile aynı).
+    /// </summary>
+    public const int MenuLifeMs = 5000;
 
     /// <summary>Tanı: her örnekte bileşenler, bölgeleri ve kanıtları (gerçek kare doğrulaması günlüğe yazar).</summary>
     internal Action<string>? Diagnose { get; set; }
@@ -219,6 +230,8 @@ public sealed class ScreenTextDetector
             tracked.Clear();
             lastSample = null;
             menu = false;
+            menuAnchors = [];
+            menuFloor = null;
         }
     }
 
@@ -434,7 +447,10 @@ public sealed class ScreenTextDetector
     /// <summary>
     /// Menü durumu: en az üç ayrı bileşen var ve bileşenlerin dışındaki karoların çoğu düşük kenar enerjili (bulanık ya da
     /// karartılmış zemin). Menüye ilk girişte bileşenlerin en çok 300 ms arayla birlikte belirmiş olması da gerekir;
-    /// menüde gezinirken (seçim çerçevesi değişince) durum korunur.
+    /// menüde gezinirken (seçim çerçevesi değişince) durum, menüye girildiğindeki bileşenlerden biri (karolarının en az
+    /// <see cref="KeepOverlap"/> kadarı) yerinde durdukça korunur (Mac/iPhone ve Android ile aynı). Eskiden yalnız "en az üç
+    /// bileşen ve sakin zemin" yetiyordu: GTA 6 "Gone Fishing" (gece) menüden sonra görev yazısı, PS5 bildirimi ve HUD üç
+    /// bileşen, karanlık zemin sakin sayıldı; menü durumu bitmedi, altyazı bütün oturum okunmadı.
     /// </summary>
     private bool IsMenu(List<(Cells Cells, List<int> Tiles)> components, long now)
     {
@@ -442,9 +458,21 @@ public sealed class ScreenTextDetector
         var inside = components.SelectMany(item => item.Tiles).ToHashSet();
         var outside = Enumerable.Range(0, tiles.Length).Where(index => !inside.Contains(index)).ToList();
         if (outside.Count == 0 || outside.Count(index => tiles[index].Quiet) < MenuQuietShare * outside.Count) return false;
-        if (menu) return true;
+        if (menu && components.Any(item => item.Tiles.Count(menuAnchors.Contains) >= KeepOverlap * item.Tiles.Count))
+        {
+            // Menüde bir şey değişmeden (gezinme, seçim) MenuLifeMs geçti: menü sayılmaz, altyazı yeniden gösterilir. Aynı
+            // yazılar yeniden menü sayılmaz; menü ancak sonradan beliren yazılarla yeniden açılır (menuFloor).
+            var activity = menuAnchors.Count == 0 ? menuEnteredAt : menuAnchors.Max(index => tiles[index].StableSince);
+            if (now - Math.Max(activity, menuEnteredAt) <= MenuLifeMs) return true;
+            menuFloor = now;
+            return false;
+        }
         var appeared = components.Select(item => item.Tiles.Max(index => tiles[index].StableSince)).ToList();
-        return appeared.Max() - appeared.Min() <= MenuTogetherMs;
+        if (appeared.Max() - appeared.Min() > MenuTogetherMs) return false;
+        if (menuFloor is { } floor && appeared.Any(time => time <= floor)) return false;
+        if (!menu) menuEnteredAt = now;
+        menuAnchors = inside;
+        return true;
     }
 
     private void Update(List<(Cells Cells, List<int> Tiles)> components, bool[] candidate, long now, bool inMenu)

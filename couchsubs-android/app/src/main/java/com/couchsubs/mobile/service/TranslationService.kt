@@ -391,6 +391,8 @@ class TranslationService : Service() {
     private val background = Executors.newSingleThreadScheduledExecutor { Thread(it, "CouchSubs background").apply { isDaemon = true } }
     private val reading = AtomicBoolean(false)
     private var lastRead = 0L
+    /** Günlüğe son yazılan menü durumu: menüdeyken altyazı okunmaz, günlükte görünsün (Mac/iPhone ile aynı satırlar). */
+    @Volatile private var loggedMenu = false
     private var lastSignature = 0L
     private var lastReading = com.couchsubs.mobile.core.Reading.Empty
     @Volatile private var lastOcrMs: Int? = null
@@ -825,13 +827,20 @@ class TranslationService : Service() {
             else if (screenRefreshRequested.compareAndSet(true, false)) startScreen(frame, refresh = true)
             else followTick(frame, now)
             // Menü açıkken (tekerlek, duraklatma menüsü) altyazı okunmaz: menünün alt ortadaki etiketleri altyazı sanılmasın.
-            if (!reading.get() && !detector.menu && now - lastRead >= 1000 / MAX_READS_PER_SECOND) {
+            val inMenu = detector.menu
+            if (inMenu != loggedMenu) {
+                loggedMenu = inMenu
+                Log.i(TAG, if (inMenu) "ekran menüsü açık: altyazı okunmuyor" else "ekran menüsü kapandı: altyazı okunuyor")
+            }
+            if (!reading.get() && !inMenu &&now - lastRead >= 1000 / MAX_READS_PER_SECOND) {
                 val area = region
                 // Karenin geldiği an: gecikme buradan TV'ye gidene kadar ölçülür (hattın saatiyle).
                 val capturedAt = com.couchsubs.mobile.core.monotonicClock()
                 // Karede GTA 6 telefonu açıksa ekranındaki satırlar altyazı değildir; telefon seyrek aranır, bulunan yer
-                // sonraki okumalara da geçerlidir (Mac, Windows: SubtitlePipeline.findsPhone).
-                if (now - subtitlePhoneAt >= com.couchsubs.mobile.core.GamePhoneTracker.INTERVAL_MS || now < subtitlePhoneAt) {
+                // sonraki okumalara da geçerlidir (Mac, Windows: SubtitlePipeline.findsPhone). Yalnız GTA 6'da ve telefon
+                // ayarı açıkken: başka oyunda (ya da karanlık sahnede) yanlış bulunan telefon alt şeritteki altyazıyı silmesin.
+                if (!playsGta6 || !settings.readsGamePhone) subtitlePhone = null
+                else if (now - subtitlePhoneAt >=com.couchsubs.mobile.core.GamePhoneTracker.INTERVAL_MS || now < subtitlePhoneAt) {
                     subtitlePhoneAt = now
                     subtitlePhone = try {
                         com.couchsubs.mobile.core.ScreenPhoneCard.phone(com.couchsubs.mobile.ocr.LivePhoneImage(frame))

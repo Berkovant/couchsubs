@@ -764,6 +764,8 @@ final class AppModel: ObservableObject {
     /// Ekran yazılarını kendiliğinden bulan (ayar açık ve çeviri sürerken var); örnek arka planda, tek uçuşta alınır.
     private var screenTextDetector: ScreenTextDetector?
     private var screenTextBusy = false
+    /// Altyazı günlüğüne son yazılan menü durumu (`ScreenTextDetector.menuLog`).
+    private var loggedMenu = false
     /// Altyazı hattının altyazıdan ayırdığı görev satırının bölgesi (bkz. `MissionLine`); yoksa nil.
     private var missionRegion: CropRegion?
     /// Altyazı hattının altyazıdan ayırdığı kenar bildirimlerinin alanları (bkz. `ScreenNotices`); yoksa boş.
@@ -2059,7 +2061,8 @@ final class AppModel: ObservableObject {
         SubtitleLog.write("oturum başladı: CouchSubs \(AppIdentity.version), \(settings.sourceLanguage)→\(settings.targetLanguage), "
             + "motor: \(onlineTranslationActive ? settings.onlineEngine.rawValue : "ücretsiz"), "
             + "seçilen motor: \(settings.translationEngine.rawValue), paketler: \(settings.gamePacks ? "açık" : "kapalı"), "
-            + "görüntü: \(demoMode ? "deneme modu" : xbox != nil ? "Xbox (Beta)" : readsWindow ? "PS Remote Play penceresi" : captureTarget != nil ? "seçilen pencere" : "PS5")")
+            + "görüntü: \(demoMode ? "deneme modu" : xbox != nil ? "Xbox (Beta)" : readsWindow ? "PS Remote Play penceresi" : captureTarget != nil ? "seçilen pencere" : "PS5"), "
+            + SubtitleLog.areaSummary(settings))
 
         let session: StreamControlling
         if demoMode {
@@ -2635,6 +2638,9 @@ final class AppModel: ObservableObject {
         } else {
             gamePhoneTracker = nil
         }
+        // Altyazı hattı telefonu yalnız GTA 6'da ve telefon ayarı açıkken arar: başka oyunda ya da karanlık sahnede yanlış
+        // bulunan telefon alt şeritteki altyazıyı silmesin (iPhone, Windows, Android ile aynı).
+        pipeline?.findsPhone = gamePhoneTracker != nil
     }
 
     /// Ek alanlar aynı dil, motor ve paketlerle okunur; ayrı bir okuyucu ve çevirmenle (altyazının sırasını beklemez).
@@ -2869,6 +2875,7 @@ final class AppModel: ObservableObject {
         tvOpenProblem = nil
         pipeline?.reset()
         if pipeline != nil { SubtitleLog.write("oturum bitti") }
+        loggedMenu = false
         pipeline = nil
         regionWatcher?.reset()
         regionWatcher = nil
@@ -3172,7 +3179,12 @@ final class AppModel: ObservableObject {
         }
         regionWatcher?.offer(frame, areas: areas, phone: pose)
         // Ekranda menü açık (otomatik ekran yazısı menü durumunda): menü satırları altyazıya karışmasın, altyazı okunmaz.
-        if screenTextDetector?.inMenu == true { return }
+        let inMenu = screenTextDetector?.inMenu == true
+        if inMenu != loggedMenu {
+            loggedMenu = inMenu
+            SubtitleLog.write(ScreenTextDetector.menuLog(inMenu))
+        }
+        if inMenu { return }
         // Önceki kare hâlâ işleniyorsa bu kare atlanır; okuma kareleri biriktirmez.
         var entry = frameGate.enter(now: SubtitleStabilizer.uptimeMs())
         if case .stuck(let ms) = entry {

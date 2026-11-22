@@ -3148,7 +3148,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             ? ReadScheduler.FastMaxReuse : ReadScheduler.DefaultMaxReuse);
         // Ekranda menü varken altyazı gönderilmez: altyazı alanındaki menü satırları (alttaki seçenekler, tuş çubuğu)
         // otomatik ekran yazısı olarak kendi yerinde çevriliyor, altyazıya karışmasın.
-        var sender = new MenuPausedSender(server, () => Volatile.Read(ref screenText)?.InMenu == true);
+        var sender = new MenuPausedSender(server, () => Volatile.Read(ref screenText)?.InMenu == true, SubtitleLog.Write);
         var built = new SubtitlePipeline(reader, MakeTranslator(), sender, scheduler)
         {
             ShowSpeakerNames = settings.ShowSpeakerNames,
@@ -3157,6 +3157,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             DropsScreenText = () => !demoMode && ScreenText.IsGta(gameSense.Current?.Name),
             Echo = SubtitleEcho,
             EchoPaused = () => Volatile.Read(ref screenText)?.InMenu == true,
+            FindsPhone = settings.ReadsGamePhone && GameName.Key(gameSense.Current?.Name) == "gta 6",
         };
         built.MetricsReady += metrics => post(() => MetricsText = metrics.Summary(text));
         built.PairShown += (source, translation) =>
@@ -3288,6 +3289,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 ClosePhone();
                 phoneTracker = null;
             }
+            // Altyazı hattı telefonu yalnız GTA 6'da ve telefon ayarı açıkken arar: başka oyunda ya da karanlık sahnede
+            // yanlış bulunan telefon alt şeritteki altyazıyı silmesin (Mac, iPhone, Android ile aynı).
+            if (pipeline is { } current) current.FindsPhone = phoneTracker is not null;
             if (running && settings.AutoScreenText && !settings.ExtraAreasPausedByFullScreen)
                 screenText ??= new ScreenTextDetector();
             else
