@@ -91,7 +91,7 @@ def request(cfg, key="", query=None):
 
 def list_keys(cfg, prefix):
     ns = "{http://s3.amazonaws.com/doc/2006-03-01/}"
-    keys, token = [], None
+    keys, token, seen = [], None, set()
     while True:
         query = {"list-type": "2", "prefix": prefix}
         if token:
@@ -101,6 +101,9 @@ def list_keys(cfg, prefix):
         if tree.findtext(f"{ns}IsTruncated") != "true":
             return keys
         token = tree.findtext(f"{ns}NextContinuationToken")
+        if not token or token in seen:
+            raise ValueError("R2 listing has missing or repeated continuation token")
+        seen.add(token)
 
 
 def main(argv):
@@ -111,13 +114,13 @@ def main(argv):
         message = "paket kovasına erişim yok (PACKS_R2_* ya da ~/.config/couchsubs/packs.env); paketler indirilmedi"
         print(("✗ " if require else "! ") + message, file=sys.stderr)
         return 1 if require else 0
-    total = 0
+    bundled_archives = 0
     for prefix in prefixes:
         target = TARGETS[prefix]
         target.mkdir(parents=True, exist_ok=True)
         try:
             keys = list_keys(cfg, prefix)
-        except (urllib.error.URLError, ET.ParseError) as error:
+        except (urllib.error.URLError, ET.ParseError, ValueError) as error:
             print(f"✗ {prefix} listelenemedi: {getattr(error, 'code', '') or error.__class__.__name__}", file=sys.stderr)
             return 1
         for key, _size in keys:
@@ -136,19 +139,22 @@ def main(argv):
                 try:
                     pack = json.loads(gzip.decompress(data))
                     if not (isinstance(pack, dict) and pack.get("format") == 2
-                            and isinstance(pack.get("entries"), dict)
-                            and isinstance(pack.get("segments", {}), dict)):
-                        raise ValueError("invalid format-2 pack structure")
+                            and isinstance(pack.get("entries"), dict) and pack["entries"]
+                            and isinstance(pack.get("segments", {}), dict)
+                            and pack.get("id", name.removesuffix(".json.gz")) == name.removesuffix(".json.gz")):
+                        raise ValueError("invalid format-2 pack structure, ID or empty entries")
                 except (OSError, EOFError, UnicodeError, ValueError) as error:
                     print(f"✗ {key} geçersiz paket: {error.__class__.__name__}", file=sys.stderr)
                     return 1
             temporary = dest.with_name("." + name + ".download")
             temporary.write_bytes(data)
             temporary.replace(dest)
-            total += 1
+            if prefix == "bundled/" and name.endswith(".json.gz"):
+                bundled_archives += 1
         print(f"✓ {prefix} → {target.relative_to(ROOT)} ({len(keys)} dosya)")
-    if require and total == 0:
-        print("✗ hiç paket inmedi", file=sys.stderr)
+    # Contributions or README-like metadata cannot satisfy a required app build.
+    if require and bundled_archives == 0:
+        print("✗ gerekli oyun paketi arşivi inmedi (bundled/*.json.gz)", file=sys.stderr)
         return 1
     return 0
 
