@@ -165,37 +165,62 @@ private struct WizardFrame: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    static var topBar: CGFloat { DSChrome.titlebar + DS.size("header") }
+    /// Geri / Deneme Modu / açıklama / Devam çubuğu (48 pt düğme + üst 16 + alt 24).
+    static var bottomBar: CGFloat { DS.size("button") + DS.space("m") + DS.space("l") }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                DSBrand().frame(maxWidth: .infinity, alignment: .leading)
-                ProgressDots(position: WizardText.position(model.step))
-                Button("I'll Set Up Later") { model.step = .done }
-                    .buttonStyle(.plain)
-                    .font(.dsSmall)
-                    .foregroundStyle(Color.dsMuted)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .padding(.horizontal, DS.space("l"))
-            .frame(height: DS.size("header"))
+        // Adım içeriği pencere boyu kayar; üstteki başlık çubuğu ve alttaki Geri/Devam çubuğu camdır, içerik ikisinin de
+        // arkasından geçer (Ana pencereyle aynı). İlk açılışta içerik çubukların arasında başlar ve biter.
+        ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: DS.space("xl")) {
                 DSPageTitle(eyebrow: WizardText.eyebrow(model.step, xbox: model.isXbox),
                             title: WizardText.title(model.step, xbox: model.isXbox),
                             message: WizardText.message(model.step, xbox: model.isXbox, hasTV: model.hasTV))
-                ScrollView(.vertical) {
-                    StepBody().frame(maxWidth: .infinity, alignment: .topLeading).padding(.bottom, 2)
-                }
-                .frame(maxHeight: .infinity)
-                WizardFooter()
+                StepBody().frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .padding(.horizontal, DS.space("wizardSide"))
-            .padding(.top, DS.space("l"))
-            .padding(.bottom, DS.space("xxl"))
+            .padding(.top, Self.topBar + DS.space("l"))
+            .padding(.bottom, Self.bottomBar + DS.space("l"))
+            .frame(maxWidth: DS.size("contentMax"))
+            .frame(maxWidth: .infinity)
             .id(model.step)
             .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity))
         }
-        .frame(maxWidth: DS.size("contentMax"))
+        .scrollIndicators(.automatic)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: DSChrome.titlebar)
+                HStack {
+                    DSBrand().frame(maxWidth: .infinity, alignment: .leading)
+                    ProgressDots(position: WizardText.position(model.step))
+                    Button("I'll Set Up Later") { model.step = .done }
+                        .buttonStyle(.plain)
+                        .font(.dsSmall)
+                        .foregroundStyle(Color.dsMuted)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.horizontal, DS.space("l"))
+                .frame(height: DS.size("header"))
+                .frame(maxWidth: DS.size("contentMax"))
+            }
+            .frame(maxWidth: .infinity)
+            .background(DSGlassBar(edge: .top))
+        }
+        .overlay(alignment: .bottom) {
+            WizardFooter()
+                .padding(.horizontal, DS.space("wizardSide"))
+                .padding(.top, DS.space("m"))
+                .padding(.bottom, DS.space("l"))
+                .frame(minHeight: Self.bottomBar, alignment: .top)
+                .frame(maxWidth: DS.size("contentMax"))
+                .frame(maxWidth: .infinity)
+                .background(DSGlassBar(edge: .bottom))
+                .id(model.step)
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .background(DSFullSizeWindow())
         // Ortam ışığı (Core Animation, çok yavaş; hareket kapısı kapalıyken durağan).
         .background { DSAmbientGlow(intensity: 0.7) }
         .background(Color.dsBackground)
@@ -561,7 +586,7 @@ private struct ConnectPS5Step: View {
                         VStack(alignment: .leading, spacing: DS.space("line")) {
                             Text(verbatim: console.name.isEmpty ? "PS5" : console.name).font(.dsBodyStrong)
                             Text(verbatim: "\(console.host) · \(String(localized: console.isAwake ? "On" : "In Rest Mode"))")
-                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsMuted)
+                                .font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsMuted)
                         }
                     }
                 }

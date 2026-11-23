@@ -15835,6 +15835,7 @@
     "Not Connected": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Not Connected"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bağlı Değil"}}}},
     "Waiting": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Waiting"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bekleniyor"}}}},
     "Unknown Game": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Unknown Game"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bilinmeyen Oyun"}}}},
+    "Not Recognized": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Not Recognized"}}, "tr": {"stringUnit": {"state": "translated", "value": "Tanınmadı"}}}},
     "LIVE": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "LIVE"}}, "tr": {"stringUnit": {"state": "translated", "value": "CANLI"}}}},
     "STOPPED": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "STOPPED"}}, "tr": {"stringUnit": {"state": "translated", "value": "DURDU"}}}},
     "%lld Frames/s": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "%lld Frames/s"}}, "tr": {"stringUnit": {"state": "translated", "value": "%lld Kare/sn"}}}},

@@ -89,32 +89,45 @@ struct SettingsPage: View {
     @Binding var section: SettingsSection
     @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsChromeInsets) private var chrome
 
     var body: some View {
+        // Yan menü ve bölüm içeriği pencere boyu iki ayrı kaydırma; ikisi de üst ve alt cam çubuğun arkasından kayar.
+        // İlk açılışta çubukların altından başlar, en alttaki içerik kaydırınca tam görünür.
         HStack(alignment: .top, spacing: DS.space("l")) {
-            SettingsNav(section: $section)
-                .frame(width: DS.size("settingsNav"))
-            VStack(alignment: .leading, spacing: DS.space("m")) {
-                SectionHeading(section: section)
-                Group {
-                switch section {
-                case .basics: BasicsSettings(section: $section)
-                case .appearance: SubtitleLookSettings()
-                case .advanced: AdvancedSettings()
-                case .area: AreaSettings()
-                case .packs: SettingsScroll { GamePacksPage() }
-                case .dubbing: SettingsScroll { DubbingCard() }
-                case .outputs: OutputSettings()
-                case .shortcuts: SettingsScroll { ShortcutsCard() }
-                case .console: ConsoleSettings()
-                }
-                }
+            ScrollView(.vertical) {
+                SettingsNav(section: $section)
+                    .padding(.top, chrome.top + DS.space("l"))
+                    .padding(.bottom, chrome.bottom + DS.space("l"))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .scrollIndicators(.never)
+            .frame(width: DS.size("settingsNav"))
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: DS.space("m")) {
+                    SectionHeading(section: section)
+                    Group {
+                    switch section {
+                    case .basics: BasicsSettings(section: $section)
+                    case .appearance: SubtitleLookSettings()
+                    case .advanced: AdvancedSettings()
+                    case .area: AreaSettings()
+                    case .packs: SettingsScroll { GamePacksPage() }
+                    case .dubbing: SettingsScroll { DubbingCard() }
+                    case .outputs: OutputSettings()
+                    case .shortcuts: SettingsScroll { ShortcutsCard() }
+                    case .console: ConsoleSettings()
+                    }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.top, chrome.top + DS.space("l"))
+                .padding(.bottom, chrome.bottom + DS.space("l"))
+            }
+            .scrollIndicators(.automatic)
             .id(section)
             .transition(.opacity.combined(with: .offset(y: 8)))
         }
-        .padding(DS.space("l"))
+        .padding(.horizontal, DS.space("l"))
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: section)
     }
 }
@@ -240,31 +253,25 @@ private struct SectionHeading: View {
     }
 }
 
-/// Eski kartlardan kurulan sayfalar için kayan tek sütun.
+/// Eski kartlardan kurulan sayfalar için tek sütun (sayfanın kaydırmasıyla kayar).
 struct SettingsScroll<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: DS.space("l")) { content }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, DS.space("l"))
-        }
-        .scrollIndicators(.automatic)
+        VStack(alignment: .leading, spacing: DS.space("l")) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// İki eşit sütun; sütunlar kendi içinde kayar.
+/// İki eşit sütun; sayfanın kaydırmasıyla birlikte kayar (cam çubukların arkasından).
 private struct TwoColumns<Left: View, Right: View>: View {
     @ViewBuilder var left: Left
     @ViewBuilder var right: Right
 
     var body: some View {
         HStack(alignment: .top, spacing: DS.space("l")) {
-            ScrollView(.vertical) { VStack(spacing: DS.space("l")) { left }.padding(.bottom, 1) }
-                .frame(maxWidth: .infinity)
-            ScrollView(.vertical) { VStack(spacing: DS.space("l")) { right }.padding(.bottom, 1) }
-                .frame(maxWidth: .infinity)
+            VStack(spacing: DS.space("l")) { left }.frame(maxWidth: .infinity, alignment: .top)
+            VStack(spacing: DS.space("l")) { right }.frame(maxWidth: .infinity, alignment: .top)
         }
     }
 }
@@ -428,7 +435,7 @@ private struct SubtitleLookSettings: View {
             HStack {
                 Text("Text Size").font(.dsBodyStrong)
                 Spacer()
-                Text(String(format: String(localized: "%lld px"), Int(size.rounded()))).font(.system(size: 13, weight: .medium, design: .monospaced))
+                Text(String(format: String(localized: "%lld px"), Int(size.rounded()))).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(Color.dsAmberText)
             }
             DSSlider(value: $size, range: 16...50, step: 1) { editing in
                 if editing { model.sendTestSubtitle() }
