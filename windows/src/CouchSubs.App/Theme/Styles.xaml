@@ -85,7 +85,7 @@
 
     <!-- Kaydırıcının değeri (başlığın sağında, sağ kenarı çubuğun sağ ucunda): mono 13 yarı kalın amber. -->
     <Style x:Key="SliderValueText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource amberTextBrush}" />
@@ -99,6 +99,9 @@
     <Thickness x:Key="shell.inset">0</Thickness>
     <system:Double x:Key="shell.topGlass">88</system:Double>
     <system:Double x:Key="shell.bottomGlass">112</system:Double>
+    <!-- Kurulum: içerik üst çubuk (72) ve Geri / Devam çubuğu (48 + 32 + 40) kadar içeriden başlar ve biter; cam şerit +16. -->
+    <Thickness x:Key="wizard.inset">0,72,0,120</Thickness>
+    <system:Double x:Key="wizard.bottomGlass">136</system:Double>
 
     <!-- Canlı Akış sayıları (Mac LiveFeedCard.Stat): değer mono 17 yarı kalın, açıklama 12 gri; tek satır. -->
     <Style x:Key="HomeStatValue" TargetType="TextBlock">
@@ -540,17 +543,17 @@
     </Style>
     <!-- Canlı / durdur (btnlive): kırmızı tonlu; solda kare. -->
     <Style x:Key="LiveButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-        <Setter Property="Background" Value="{DynamicResource liveSoftBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource liveTextBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource liveBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource stopFillBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource onStopBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource stopFillBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="ContentTemplate">
             <Setter.Value>
                 <DataTemplate>
-                    <!-- Canlı/durdur (Perde): kırmızı tonlu; solda nabız atan canlı noktası (çeviri sürerken ekrandaki tek sürekli
-                         animasyon; hareket azaltılmışken sabit). -->
+                    <!-- Durdur (Perde): çeviri sürerken birincil eylem; dolu canlı zemin (stopFill), beyaz yazı; solda beyaz nabız
+                         noktası (ekrandaki tek sürekli animasyon; hareket azaltılmışken sabit). Sil/Kaldır (DangerButton) soluk kalır. -->
                     <StackPanel Orientation="Horizontal">
-                        <c:PulseDot Diameter="8" Margin="0,0,10,0" />
+                        <c:PulseDot Diameter="8" Margin="0,0,10,0" Fill="{DynamicResource onStopBrush}" />
                         <ContentPresenter Content="{Binding}" VerticalAlignment="Center" />
                     </StackPanel>
                 </DataTemplate>
@@ -558,7 +561,7 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource liveBorderBrush}" />
+                <Setter Property="Background" Value="{DynamicResource stopHoverBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -1588,7 +1591,7 @@
     <!-- Kaydırıcı (kesin kural): çubuk kartın iç genişliğini tam kaplar; çubuğun sol ucu = başlığın sol kenarı = en küçük
          etiketin sol kenarı; sağ ucu = değer etiketinin sağ kenarı = en büyük etiketin sağ kenarı. Uç etiketleri mono 12 gri. -->
     <Style x:Key="SliderRangeText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{DynamicResource mutedBrush}" />

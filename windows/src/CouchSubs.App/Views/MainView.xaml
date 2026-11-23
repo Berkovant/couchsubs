@@ -21,7 +21,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Sol: perde (16:9, sütunu tam doldurur) ve altında aynı genişlikte düğme satırı (16 aralık). -->
-        <StackPanel x:Name="Stage" VerticalAlignment="Top">
+        <StackPanel x:Name="Stage" VerticalAlignment="Center">
             <local:GamePreview x:Name="Preview" />
             <Grid Margin="{t:Sp '0,m,0,0'}">
                 <Grid.ColumnDefinitions>
@@ -56,7 +56,7 @@
         </StackPanel>
 
         <!-- Sağ: durum karoları, bildirimler, Canlı Akış ya da sessizlik nedeni; yüksekliği perde + düğmeler kadar. -->
-        <DockPanel x:Name="Right" Grid.Column="2" Height="{Binding ActualHeight, ElementName=Stage}" VerticalAlignment="Top">
+        <DockPanel x:Name="Right" Grid.Column="2" Height="{Binding ActualHeight, ElementName=Stage}" VerticalAlignment="Center">
             <!-- Dört karo (2 × 2, 12 aralık): renkli simge karesi, küçük anahtar + durum noktası, kalın değer, mono ek bilgi. -->
             <Grid x:Name="Tiles" DockPanel.Dock="Top" Margin="{t:Sp '0,0,0,m'}">
                 <Grid.ColumnDefinitions>

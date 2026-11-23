@@ -87,7 +87,7 @@ public partial class ConsoleStep : UserControl
             var name = new TextBlock { Text = string.IsNullOrEmpty(console.Name) ? "PS5" : console.Name, TextTrimming = TextTrimming.CharacterEllipsis };
             name.SetResourceReference(StyleProperty, "UnitTitleText");
             var detail = new TextBlock { Text = $"{console.Host} · {text[console.IsAwake ? "On" : "In Rest Mode"]}", FontSize = 12, Margin = Sp.T("0", "line", "0", "0") };
-            detail.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+            System.Windows.Documents.Typography.SetNumeralAlignment(detail, FontNumeralAlignment.Tabular);
             detail.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
             var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             texts.Children.Add(name);

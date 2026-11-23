@@ -45,6 +45,9 @@ public partial class MainView : UserControl
         controller.PropertyChanged += OnChanged;
         connectionWatch.Tick += async (_, _) => await controller.CheckConnectionsAsync();
         tick.Tick += (_, _) => OnTick();
+        // Uzun pencerede perde boş yüksekliği doldurur (sol sütun en az 2/3, en çok %70), kalan boşlukta içerik cam
+        // çubukların arasında dikeyde ortalanır (Mac HomeStage.leftWidth).
+        Page.SizeChanged += (_, _) => FitStage();
         Loaded += (_, _) =>
         {
             connectionWatch.Start();
@@ -123,9 +126,26 @@ public partial class MainView : UserControl
         var text = Localizer.Current;
         var running = controller.IsRunning;
         Preview.SetLive(running);
-        Preview.SetRate(running && framesPerSecond > 0 ? $"{controller.ConsoleTitle} · {text.Format("%lld Frames/s", framesPerSecond)}" : null);
+        // Kaynak + kare hızı (pencereden okunurken kaynak adı yok; Mac frameRate).
+        var rate = text.Format("%lld Frames/s", framesPerSecond);
+        var windowSource = controller.IsXbox ? controller.XboxReadsWindow : controller.Settings.FrameSource == FrameSource.CaptureWindow;
+        Preview.SetRate(running ? windowSource ? rate : $"{(controller.IsXbox ? "Xbox" : "PS5")} · {rate}" : null);
         ShowProblem();
         ShowStats();
+    }
+
+    private void FitStage()
+    {
+        if (Page.ActualWidth <= 0) return;
+        var inset = Body.Parent is Border holder ? holder.Padding : new Thickness(0);
+        var gap = Sp.V("l");
+        var total = Math.Max(0, Page.ActualWidth - 2 * gap - gap);
+        var free = Page.ActualHeight - inset.Top - inset.Bottom - 2 * gap;
+        var fill = (free - Sp.V("m") - Palette.Size["button"]) * 16 / 9;
+        var left = Math.Floor(Math.Min(Math.Max(total * 2 / 3, fill), total * 0.7));
+        Body.ColumnDefinitions[0].Width = new GridLength(Math.Max(0, left));
+        Body.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+        Body.MinHeight = Math.Max(0, free);
     }
 
     /// <summary>Kayıt arka planda hazırlanır; hazır olunca arayüz iş parçacığında gösterilir.</summary>
@@ -313,7 +333,7 @@ public partial class MainView : UserControl
         var packs = GameCatalog.PackShelf(controller.InstalledPacks);
         var game = controller.PlayedGame;
         var hasPack = game is not null && settings.GamePacks && packs.Any(item => item.Titles.Append(item.Title).Any(title => GameName.Key(title) == GameName.Key(game)));
-        GameTile.Show(text["Game"], game ?? text["Unknown Game"], hasPack ? text["Pack"] : null, game is null ? StatusTone.Idle : StatusTone.Good, "\uE9CE", IconTone.Gray, game);
+        GameTile.Show(text["Game"], game ?? text["Not Recognized"], hasPack ? text["Pack"] : null, game is null ? StatusTone.Idle : StatusTone.Good, "\uE9CE", IconTone.Gray, game);
 
         var engineTone = controller.TranslatorStatus == TranslatorStatus.EngineFailed || (running && controller.OnlineIssue is not null) ? StatusTone.Warning : StatusTone.Good;
         var engine = settings.Engine == TranslationEngine.Free ? text["Free Translation"] : settings.Engine.DisplayName();

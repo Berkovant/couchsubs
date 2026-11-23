@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -718,27 +719,107 @@ public sealed class SubtitlePlate : Border
 /// <summary>Perdenin fırçaları: sıcak sahne (görüntü yokken) ve projeksiyon ışığı.</summary>
 public static class PerdeBrushes
 {
-    /// <summary>Görüntü gelmeden önceki sıcak sahne (DSPerdeScene): yeşil-kum degrade, sağ üstte güneş, solda yeşil gölge.</summary>
+    /// <summary>
+    /// Görüntü gelmeden önceki sahne (DSPerdeScene): özgün, soyut sinematik manzara (telifli görsel yok, tamamıyla çizim).
+    /// Alacakaranlık göğü, ufukta batan güneş ve göğe vuran ışık hüzmeleri, katman katman tepeler, ufka koşan yol ve ince
+    /// amber ufuk çizgisi. Durağan. 160 × 90 birimde çizilir, alana gerilir (perde hep 16:9).
+    /// </summary>
     public static Brush Scene()
     {
+        const double w = 160, h = 90;
+        var horizon = h * 0.6;
+        var sunX = w * 0.66;
+        var amber = PerdeColors.Rgb(0xF5, 0xB8, 0x3D);
         var drawing = new DrawingGroup();
-        var bounds = new RectangleGeometry(new Rect(0, 0, 160, 90));
-        var linear = new LinearGradientBrush
+        var bounds = new RectangleGeometry(new Rect(0, 0, w, h));
+        // Gök: üstte gece mavisi, ufka doğru kızıl-amber.
+        var sky = new LinearGradientBrush
         {
-            StartPoint = new Point(0, 0), EndPoint = new Point(1, 1),
-            GradientStops = { new GradientStop(PerdeColors.Rgb(94, 116, 98), 0), new GradientStop(PerdeColors.Rgb(142, 123, 87), 0.5), new GradientStop(PerdeColors.Rgb(56, 52, 46), 1) },
+            StartPoint = new Point(0, 0), EndPoint = new Point(0, 1),
+            GradientStops =
+            {
+                new GradientStop(C(0.067, 0.078, 0.122), 0), new GradientStop(C(0.188, 0.149, 0.188), 0.36), new GradientStop(C(0.62, 0.329, 0.231), 0.52),
+                new GradientStop(C(0.937, 0.612, 0.29), 0.62), new GradientStop(C(0.937, 0.612, 0.29), 1),
+            },
         };
-        drawing.Children.Add(new GeometryDrawing(linear, null, bounds));
-        drawing.Children.Add(new GeometryDrawing(Glow(PerdeColors.Rgb(222, 168, 96), 0.65), null, new EllipseGeometry(new Point(115, 27), 64, 64)));
-        drawing.Children.Add(new GeometryDrawing(Glow(PerdeColors.Rgb(70, 96, 84), 0.8), null, new EllipseGeometry(new Point(32, 63), 64, 64)));
+        drawing.Children.Add(new GeometryDrawing(sky, null, bounds));
+        // Işık hüzmeleri: güneşten göğe beş ince kama.
+        var beams = new StreamGeometry();
+        using (var g = beams.Open())
+        {
+            foreach (var (from, to) in new[] { (-0.8, -0.66), (-0.44, -0.33), (-0.1, 0.0), (0.2, 0.28), (0.52, 0.66) })
+            {
+                g.BeginFigure(new Point(sunX, horizon), true, true);
+                g.LineTo(new Point(sunX + w * from, 0), false, false);
+                g.LineTo(new Point(sunX + w * to, 0), false, false);
+            }
+        }
+        var beamFill = new LinearGradientBrush(PerdeColors.WithAlpha(C(1, 0.85, 0.6), 0.2), Color.FromArgb(0, 255, 217, 153), new Point(0, horizon), new Point(0, 0))
+        { MappingMode = BrushMappingMode.Absolute };
+        drawing.Children.Add(new GeometryDrawing(beamFill, null, beams));
+        // Güneş ve hâlesi.
+        var halo = new RadialGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute, Center = new Point(sunX, horizon), GradientOrigin = new Point(sunX, horizon), RadiusX = w * 0.42, RadiusY = w * 0.42,
+            GradientStops =
+            {
+                new GradientStop(PerdeColors.WithAlpha(C(1, 0.78, 0.47), 0.8), 0), new GradientStop(PerdeColors.WithAlpha(C(0.95, 0.5, 0.25), 0.22), 0.5),
+                new GradientStop(Color.FromArgb(0, 242, 128, 64), 1),
+            },
+        };
+        drawing.Children.Add(new GeometryDrawing(halo, null, bounds));
+        drawing.Children.Add(new GeometryDrawing(new SolidColorBrush(C(1, 0.9, 0.72)), null, new EllipseGeometry(new Point(sunX, horizon), h * 0.08, h * 0.08)));
+        // Uzak ve yakın tepeler (güneşin altını örter).
+        drawing.Children.Add(new GeometryDrawing(new SolidColorBrush(PerdeColors.WithAlpha(C(0.231, 0.153, 0.188), 0.92)), null, Ridge(w, h, horizon, h * 0.07, 0.2, 2.3)));
+        drawing.Children.Add(new GeometryDrawing(new SolidColorBrush(C(0.122, 0.09, 0.118)), null, Ridge(w, h, horizon + h * 0.035, h * 0.05, 1.4, 3.1)));
+        var groundTop = horizon + h * 0.05;
+        var ground = new LinearGradientBrush(C(0.122, 0.09, 0.118), C(0.035, 0.035, 0.043), new Point(0, groundTop), new Point(0, h)) { MappingMode = BrushMappingMode.Absolute };
+        drawing.Children.Add(new GeometryDrawing(ground, null, new RectangleGeometry(new Rect(0, groundTop, w, h - groundTop))));
+        // Ufka koşan yol (perspektif) ve ince amber ufuk çizgisi.
+        var road = new StreamGeometry();
+        using (var g = road.Open())
+        {
+            g.BeginFigure(new Point(sunX - 1.5 * w / 1000, groundTop), true, true);
+            g.LineTo(new Point(sunX + 1.5 * w / 1000, groundTop), false, false);
+            g.LineTo(new Point(sunX + w * 0.2, h), false, false);
+            g.LineTo(new Point(sunX - w * 0.34, h), false, false);
+        }
+        var roadFill = new LinearGradientBrush(PerdeColors.WithAlpha(amber, 0.3), PerdeColors.WithAlpha(amber, 0.04), new Point(0, groundTop), new Point(0, h))
+        { MappingMode = BrushMappingMode.Absolute };
+        drawing.Children.Add(new GeometryDrawing(roadFill, null, road));
+        var line = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+            GradientStops = { new GradientStop(PerdeColors.WithAlpha(amber, 0), 0), new GradientStop(PerdeColors.WithAlpha(amber, 0.75), 0.5), new GradientStop(PerdeColors.WithAlpha(amber, 0), 1) },
+        };
+        drawing.Children.Add(new GeometryDrawing(line, null, new RectangleGeometry(new Rect(0, groundTop, w, 0.4))));
         drawing.ClipGeometry = bounds;
         var brush = new DrawingBrush(drawing) { Stretch = Stretch.Fill };
         brush.Freeze();
         return brush;
     }
 
-    private static RadialGradientBrush Glow(Color color, double alpha) =>
-        new(new GradientStopCollection { new(PerdeColors.WithAlpha(color, alpha), 0), new(PerdeColors.WithAlpha(color, 0), 1) });
+    /// <summary>Yumuşak dalgalı tepe sırası (iki sinüsün toplamı), alta kadar dolu.</summary>
+    private static Geometry Ridge(double w, double h, double baseline, double amplitude, double phase, double waves)
+    {
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(0, h), true, true);
+            const int steps = 48;
+            for (var index = 0; index <= steps; index++)
+            {
+                var t = (double)index / steps;
+                var wave = 0.6 * Math.Sin(t * Math.PI * waves + phase) + 0.4 * Math.Sin(t * Math.PI * waves * 2.7 + phase * 1.7);
+                g.LineTo(new Point(w * t, baseline - amplitude * wave - amplitude * 0.3), false, false);
+            }
+            g.LineTo(new Point(w, h), false, false);
+        }
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static Color C(double r, double g, double b) => Color.FromRgb((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
 
     /// <summary>
     /// Projeksiyon ışığı (DSProjectorLight): üst kenardan düşen geniş, yumuşak amber ışık (koyuda %16, açıkta %22). Durağan.
@@ -902,24 +983,24 @@ public sealed class PerdePreview : ContentControl
 // ───────────── Oyun kapağı ─────────────
 
 /// <summary>
-/// Kapak görseli yoksa oyunun adından türetilen degrade (DSCoverArt): her oyun hep aynı renkte, altta şehir silueti; marka
-/// öğesi yok.
+/// Oyun kapağı (DSCoverArt): kapak görseli yoksa oyunun adından ÖZGÜN TİPOGRAFİK kapak (gerçek kapak/logo kullanılmaz;
+/// telif ve mağaza riski). Her oyuna kararlı bir degrade (adın karmasından), köşe ışığı, çapraz ışık bandı ve oyunun
+/// kısaltması (GTA, RD2) iri, sıkı aralıklı ağır yazıyla. Küçük boyda (72'den küçük; simge karesi) yalnız kısaltma ortada.
 /// </summary>
 public sealed class CoverArt : FrameworkElement
 {
-    private static readonly (Color, Color, Color, Color)[] Palettes =
+    /// <summary>(üst, alt, ışık, yazı) — Mac ile aynı sekiz palet.</summary>
+    private static readonly (Color Top, Color Bottom, Color Light, Color Ink)[] Palettes =
     [
-        (C(0.949, 0.651, 0.353), C(0.784, 0.271, 0.416), C(0.165, 0.086, 0.212), C(1, 0.816, 0.541)),
-        (C(0.788, 0.471, 0.243), C(0.541, 0.231, 0.184), C(0.141, 0.078, 0.059), C(0.969, 0.851, 0.627)),
-        (C(0.243, 0.369, 0.525), C(0.122, 0.169, 0.267), C(0.051, 0.063, 0.094), C(0.624, 0.847, 1)),
-        (C(0.494, 0.604, 0.353), C(0.247, 0.322, 0.208), C(0.071, 0.102, 0.063), C(0.906, 0.941, 0.69)),
-        (C(0.949, 0.882, 0.29), C(0.878, 0.2, 0.431), C(0.102, 0.043, 0.133), C(1, 0.608, 0.816)),
-        (C(0.49, 0.529, 0.58), C(0.227, 0.247, 0.286), C(0.071, 0.078, 0.094), C(0.914, 0.863, 0.776)),
+        (C(0.957, 0.6, 0.267), C(0.6, 0.157, 0.157), C(1, 0.851, 0.6), C(1, 0.957, 0.886)),
+        (C(0.878, 0.243, 0.396), C(0.247, 0.071, 0.247), C(1, 0.616, 0.69), C(1, 0.925, 0.937)),
+        (C(0.204, 0.431, 0.851), C(0.059, 0.098, 0.282), C(0.592, 0.792, 1), C(0.902, 0.949, 1)),
+        (C(0.137, 0.682, 0.651), C(0.035, 0.184, 0.231), C(0.588, 0.969, 0.894), C(0.89, 1, 0.976)),
+        (C(0.537, 0.333, 0.91), C(0.122, 0.075, 0.29), C(0.792, 0.69, 1), C(0.957, 0.937, 1)),
+        (C(0.961, 0.749, 0.239), C(0.71, 0.31, 0.075), C(1, 0.941, 0.69), C(0.165, 0.086, 0.035)),
+        (C(0.937, 0.4, 0.29), C(0.318, 0.094, 0.408), C(1, 0.749, 0.588), C(1, 0.937, 0.91)),
+        (C(0.42, 0.455, 0.51), C(0.11, 0.122, 0.149), C(0.8, 0.82, 0.86), C(0.937, 0.945, 0.957)),
     ];
-
-    private static readonly (double X, double Y)[] Skyline =
-        [(0, 0.4), (0.08, 0.3), (0.12, 0.45), (0.2, 0.18), (0.26, 0.38), (0.34, 0.26), (0.4, 0.48), (0.5, 0.22), (0.56, 0.36), (0.64, 0.12), (0.7, 0.4),
-         (0.8, 0.28), (0.86, 0.44), (0.94, 0.2), (1, 0.35)];
 
     private static Color C(double r, double g, double b) => Color.FromRgb((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
 
@@ -929,36 +1010,106 @@ public sealed class CoverArt : FrameworkElement
     public string Seed { get => (string)GetValue(SeedProperty); set => SetValue(SeedProperty, value); }
 
     /// <summary>Kararlı karma (Mac ile aynı: 7, ×31 + Unicode değeri).</summary>
-    public static (Color Top, Color Middle, Color Bottom, Color Light) Palette(string seed)
+    public static (Color Top, Color Bottom, Color Light, Color Ink) Palette(string seed)
     {
         uint sum = 7;
         foreach (var rune in seed.EnumerateRunes()) sum = unchecked(sum * 31 + (uint)rune.Value);
         return Palettes[(int)(sum % (uint)Palettes.Length)];
     }
 
+    private static readonly CultureInfo English = CultureInfo.GetCultureInfo("en-US");
+
+    /// <summary>
+    /// Oyunun kısaltması (Mac DSCoverArt.monogram): baştaki büyük harf kısaltma (GTA V → GTA), yoksa ilk iki anlamlı sözcüğün
+    /// baş harfi + sondaki sayı ya da Roma rakamı sığarsa (Red Dead Redemption 2 → RD2); tek sözcük → ilk iki harf (Mafia → Ma).
+    /// </summary>
+    public static string Monogram(string title)
+    {
+        var words = new List<string>();
+        var current = new System.Text.StringBuilder();
+        foreach (var ch in title + " ")
+        {
+            if (char.IsLetterOrDigit(ch)) current.Append(ch);
+            else if (current.Length > 0)
+            {
+                words.Add(current.ToString());
+                current.Clear();
+            }
+        }
+        words = words.Where(w => w.Length > 1 || char.IsUpper(w[0]) || char.IsDigit(w[0])).ToList();
+        if (words.Count == 0) return "?";
+        var first = words[0];
+        if (first.Length is >= 2 and <= 4 && first == first.ToUpper(English) && first.All(char.IsLetter) && !IsRoman(first)) return first;
+        string[] skip = ["the", "of", "a", "an", "and", "to", "in", "on", "for"];
+        var numeral = words.Count > 1 && IsNumeral(words[^1]) ? words[^1] : null;
+        var significant = words.Where(w => !skip.Contains(w.ToLower(English)) && !IsNumeral(w)).ToList();
+        string result;
+        if (significant.Count >= 2) result = string.Concat(significant.Take(2).Select(w => w[..1].ToUpper(English)));
+        else
+        {
+            var word = significant.FirstOrDefault() ?? first;
+            result = word[..1].ToUpper(English) + (word.Length > 1 ? word.Substring(1, 1).ToLower(English) : "");
+        }
+        if (numeral is not null && result.Length + numeral.Length <= 3) result += numeral;
+        return result;
+    }
+
+    private static bool IsNumeral(string word) => word.All(char.IsDigit) || IsRoman(word);
+
+    private static bool IsRoman(string word) => word.Length is > 0 and <= 4 && word.All(ch => ch is 'I' or 'V' or 'X');
+
     protected override void OnRender(DrawingContext context)
     {
         var w = ActualWidth;
         var h = ActualHeight;
         if (w <= 0 || h <= 0) return;
-        var (top, middle, bottom, light) = Palette(Seed ?? "");
+        var (top, bottom, light, ink) = Palette(Seed ?? "");
+        var span = Math.Max(w, h);
         var rect = new Rect(0, 0, w, h);
-        context.DrawRectangle(new LinearGradientBrush(new GradientStopCollection { new(top, 0), new(middle, 0.5), new(bottom, 1) }, new Point(0.4, 0), new Point(0.6, 1)), null, rect);
-        var glow = new RadialGradientBrush(light, Color.FromArgb(0, light.R, light.G, light.B))
+        context.PushClip(new RectangleGeometry(rect));
+        context.DrawRectangle(new LinearGradientBrush(top, bottom, new Point(0.15, 0), new Point(0.85, 1)), null, rect);
+        var glow = new RadialGradientBrush(PerdeColors.WithAlpha(light, 0.7), PerdeColors.WithAlpha(light, 0))
         {
-            MappingMode = BrushMappingMode.Absolute, Center = new Point(w * 0.62, h * 0.3), GradientOrigin = new Point(w * 0.62, h * 0.3), RadiusX = w * 0.55, RadiusY = w * 0.55,
+            MappingMode = BrushMappingMode.Absolute, Center = new Point(w * 0.9, h * 0.05), GradientOrigin = new Point(w * 0.9, h * 0.05), RadiusX = span * 0.7, RadiusY = span * 0.7,
         };
         context.DrawRectangle(glow, null, rect);
-        var band = h * 0.42;
-        var geometry = new StreamGeometry();
-        using (var g = geometry.Open())
+        // Çapraz ışık bandı (28°).
+        context.PushTransform(new RotateTransform(28, w * 0.64, h * 0.4));
+        var band = new LinearGradientBrush
         {
-            g.BeginFigure(new Point(0, h), true, true);
-            foreach (var (x, y) in Skyline) g.LineTo(new Point(w * x, h - band + band * y), false, false);
-            g.LineTo(new Point(w, h), false, false);
+            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+            GradientStops = { new GradientStop(Color.FromArgb(0, 255, 255, 255), 0), new GradientStop(Color.FromArgb(0x29, 255, 255, 255), 0.5), new GradientStop(Color.FromArgb(0, 255, 255, 255), 1) },
+        };
+        context.DrawRectangle(band, null, new Rect(w * 0.64 - span * 0.15, h * 0.4 - span * 1.1, span * 0.3, span * 2.2));
+        context.Pop();
+        var mark = Monogram(Seed ?? "");
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var face = new Typeface(new FontFamily("Segoe UI Variable Display, Segoe UI"), FontStyles.Normal, FontWeights.Black, FontStretches.Normal);
+        if (Math.Min(w, h) < 72)
+        {
+            var size = Math.Min(w, h) * (mark.Length > 2 ? 0.34 : 0.44);
+            var text = new FormattedText(mark, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, size, new SolidColorBrush(ink), dpi);
+            if (text.Width > w * 0.9) text.SetFontSize(size * w * 0.9 / text.Width);
+            context.DrawText(text, new Point((w - text.Width) / 2, (h - text.Height) / 2));
         }
-        geometry.Freeze();
-        context.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), null, geometry);
+        else
+        {
+            // İri kısaltma üst bölgede; altında kısa çizgi. Başlık (GameCover) alttaki scrim'in üstünde kalır.
+            var size = w * (mark.Length > 2 ? 0.42 : 0.56);
+            var text = new FormattedText(mark, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, size, new SolidColorBrush(PerdeColors.WithAlpha(ink, 0.94)), dpi);
+            var room = w * (1 - 0.09 - 0.06);
+            if (text.WidthIncludingTrailingWhitespace > room) text.SetFontSize(size * room / text.WidthIncludingTrailingWhitespace);
+            var origin = new Point(w * 0.09, h * 0.1);
+            var shadow = new FormattedText(mark, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, text.Height > 0 ? size : size,
+                new SolidColorBrush(PerdeColors.WithAlpha(bottom, 0.5)), dpi);
+            if (shadow.WidthIncludingTrailingWhitespace > room) shadow.SetFontSize(size * room / shadow.WidthIncludingTrailingWhitespace);
+            context.DrawText(shadow, new Point(origin.X, origin.Y + Math.Max(1, w * 0.015)));
+            context.DrawText(text, origin);
+            var lineY = origin.Y + text.Baseline + text.Height * 0.12;
+            var lineHeight = Math.Max(2, w * 0.02);
+            context.DrawRoundedRectangle(new SolidColorBrush(PerdeColors.WithAlpha(ink, 0.75)), null, new Rect(origin.X, lineY, w * 0.2, lineHeight), lineHeight / 2, lineHeight / 2);
+        }
+        context.Pop();
     }
 }
 

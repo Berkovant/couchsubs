@@ -30,7 +30,7 @@ public sealed class HomeTile : Button
     private readonly ContentControl icon = new() { Width = 36, Height = 36, Focusable = false, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock key = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly Ellipse dot = new() { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("xxs", "0", "0", "0") };
-    private readonly TextBlock value = new() { FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock value = new() { FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 40 };
     private readonly TextBlock detail = new() { FontSize = 11, FontWeight = FontWeights.Medium, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
 
     public HomeTile()
@@ -45,7 +45,7 @@ public sealed class HomeTile : Button
         key.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
         value.SetResourceReference(TextBlock.ForegroundProperty, "textBrush");
         detail.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
-        detail.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        System.Windows.Documents.Typography.SetNumeralAlignment(detail, FontNumeralAlignment.Tabular);
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(key);
         head.Children.Add(dot);
@@ -145,7 +145,6 @@ public sealed class GamePreview : ContentControl
     private readonly Grid area = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
     private readonly SubtitlePlate plate = new() { VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
     private readonly StackPanel pills = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-    private readonly Chip liveChip = new() { Tone = ChipTone.Glass, Height = 28 };
     private readonly Chip rateChip = new() { Tone = ChipTone.Glass, ShowDot = false, Height = 28 };
     private readonly Border reflection = new() { CornerRadius = new CornerRadius(20) };
     private WriteableBitmap? bitmap;
@@ -170,8 +169,6 @@ public sealed class GamePreview : ContentControl
         area.IsHitTestVisible = false;
         stage.Children.Add(area);
         stage.Children.Add(plate);
-        rateChip.Margin = Sp.T("xs", "0", "0", "0");
-        pills.Children.Add(liveChip);
         pills.Children.Add(rateChip);
         pills.Margin = Sp.T("s");
         stage.Children.Add(pills);
@@ -191,38 +188,53 @@ public sealed class GamePreview : ContentControl
         SetLive(false);
     }
 
-    /// <summary>Çeviri sürüyorsa CANLI (nabız atan kırmızı nokta), yoksa DURDU (soluk nokta).</summary>
+    /// <summary>
+    /// Çeviri durumu: perdede CANLI hapı yok (durum tek yerde, üst çubuktaki "Çeviri Açık"); canlıyken alttaki amber yansıma
+    /// güçlenir, boşta görüntü yoksa örnek altyazı plakası altyazının nerede ve nasıl görüneceğini gösterir.
+    /// </summary>
     public void SetLive(bool running)
     {
-        var text = Localizer.Current[running ? "LIVE" : "STOPPED"];
-        if (liveChip.Text != text) liveChip.Text = text;
         if (live == running && reflection.Effect is not null) return;
         live = running;
-        liveChip.Tone = running ? ChipTone.GlassLive : ChipTone.Glass;
         reflection.Effect = PerdeEffects.AmberGlow(52, 14, running ? 0.45 : 0.25);
+        ShowSample();
     }
 
-    /// <summary>Sağ üstteki mono bilgi ("PS5 · 10 Kare/sn"); boşsa gizli.</summary>
+    /// <summary>Boşta (çeviri durmuş, görüntü yok, gösterilen satır yok) örnek plaka.</summary>
+    private void ShowSample()
+    {
+        if (lastLine is not null) return;
+        if (!live && image.Source is null)
+        {
+            plate.Show(null, Localizer.Current["Subtitles will appear here while you play."], 17);
+            plate.Visibility = Visibility.Visible;
+            Layout();
+        }
+        else plate.Visibility = Visibility.Collapsed;
+    }
+
+    private string? lastLine;
+
+    /// <summary>Sağ üstteki cam hap: kaynak + kare hızı ("PS5 · Saniyede 10 Kare"; sans, sabit genişlikte rakam); boşsa gizli.</summary>
     public void SetRate(string? text)
     {
-        rateChip.Text = text ?? "";
+        if (rateChip.Text != (text ?? "")) rateChip.Text = text ?? "";
         rateChip.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
         if (rateChip.Child is StackPanel row && row.Children.OfType<TextBlock>().LastOrDefault() is { } label)
-        {
-            label.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-            label.FontWeight = FontWeights.Medium;
-        }
+            System.Windows.Documents.Typography.SetNumeralAlignment(label, FontNumeralAlignment.Tabular);
     }
 
     /// <summary>Son çeviri (konuşanın adı amber); boşsa plaka gizli. Yeni satır kısaca aşağıdan gelir (hareket kapısına göre).</summary>
     public void SetLine(string? line)
     {
-        if (string.IsNullOrWhiteSpace(line))
+        lastLine = string.IsNullOrWhiteSpace(line) ? null : line;
+        if (lastLine is null)
         {
             plate.Visibility = Visibility.Collapsed;
+            ShowSample();
             return;
         }
-        var (speaker, body) = SubtitlePlate.Split(line);
+        var (speaker, body) = SubtitlePlate.Split(line!);
         plate.Show(speaker, body, 17);
         plate.Visibility = Visibility.Visible;
         Layout();
@@ -242,6 +254,7 @@ public sealed class GamePreview : ContentControl
         {
             image.Source = null;
             bitmap = null;
+            ShowSample();
             return;
         }
         var now = Environment.TickCount64;
@@ -250,7 +263,11 @@ public sealed class GamePreview : ContentControl
         if (bitmap is null || bitmap.PixelWidth != frame.Width || bitmap.PixelHeight != frame.Height)
             bitmap = new WriteableBitmap(frame.Width, frame.Height, 96, 96, PixelFormats.Bgr32, null);
         bitmap.WritePixels(new Int32Rect(0, 0, frame.Width, frame.Height), frame.Pixels, frame.Stride, 0);
-        image.Source = bitmap;
+        if (image.Source != bitmap)
+        {
+            image.Source = bitmap;
+            ShowSample();
+        }
     }
 
     private void Layout()

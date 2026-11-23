@@ -324,7 +324,7 @@
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{TemplateBinding TvName}" FontSize="{DynamicResource bodyStrongFontSize}" FontWeight="{DynamicResource bodyStrongFontWeight}"
                                                Foreground="{DynamicResource textBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{TemplateBinding Detail}" FontFamily="Cascadia Mono, Consolas" FontSize="11" FontWeight="Medium"
+                                    <TextBlock Text="{TemplateBinding Detail}" FontSize="12" FontWeight="Medium" Typography.NumeralAlignment="Tabular"
                                                Foreground="{DynamicResource mutedBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{m:Sp '0,line,0,0'}" />
                                 </StackPanel>
                             </DockPanel>

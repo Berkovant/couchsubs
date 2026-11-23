@@ -92,6 +92,7 @@ public partial class OnboardingView : UserControl
         };
         ShowSteps();
         // Adım 8 px aşağıdan kayarak gelir (hareket azaltılmışsa yalnız solma).
+        StepScroll.ScrollToTop();
         if (StepHost.Content is FrameworkElement page) Theme.Motion.EnterFrom(page, 12, Theme.Motion.Page);
         BackButton.Visibility = controller.Step == OnboardingStep.Welcome ? Visibility.Collapsed : Visibility.Visible;
         ContinueButton.Visibility = controller.Step == OnboardingStep.Test ? Visibility.Hidden : Visibility.Visible;

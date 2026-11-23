@@ -99,6 +99,9 @@ public static class ThemeManager
             new(Color.FromArgb(0x00, bg.R, bg.G, bg.B), 0), new(Color.FromArgb(0xD9, bg.R, bg.G, bg.B), 0.3), new(Color.FromArgb(0xF2, bg.R, bg.G, bg.B), 1),
         }, 90));
         resources["glassFillBrush"] = Frozen(new SolidColorBrush(Color.FromArgb((byte)Math.Min(255, glass.A + 0x30), glass.R, glass.G, glass.B)));
+        // Durdur düğmesi: üzerine gelince dolu canlı zemin %8 koyulaşır (Mac: siyah %8 örtü).
+        var stop = Get("stopFill");
+        resources["stopHoverBrush"] = Frozen(new SolidColorBrush(Color.FromRgb((byte)(stop.R * 0.92), (byte)(stop.G * 0.92), (byte)(stop.B * 0.92))));
         resources["focusGlowColor"] = Get("amber");
         resources["shadowColor"] = dark ? Colors.Black : Color.FromRgb(0x3C, 0x28, 0x0A);
         resources["raisedShadowOpacity"] = dark ? 0.45 : 0.16;
