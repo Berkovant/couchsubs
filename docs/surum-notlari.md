@@ -6,13 +6,16 @@ CouchSubs'ın yeni deneme sürümü. Türkçe dil desteği olmayan PS5 oyunları
 
 **Bu sürümde yeni**
 
-- **LG'de kararma:** Çeviri başlarken ve PS tuşundan dönünce ekranın 2 sn aralıkla kararması giderildi (TV uygulaması 0.9.82).
-- **Android TV'de çökme:** Bazı Android TV'lerde altyazı katmanı çizilirken uygulama çöküyorsa bir sonraki açılışta daha güvenli çizime geçiyor (TV uygulaması 0.9.83).
-- **Android TV'de "Uygulama içinde":** Görüntü modu "Uygulama içinde" seçiliyse TV uygulaması kendiliğinden katmana geçmiyor (TV uygulaması 0.9.84).
-- **LG'de "TV bağlantıyı reddetti":** TV bağlantıyı reddettiğinde "TV yanıt vermedi" yerine TV'yi yeniden başlatma önerisi ve webOS Hub uyarısı çıkıyor.
-- **Xbox'ta oyun seçimi:** Oyun tanınmazsa son seçtiğiniz oyun kullanılıyor; GTA 6 telefonu seçilince hemen açılıyor.
-- **Açık zeminde koyu yazı:** Duvardaki kâğıt ilan gibi açık zemin üstündeki koyu yazılar da okunup çevriliyor (#1124).
-- **Eksik Türkçe metinler** tamamlandı.
+- **Ekranı çevir:** Çeviri özgün yazının yerinde ve boyunda çiziliyor; tuş simgeleri ve fotoğraflar açıkta kalıyor. Daha önce görülen yazıların çevirisi beklemeden anında çıkıyor (TV uygulaması 0.9.85).
+- **TV'nin adresi değişince:** TV ağda yeni adres alırsa kendiliğinden yeniden bulunuyor. Ayarlar'dan TV'yi Değiştir ya da Eşleşmeyi Kaldır seçebilirsiniz.
+- **LG'de güncelleme:** Güncellemeden sonra TV'de eski sürüm çalışmayı sürdürmüyor (TV uygulaması 0.9.88).
+- **LG'de ilk oturumda kararma:** Çeviri ilk kez başladığında ekranın kararması giderildi (TV uygulaması 0.9.87).
+- **PS5'in Türkçe menü yazıları** altyazı sanılıp çevrilmiyor.
+- **Açık mavi kâğıttaki ilan** altyazı sanılmıyor.
+- **GTA 6 telefon paneli:** Yazı boyu ve yeri el titremesiyle değişmiyor.
+- **Dublajda ses cinsiyeti:** Adı tanınmayan erkek karakter kadın sesiyle okunmuyor; tanınmayan karakterin sesini Ayarlar'dan seçebilirsiniz.
+
+**beta.89'da gelenler:** LG'de 2 sn aralıkla kararma (TV uygulaması 0.9.82), Android TV'de çökme ve "Uygulama içinde" modu, LG "TV bağlantıyı reddetti" uyarısı, Xbox'ta oyun seçimi, açık zeminde koyu yazı, eksik Türkçe metinler.
 
 **beta.88'de gelenler:** yeni tasarım (Mac, Windows), Xbox'ta "Uzaktan yürütme başlatıldı / durdu" döngüsü, PS5'te bağlan-kop döngüsü, Windows'ta nadir çökmeye karşı önlem.
 
