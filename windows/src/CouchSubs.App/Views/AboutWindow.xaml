@@ -8,10 +8,17 @@
         xmlns:t="clr-namespace:CouchSubs.App.Theme"
         Title="{t:T 'About CouchSubs'}" Width="460" SizeToContent="Height" ResizeMode="NoResize" ShowInTaskbar="True"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource windowBackgroundBrush}" Foreground="{DynamicResource textPrimaryBrush}">
+    <!-- Perde: arkada üstten düşen durağan projeksiyon ışığı; logonun arkasında amber ışıma. -->
+    <Grid>
+    <c:ProjectorLight />
     <Border Style="{StaticResource CardBorder}" Margin="{t:Sp 'l'}">
         <StackPanel>
             <TextBlock Text="{t:T 'About'}" Style="{StaticResource SectionLabel}" />
-            <c:CouchLogo Width="110" Height="80" HorizontalAlignment="Center" Margin="{t:Sp '0,xs,0,0'}" />
+            <c:CouchLogo Width="110" Height="80" HorizontalAlignment="Center" Margin="{t:Sp '0,xs,0,0'}" Animated="False">
+                <c:CouchLogo.Effect>
+                    <DropShadowEffect BlurRadius="48" ShadowDepth="0" Opacity="0.45" Color="#F5B83D" RenderingBias="Performance" />
+                </c:CouchLogo.Effect>
+            </c:CouchLogo>
             <TextBlock Text="CouchSubs" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="{t:Sp '0,s,0,0'}" />
             <TextBlock x:Name="Version" Style="{StaticResource MonoText}" Foreground="{DynamicResource textSecondaryBrush}" HorizontalAlignment="Center" Margin="{t:Sp '0,xxs,0,s'}" />
             <TextBlock Text="{t:T 'Free and open source under the GNU AGPL-3.0 license.'}" Style="{StaticResource HintText}" TextAlignment="Center" />
@@ -32,4 +39,5 @@
             <Button Content="{t:T 'Close'}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Margin="{t:Sp '0,m,0,0'}" IsDefault="True" IsCancel="True" Click="OnClose" />
         </StackPanel>
     </Border>
+    </Grid>
 </Window>

@@ -42,8 +42,13 @@ public sealed class DesignGallery : UserControl
 
         var grid = new Grid { Margin = Sp.T("l") };
         grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Sp.V("l")) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Sp.V("l")) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        var perde = PerdeColumn();
+        Grid.SetColumn(perde, 4);
+        grid.Children.Add(perde);
         var left = new Card { Title = "Düğmeler" };
         var buttons = new WrapPanel();
         foreach (var (style, label) in new[] { ("PrimaryButton", "Çeviriyi Başlat"), ("LiveButton", "Çeviriyi Durdur"), ("SecondaryButton", "Ekranı Çevir"),
@@ -88,6 +93,40 @@ public sealed class DesignGallery : UserControl
         grid.Children.Add(right);
         root.Children.Add(grid);
         Content = root;
+    }
+
+    /// <summary>
+    /// Perde bileşenleri (Mac PerdeCatalog): durum hapları, nabız / çubuk yükleyici / arama halkası, simge kareleri, adım
+    /// çizelgesi, perde önizlemesi ve altyazı plakası, oyun kapakları (seçili ve seçisiz), başarı anı.
+    /// </summary>
+    private static UIElement PerdeColumn()
+    {
+        var stack = new SpacedStack { Gap = "m" };
+        var chips = new WrapPanel();
+        foreach (var (tone, label) in new[] { (ChipTone.Ok, "Eşli"), (ChipTone.Live, "Canlı"), (ChipTone.Amber, "Aranıyor…"), (ChipTone.Info, "Bilgi"), (ChipTone.Muted, "Durdu") })
+            chips.Children.Add(new Chip { Text = label, Tone = tone, Margin = Sp.T("0", "0", "xs", "xs") });
+        stack.Children.Add(chips);
+        var loaders = new StackPanel { Orientation = Orientation.Horizontal };
+        loaders.Children.Add(new PulseDot { Diameter = 10, Margin = Sp.T("0", "0", "m", "0") });
+        loaders.Children.Add(new BarsLoader { Margin = Sp.T("0", "0", "m", "0") });
+        loaders.Children.Add(new SearchRings { Size = 48, Margin = Sp.T("0", "0", "m", "0") });
+        foreach (var tone in new[] { IconTone.Amber, IconTone.Peach, IconTone.Olive, IconTone.Teal, IconTone.Plum, IconTone.Sky, IconTone.Gray })
+            loaders.Children.Add(new IconSquare { Glyph = "", Tone = tone, Size = 28, Margin = Sp.T("0", "0", "xxs", "0") });
+        stack.Children.Add(loaders);
+        stack.Children.Add(new StepTimeline
+        {
+            Steps = [new("PlayStation Hesabı", "İkinci hesapla giriş yapıldı.", StepPhase.Done), new("PS5 Bulundu", null, StepPhase.Current), new("Eşleşme ve İlk Görüntü", null, StepPhase.Todo)],
+        });
+        var preview = new PerdePreview { ShowArea = true };
+        preview.SetLine("Lucia:", "Hazır olduğunda haber ver, gidiyoruz.", 13);
+        preview.SetPills(new Chip { Text = "CANLI", Tone = ChipTone.GlassLive });
+        stack.Children.Add(preview);
+        var covers = new StackPanel { Orientation = Orientation.Horizontal, Margin = Sp.T("xxs", "xs", "0", "xs") };
+        covers.Children.Add(new GameCover("Red Dead Redemption 2", "Paket Var", true, 88) { Margin = Sp.T("0", "0", "m", "0") });
+        covers.Children.Add(new GameCover("Grand Theft Auto V", null, false, 88) { Margin = Sp.T("0", "0", "m", "0") });
+        covers.Children.Add(new SuccessMoment("Eşleşti") { VerticalAlignment = VerticalAlignment.Center });
+        stack.Children.Add(covers);
+        return new Card { Title = "Perde", Content = stack, VerticalAlignment = VerticalAlignment.Top };
     }
 
     private static Border Group(string groupStyle, string itemStyle, string[] labels, int selected)

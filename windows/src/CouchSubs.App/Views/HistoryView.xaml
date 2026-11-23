@@ -16,15 +16,21 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Row" Background="Transparent" BorderBrush="{DynamicResource dividerBrush}" BorderThickness="0,0,0,1" Padding="{t:Sp 'l,s'}">
-                            <ContentPresenter />
-                        </Border>
+                        <!-- Perde: seçili satır amber yumuşak zemin + solda 3 px amber çubuk; satır arası kıl çizgi. -->
+                        <Grid>
+                            <Border x:Name="Row" Background="Transparent" BorderBrush="{DynamicResource tileBorderBrush}" BorderThickness="0,0,0,1" Padding="{t:Sp 'l,s'}">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Mark" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="{t:Sp '0,xs'}" Background="{DynamicResource amberBrush}"
+                                    Visibility="Collapsed" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource surface2Brush}" />
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource fieldBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource surface2Brush}" />
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource amberSoftBrush}" />
+                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -32,6 +38,8 @@
             </Setter>
         </Style>
     </UserControl.Resources>
+    <!-- Cam üst çubuk ve reklam şeridi kadar içeriden (shell.inset); tablo kartın içinde kayar. -->
+    <Border Padding="{DynamicResource shell.inset}">
     <Grid Margin="{t:Sp 'l'}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -46,7 +54,7 @@
                 <ColumnDefinition Width="12" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Border Height="48" CornerRadius="24" Background="{DynamicResource surfaceBrush}" BorderBrush="{DynamicResource borderBrush}" BorderThickness="1" Padding="{t:Sp 'm,0'}">
+            <Border Height="48" CornerRadius="24" Background="{DynamicResource fieldBrush}" BorderBrush="{DynamicResource borderBrush}" BorderThickness="1" Padding="{t:Sp 'm,0'}">
                 <DockPanel>
                     <Path DockPanel.Dock="Left" Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource textSecondaryBrush}" StrokeThickness="2"
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M11,4 A7,7 0 1 1 10.99,4 M20,20 L16,16" VerticalAlignment="Center" />
@@ -83,7 +91,7 @@
                         <ColumnDefinition Width="16" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="96" />
+                        <ColumnDefinition Width="136" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{t:T 'Time'}" Style="{StaticResource LabelText}" />
                     <TextBlock Grid.Column="2" Text="{t:T 'Turkish'}" Style="{StaticResource LabelText}" />
@@ -101,12 +109,16 @@
                             <Button x:Name="ReportButton" Content="{t:T 'Report a Wrong Translation'}" Style="{StaticResource SmallSecondaryButton}" Height="40" Margin="{t:Sp 'xs,0,0,0'}" Click="OnReport" />
                             <Button x:Name="ClearAll" Content="{t:T 'Clear History'}" Style="{StaticResource SmallSecondaryButton}" Height="40" Margin="{t:Sp 'xs,0,0,0'}" Click="OnClear" />
                         </StackPanel>
-                        <TextBlock x:Name="Summary" FontSize="13" Foreground="{DynamicResource textSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                        <TextBlock x:Name="Summary" FontSize="13" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
                     </DockPanel>
                 </Border>
 
                 <Grid>
-                    <TextBlock x:Name="EmptyHint" Style="{StaticResource SecondaryText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="{t:Sp 'xxl'}" TextAlignment="Center" />
+                    <!-- Boş durum: 48'lik simge karesi ve tek cümle, ortada. -->
+                    <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{t:Sp 'xxl'}">
+                        <c:IconSquare x:Name="EmptyIcon" Size="48" Tone="Gray" Glyph="&#xE8BD;" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="EmptyHint" Style="{StaticResource SecondaryText}" HorizontalAlignment="Center" TextAlignment="Center" Margin="{t:Sp '0,m,0,0'}" />
+                    </StackPanel>
                     <ListBox x:Name="Lines" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource RowItem}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" KeyDown="OnLinesKey">
                         <ListBox.ContextMenu>
@@ -125,12 +137,14 @@
                                         <ColumnDefinition Width="16" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="16" />
-                                        <ColumnDefinition Width="96" />
+                                        <ColumnDefinition Width="136" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Time}" Style="{StaticResource MonoText}" FontSize="12" Foreground="{DynamicResource textSecondaryBrush}" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Translation}" FontSize="14" FontWeight="Medium" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="4" Text="{Binding Source}" FontSize="13" Foreground="{DynamicResource textSecondaryBrush}" VerticalAlignment="Center" />
-                                    <c:Badge Grid.Column="6" Content="{Binding Origin}" Tone="{Binding Tone}" />
+                                    <!-- Koyu temada da yüksek kontrast: çeviri ana yazı renginde, İngilizcesi ve saat gri (soluk değil). -->
+                                    <TextBlock Text="{Binding Time}" Style="{StaticResource MonoText}" FontSize="12" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Translation}" FontSize="14" FontWeight="Medium" Foreground="{DynamicResource textBrush}" VerticalAlignment="Center"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Source}" FontSize="13" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <c:Chip Grid.Column="6" Text="{Binding Origin}" Tone="{Binding Tone}" Glyph="{Binding Glyph}" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -139,4 +153,5 @@
             </DockPanel>
         </Border>
     </Grid>
+    </Border>
 </UserControl>

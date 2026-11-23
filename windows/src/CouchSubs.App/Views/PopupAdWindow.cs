@@ -34,15 +34,22 @@ public static class PopupAdWindow
         // IsVisible tek başına yetmez: ekran görüntüsü kipinde ve açılışın ilk karelerinde pencere henüz gerçekten
         // gösterilmemiş olabilir (WPF "Cannot set Owner property to a Window that has not been shown previously").
         if (!owner.IsVisible || !owner.IsLoaded || PresentationSource.FromVisual(owner) is null) return;
-        var now = DateTime.Now;
-        if (!PopupAdPolicy.ShouldShow(moment, now, UiPreferences.Current.LastPopupAd, controller.IsRunning, controller.Step == OnboardingStep.Done,
-                StreamWindow.IsOpen, Ads.Count > 0))
-            return;
-        UiPreferences.Save(UiPreferences.Current with { LastPopupAd = now });
-        if (PopupAdPolicy.Pick(Ads, now) is not { } ad) return;
-        // Reklam hiçbir koşulda uygulamayı düşürmemeli.
-        try { Show(owner, ad); }
-        catch (Exception e) { SubtitleLog.Write($"Açılır reklam gösterilemedi: {e.GetType().Name}: {e.Message}"); }
+        // Reklam hiçbir koşulda uygulamayı düşürmemeli (tercih kaydı, görsel, pencere).
+        try
+        {
+            var now = DateTime.Now;
+            if (!PopupAdPolicy.ShouldShow(moment, now, UiPreferences.Current.LastPopupAd, controller.IsRunning, controller.Step == OnboardingStep.Done,
+                    StreamWindow.IsOpen, Ads.Count > 0))
+                return;
+            UiPreferences.Save(UiPreferences.Current with { LastPopupAd = now });
+            if (PopupAdPolicy.Pick(Ads, now) is not { } ad) return;
+            Show(owner, ad);
+        }
+        catch (Exception e)
+        {
+            SubtitleLog.Write($"Açılır reklam gösterilemedi: {e.GetType().Name}: {e.Message}");
+            StartupGuard.Log("Açılır reklam gösterilemedi", e);
+        }
     }
 
     private static void Show(Window owner, PopupAd ad)
@@ -74,12 +81,20 @@ public static class PopupAdWindow
             Child = new TextBlock { Text = Localizer.Current["AD"], FontSize = 10, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") },
         };
+        // Kapat: 32'lik cam daire (siyah %45 + beyaz %12 kenar), Segoe Fluent kapat simgesi.
         var close = new Button
         {
-            Content = "×", Width = 32, Height = 32, MinHeight = 32, Padding = new Thickness(0), FontSize = 16, Foreground = Brushes.White,
-            Background = new SolidColorBrush(Color.FromArgb(0x73, 0, 0, 0)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = Sp.T("s"), ToolTip = Localizer.Current["Close"],
+            BorderThickness = new Thickness(1),
+            Width = 32, Height = 32, MinHeight = 32, Padding = new Thickness(0), Foreground = Brushes.White,
+            Background = new SolidColorBrush(Color.FromArgb(0x73, 0, 0, 0)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = Sp.T("s"), ToolTip = Localizer.Current["Close"],
+            Content = new TextBlock
+            {
+                Text = "", FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center, FontFamily = (FontFamily)Application.Current.FindResource("IconFont"),
+            },
         };
+        System.Windows.Automation.AutomationProperties.SetName(close, Localizer.Current["Close"]);
         close.SetResourceReference(FrameworkElement.StyleProperty, "ButtonBase");
         close.Click += (_, _) => window.Close();
         var stage = new Grid { Width = picture.Width, Height = picture.Height, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };

@@ -21,7 +21,11 @@ namespace CouchSubs.App.Views;
 public partial class HistoryView : UserControl
 {
     /// <summary>Tablodaki bir satır (saat yerel, kaynak etiketi çevrilmiş).</summary>
-    public sealed record Row(string Time, string Translation, string Source, string Origin, PillTone Tone, SubtitleHistory.Entry Entry);
+    public sealed record Row(string Time, string Translation, string Source, string Origin, ChipTone Tone, SubtitleHistory.Entry Entry)
+    {
+        /// <summary>Paket satırında paket simgesi (Perde: amber hap + simge), çeviride nokta.</summary>
+        public string? Glyph => Tone == ChipTone.Amber ? "\uE7B8" : null;
+    }
 
     private const string IssuePage = "https://github.com/yorulmazsinan/couchsubs/issues/new";
 
@@ -77,11 +81,12 @@ public partial class HistoryView : UserControl
             entry.Translation,
             entry.Source,
             entry.Origin == LineOrigin.Pack ? text["Pack"] : engine,
-            entry.Origin == LineOrigin.Pack ? PillTone.Attention : PillTone.Idle,
+            entry.Origin == LineOrigin.Pack ? ChipTone.Amber : ChipTone.Muted,
             entry)).ToList();
         var empty = shown.Count == 0;
         EmptyHint.Text = all.Count == 0 ? text["No subtitles yet. Lines translated while you play appear here."] : text["No lines match this search."];
-        EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        EmptyPanel.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        EmptyIcon.Glyph = all.Count == 0 ? "\uE8BD" : "\uE721";
         Lines.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
         var today = shown.Count(entry => entry.Date.ToLocalTime().Date == DateTime.Now.Date);
         Summary.Text = controller.PlayedGame is { } game ? text.Format("%@ · Today · %lld Lines", game, today) : text.Format("Today · %lld Lines", today);
