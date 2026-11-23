@@ -83,6 +83,17 @@
         </Setter>
     </Style>
 
+    <!-- Kaydırıcının değeri (başlığın sağında, sağ kenarı çubuğun sağ ucunda): mono 13 yarı kalın amber. -->
+    <Style x:Key="SliderValueText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource amberTextBrush}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+    </Style>
+
     <!-- Kabuk: sayfaların cam çubuklar kadar içeriden başlayıp bitmesi (ShellWindow pencerenin kendi kaynaklarında günceller;
          sayfa tek başına çizildiğinde sıfır) ve cam şeritlerin yükseklikleri (çubuk + 16 yumuşak geçiş; reklam şeridi + 24). -->
     <Thickness x:Key="shell.inset">0</Thickness>
@@ -1587,16 +1598,6 @@
     <Style x:Key="SliderRange" TargetType="DockPanel">
         <Setter Property="Margin" Value="{m:Sp '0,xxs,0,0'}" />
         <Setter Property="LastChildFill" Value="False" />
-    </Style>
-    <!-- Kaydırıcının değeri (başlığın sağında, sağ kenarı çubuğun sağ ucunda): mono 13 yarı kalın amber. -->
-    <Style x:Key="SliderValueText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource amberTextBrush}" />
-        <Setter Property="TextWrapping" Value="NoWrap" />
-        <Setter Property="VerticalAlignment" Value="Bottom" />
-        <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
     </Style>
     <!-- Başlık + açıklama (DSSectionTitle): aralık her yerde titleBody 6. -->
     <Style TargetType="c:SectionTitle">
