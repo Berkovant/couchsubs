@@ -196,6 +196,8 @@ private struct WizardFrame: View {
         }
         .frame(maxWidth: DS.size("contentMax"))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Ortam ışığı (Core Animation, çok yavaş; hareket kapısı kapalıyken durağan).
+        .background { DSAmbientGlow(intensity: 0.7) }
         .background(Color.dsBackground)
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: model.step)
     }
@@ -353,15 +355,15 @@ private struct ConsoleChoiceStep: View {
 
     var body: some View {
         HStack(spacing: DS.space("l")) {
-            option(badge: "PS5", title: "PlayStation 5", sub: "With Remote Play", selected: !model.isXbox && !choice.window) {
+            option(symbol: "playstation.logo", tone: .sky, title: "PlayStation 5", sub: "With Remote Play", selected: !model.isXbox && !choice.window) {
                 choice.window = false
                 model.choosePlatform(.playstation)
             }
-            option(badge: "Xbox", title: "Xbox Series", sub: "With Remote Features", selected: model.isXbox && !choice.window) {
+            option(symbol: "xbox.logo", tone: .olive, title: "Xbox Series", sub: "With Remote Features", selected: model.isXbox && !choice.window) {
                 choice.window = false
                 model.choosePlatform(.xbox)
             }
-            option(badge: String(localized: "Window"), title: "Game Window", sub: "Remote Play, OBS, Capture Card", selected: choice.window) {
+            option(symbol: "macwindow", tone: .peach, title: "Game Window", sub: "Remote Play, OBS, Capture Card", selected: choice.window) {
                 choice.window = true
             }
         }
@@ -371,26 +373,33 @@ private struct ConsoleChoiceStep: View {
         }
     }
 
-    private func option(badge: String, title: LocalizedStringKey, sub: LocalizedStringKey, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// Seçenek kartı (Perde): üstte renkli degrade sahne + büyük simge, altta başlık ve radyo; seçiliyken 2 pt amber kenar,
+    /// amber dolgu ve ışıma.
+    private func option(symbol: String, tone: DSIconSquare.Tone, title: LocalizedStringKey, sub: LocalizedStringKey, selected: Bool,
+                        action: @escaping () -> Void) -> some View {
+        let shape = RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous)
+        return Button(action: action) {
             VStack(alignment: .leading, spacing: DS.space("m")) {
-                Text(verbatim: badge)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.dsCharcoal)
-                    .frame(maxWidth: .infinity, minHeight: 120)
-                    .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous))
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
+                        .fill(Color.dsField)
+                    DSProjectorLight().clipShape(RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous))
+                    DSIconSquare(symbol: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) == nil ? "gamecontroller" : symbol,
+                                 tone: selected ? .amber : tone, size: 64)
+                        .shadow(color: selected ? Color.dsAmberGlow : .clear, radius: 16)
+                }
+                .frame(maxWidth: .infinity, minHeight: 120)
                 HStack {
                     DSTitleBlock(title: title, subtitle: sub, titleFont: .dsH3)
                     DSRadio(on: selected)
                 }
             }
             .padding(DS.space("m"))
-            .background(Color.dsSurface, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous)
-                .strokeBorder(selected ? Color.dsAmber : Color.dsBorder, lineWidth: selected ? 2 : 1))
-            .contentShape(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
+            .dsElevation(.card, in: shape)
+            .dsSelectedGlow(selected, in: shape)
+            .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("card")))
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
@@ -519,12 +528,16 @@ private struct ConnectPS5Step: View {
     private var searchCard: some View {
         DSCard(spacing: DS.space("s"), scrolls: false) {
             HStack(spacing: DS.space("m")) {
-                ZStack {
-                    Circle().fill(Color.dsAmberSoft).frame(width: 48, height: 48)
-                    if searching { DSPulseDot(color: .dsAmber, size: 12) } else {
+                if searching {
+                    // Arama halkası dalgası (Core Animation; kapı kapalıyken tek durağan halka).
+                    DSSearchRings(size: 56)
+                } else {
+                    ZStack {
+                        Circle().fill(consoles.isEmpty ? Color.dsAmberSoft : Color.dsSuccessSoft)
                         Image(systemName: consoles.isEmpty ? "magnifyingglass" : "checkmark").font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(consoles.isEmpty ? Color.dsAmberText : Color.dsSuccess)
+                            .foregroundStyle(consoles.isEmpty ? Color.dsAmberText : Color.dsSuccessText)
                     }
+                    .frame(width: 56, height: 56)
                 }
                 VStack(alignment: .leading, spacing: DS.space("xxs")) {
                     Text(consoles.isEmpty ? "Searching for the PS5" : "PS5 Found").font(.dsH3)
@@ -532,15 +545,14 @@ private struct ConnectPS5Step: View {
                 }
                 Spacer()
                 Button(searching ? "Searching…" : "Search Again") { Task { await search() } }
-                    .buttonStyle(.dsSecondary)
+                    .buttonStyle(DSButtonStyle(kind: .compact, busy: searching))
                     .disabled(searching)
             }
             .padding(.bottom, DS.space("xs"))
             ForEach(consoles, id: \.host) { console in
                 Button { selected = console.host } label: {
                     HStack(spacing: DS.space("m")) {
-                        Text(verbatim: "PS5").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.dsCharcoal)
-                            .frame(width: 48, height: 40).background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("small")))
+                        DSIconSquare(symbol: "gamecontroller", tone: selected == console.host ? .amber : .gray, size: 40)
                         VStack(alignment: .leading, spacing: DS.space("line")) {
                             Text(verbatim: console.name.isEmpty ? "PS5" : console.name).font(.dsBodyStrong)
                             Text(verbatim: "\(console.host) · \(String(localized: console.isAwake ? "On" : "In Rest Mode"))")
@@ -572,29 +584,35 @@ private struct ConnectPS5Step: View {
     private var connectionCard: some View {
         DSCard(spacing: DS.space("s"), scrolls: false) {
             DSCardHeader("Connection")
-            ConnectionRow(title: "PlayStation Account", sub: "Signed in with the second account.", done: model.accountId != nil)
-            ConnectionRow(title: model.console != nil || selected != nil ? "PS5 Found" : "Searching for the PS5",
-                          sub: LocalizedStringKey(selected.map { host in String(format: String(localized: "%@ selected."), consoles.first { $0.host == host }?.name ?? host) } ?? ""),
-                          done: model.console != nil || selected != nil)
-            ConnectionRow(title: "Pairing and First Picture", sub: "Setting up an encrypted connection with the PS5.", done: model.console != nil && paired)
+            // Adım çizelgesi: biten amber + tik, şimdiki yükseltilmiş amber halka, sıradaki soluk.
+            let account = model.accountId != nil
+            let found = model.console != nil || selected != nil
+            let linked = model.console != nil && paired
+            DSStepTimeline(steps: [
+                .init(title: "PlayStation Account", detail: "Signed in with the second account.", state: account ? .done : .current),
+                .init(title: found ? "PS5 Found" : "Searching for the PS5",
+                      detail: selected.map { host in LocalizedStringKey(String(format: String(localized: "%@ selected."), consoles.first { $0.host == host }?.name ?? host)) },
+                      state: found ? .done : account ? .current : .todo),
+                .init(title: "Pairing and First Picture", detail: "Setting up an encrypted connection with the PS5.",
+                      state: linked ? .done : found ? .current : .todo),
+            ])
             Text("Turn on the PS5. As the second user, open Settings › System › Remote Play › Pair Device and enter the 8-digit code shown there.")
                 .dsMuted().padding(.top, DS.space("xs"))
             TextField("8-digit code", text: Binding(get: { pin }, set: { pin = $0; if !$0.isEmpty { paired = false } }), prompt: Text(verbatim: "12345678"))
                 .textFieldStyle(DSTextFieldStyle(mono: true))
                 .onSubmit { Task { await register() } }
             if paired {
-                DSSuccessBadge(text: "Paired", fullWidth: true)
+                // "Eşleşti" başarı anı (ışın + yaylı tik, ≤ 1 sn; hareket azaltılmışsa yalnız tik).
+                DSSuccessMoment(title: "Paired")
             } else {
                 Button(working ? "Connecting…" : "Connect") { Task { await register() } }
-                    .buttonStyle(DSButtonStyle(kind: .dark, fullWidth: true))
+                    .buttonStyle(DSButtonStyle(kind: .primary, fullWidth: true, busy: working))
                     .disabled(working || host.isEmpty || pin.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let error {
-                Text(verbatim: error).font(.dsSmall).foregroundStyle(Color.dsLive).fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-                HStack {
-                    Button("Show Log File") { showLogFile() }.buttonStyle(.dsSecondary)
-                    Button("Check What's Missing") { Task { await runChecks() } }.buttonStyle(.dsSecondary)
+                DSErrorBox(title: "Couldn't connect to the PS5", message: error) {
+                    Button("Show Log File") { showLogFile() }.buttonStyle(DSButtonStyle(kind: .compact))
+                    Button("Check What's Missing") { Task { await runChecks() } }.buttonStyle(DSButtonStyle(kind: .compact))
                 }
             }
             DSCallout(text: "Always start the game on the PS5 with your main account. CouchSubs only watches the picture and never touches the game.")
@@ -692,10 +710,11 @@ private struct DiagnosticsView: View {
                     HStack(alignment: .top, spacing: DS.space("m")) {
                         DSTitleBlock(title: title(check.kind), subtitle: checking ? nil : fix(check), titleFont: .dsBodyStrong)
                         if checking {
-                            DSBadge(text: "Checking…")
+                            DSStatusChip("Checking…", tone: .amber)
                         } else {
-                            DSBadge(text: check.state == .passed ? "Passed" : check.state == .problem ? "Problem" : "Unknown",
-                                    tone: check.state == .passed ? .ok : check.state == .problem ? .warn : .unknown)
+                            DSStatusChip(check.state == .passed ? "Passed" : check.state == .problem ? "Problem" : "Unknown",
+                                         tone: check.state == .passed ? .ok : check.state == .problem ? .live : .muted,
+                                         icon: check.state == .passed ? "checkmark" : check.state == .problem ? "exclamationmark" : nil)
                         }
                     }
                     .padding(.vertical, DS.space("s"))
@@ -708,11 +727,11 @@ private struct DiagnosticsView: View {
                     DSSectionTitle(title: "Do You Know the PS5's Address?", message: "On the PS5, the IP address is shown in Settings › Network › Connection Status.", font: .dsH3)
                     TextField("IP address, e.g. 192.168.1.20", text: $manualHost).textFieldStyle(DSTextFieldStyle(mono: true))
                     Button("Connect") { connect() }
-                        .buttonStyle(DSButtonStyle(kind: .dark, fullWidth: true))
+                        .buttonStyle(DSButtonStyle(kind: .secondary, fullWidth: true))
                         .disabled(manualHost.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 Button(checking ? "Checking…" : "Try Again") { retry() }
-                    .buttonStyle(DSButtonStyle(kind: .primary, fullWidth: true))
+                    .buttonStyle(DSButtonStyle(kind: .primary, fullWidth: true, busy: checking))
                     .disabled(checking)
                 Button("Back") { back() }.buttonStyle(DSButtonStyle(kind: .secondary, fullWidth: true))
                 Text("If the problem continues, attach the log file to an issue on GitHub.").dsMuted()
@@ -773,8 +792,9 @@ struct PairingCodeCard: View {
                 HStack(spacing: DS.space("xs")) {
                     ForEach(Array(ticket.code.enumerated()), id: \.offset) { _, digit in
                         Text(String(digit)).font(.system(size: 28, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.dsAmberText)
                             .frame(width: 44, height: 56)
-                            .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("control")))
+                            .dsElevation(.raised, in: RoundedRectangle(cornerRadius: DS.radius("control"), style: .continuous))
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                     }
                 }
@@ -790,8 +810,7 @@ struct PairingCodeCard: View {
                         .buttonStyle(DSButtonStyle(kind: .secondary, fullWidth: true))
                 }
             } else if approved || model.tvClients > 0 {
-                DSSuccessBadge(text: "Paired", fullWidth: true)
-                Text("Approve the code on the TV, then let's try it.").dsMuted()
+                DSSuccessMoment(title: "Paired", message: "Approve the code on the TV, then let's try it.")
             } else {
                 Text("Open CouchSubs on the TV. When it shows a code, it appears here too.").dsMuted()
             }
@@ -873,13 +892,20 @@ private struct TryItStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: DS.space("l")) {
             DSCard(spacing: DS.space("xs"), scrolls: false) {
-                CheckRow(title: model.isXbox ? "Xbox · Beta" : "PS5 Connection",
-                         sub: model.console.map { $0.name.isEmpty ? "PS5" : $0.name } ?? model.pictureSourceName,
-                         done: model.console != nil || model.readsCaptureWindow || model.isXbox)
-                CheckRow(title: "Translation Working", sub: model.settings.translationEngine == .free ? String(localized: "Free Translation") : model.settings.translationEngine.displayName,
-                         done: model.translatorStatus == .ready)
-                CheckRow(title: onComputer ? "Subtitle on This Screen" : "TV Shows the Subtitle", sub: model.tv?.name ?? String(localized: "This Mac"),
-                         done: sent && (onComputer || model.tvClients > 0))
+                let picture = model.console != nil || model.readsCaptureWindow || model.isXbox
+                let translation = model.translatorStatus == .ready
+                let shown = sent && (onComputer || model.tvClients > 0)
+                DSStepTimeline(steps: [
+                    .init(title: model.isXbox ? "Xbox · Beta" : "PS5 Connection",
+                          detail: LocalizedStringKey(model.console.map { $0.name.isEmpty ? "PS5" : $0.name } ?? model.pictureSourceName),
+                          state: picture ? .done : .current),
+                    .init(title: "Translation Working",
+                          detail: LocalizedStringKey(model.settings.translationEngine == .free ? String(localized: "Free Translation") : model.settings.translationEngine.displayName),
+                          state: translation ? .done : picture ? .current : .todo),
+                    .init(title: onComputer ? "Subtitle on This Screen" : "TV Shows the Subtitle",
+                          detail: LocalizedStringKey(model.tv?.name ?? String(localized: "This Mac")),
+                          state: shown ? .done : picture && translation ? .current : .todo),
+                ])
                 Button(testing ? "Testing…" : sent ? "Try Again" : "Send Test Subtitle") {
                     Task {
                         testing = true
@@ -888,18 +914,14 @@ private struct TryItStep: View {
                         testing = false
                     }
                 }
-                .buttonStyle(DSButtonStyle(kind: sent ? .secondary : .primary, fullWidth: true))
+                .buttonStyle(DSButtonStyle(kind: sent ? .secondary : .primary, fullWidth: true, busy: testing))
                 .disabled(testing)
                 .padding(.top, DS.space("s"))
                 if !onComputer { HintText(text: LocalizedStringKey(TVOpenText.wizardNote)) }
             }
             .frame(maxWidth: .infinity)
             DSCard(scrolls: false) {
-                DSScreenFrame {
-                    VStack { Spacer(); DSSubtitleSample(speaker: "Lucia:", line: "Hazır olduğunda haber ver, gidiyoruz.", size: 15) }
-                        .padding(DS.space("m"))
-                }
-                .aspectRatio(16 / 9, contentMode: .fit)
+                DSPerdePreview(speaker: "Lucia:", line: "Hazır olduğunda haber ver, gidiyoruz.", textSize: 15)
                 DSButtonStack {
                     Text(onComputer ? "Do you see this subtitle on the screen?" : "Do you see this subtitle on the TV?").font(.dsBodyStrong)
                     Button("Yes, I See It") {

@@ -48,6 +48,9 @@ struct AppShell: View {
         }
         .frame(maxWidth: DS.size("contentMax"))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Ortam ışığı: amber, şeftali ve gök mavisi lekeler çok yavaş süzülür (Core Animation); çeviri sürerken, hareketi
+        // azaltta ve pencere arka plandayken durağan.
+        .background { DSAmbientGlow(intensity: 0.8) }
         .background(Color.dsBackground)
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: tab.wrappedValue)
         // Tek hareket kapısı: çeviri sürerken, hareketi azaltta, Geçiş Animasyonları kapalıyken ya da pencere önde
@@ -93,7 +96,7 @@ private struct ShellHeader: View {
             HStack(spacing: DS.space("xs")) {
                 let status = ShellStatus(model: model)
                 LogCopyButton()
-                DSStatusPill(text: status.text, dot: status.dot)
+                DSStatusPill(text: status.text, dot: status.dot, pulse: status.live)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -180,6 +183,8 @@ private struct LogCopyButton: View {
 struct ShellStatus {
     let text: LocalizedStringKey
     let dot: Color
+    /// Çeviri sorunsuz akıyor: nokta canlı nabız atar (ekrandaki tek sürekli animasyon).
+    var live = false
 
     @MainActor init(model: AppModel) {
         if model.demoMode {
@@ -187,7 +192,8 @@ struct ShellStatus {
         } else if model.isRunning {
             switch model.sessionState {
             case .streaming:
-                (text, dot) = HomeProblem.current(model) == nil ? ("Translation On", .dsSuccess) : ("Needs Attention", .dsLive)
+                (text, dot) = HomeProblem.current(model) == nil ? ("Translation On", .dsLiveDot) : ("Needs Attention", .dsLive)
+                live = HomeProblem.current(model) == nil
             case .connecting:
                 (text, dot) = ("Connecting…", .dsAmber)
             case .disconnected:

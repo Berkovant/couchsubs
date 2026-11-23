@@ -16160,7 +16160,12 @@
     "Beta": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Beta"}}, "tr": {"stringUnit": {"state": "translated", "value": "Beta"}}}},
     "Copy All": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Copy All"}}, "tr": {"stringUnit": {"state": "translated", "value": "Tümünü Kopyala"}}}},
     "Open the Page on This Computer": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open the Page on This Computer"}},"tr":{"stringUnit":{"state":"translated","value":"Sayfayı Bu Bilgisayarda Aç"}}}},
-    "INSTALLED PACKS · %lld": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "INSTALLED PACKS · %lld"}}, "tr": {"stringUnit": {"state": "translated", "value": "KURULU PAKETLER · %lld"}}}}
+    "INSTALLED PACKS · %lld": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "INSTALLED PACKS · %lld"}}, "tr": {"stringUnit": {"state": "translated", "value": "KURULU PAKETLER · %lld"}}}},
+    "Live Preview": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Live Preview"}}, "tr": {"stringUnit": {"state": "translated", "value": "Canlı Önizleme"}}}},
+    "Pack Installed": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Pack Installed"}}, "tr": {"stringUnit": {"state": "translated", "value": "Paket Kuruldu"}}}},
+    "Playing": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Playing"}}, "tr": {"stringUnit": {"state": "translated", "value": "Oynanıyor"}}}},
+    "Suggestions": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Suggestions"}}, "tr": {"stringUnit": {"state": "translated", "value": "Öneriler"}}}},
+    "Signing In…": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Signing In…"}}, "tr": {"stringUnit": {"state": "translated", "value": "Giriş Yapılıyor…"}}}}
   },
   "version": "1.0"
 }

@@ -76,54 +76,50 @@ struct TVSetupStep: View {
     private var listCard: some View {
         DSCard(scrolls: false) {
             DSCardHeader("TVs on This Network") {
-                HStack(spacing: DS.space("xs")) {
-                    if searching {
-                        ProgressView().controlSize(.small)
-                        Text("Scanning the network…").font(.dsSmall).foregroundStyle(Color.dsMuted)
-                    }
-                    Button("Search Again") { Task { await search() } }
-                        .buttonStyle(DSButtonStyle(kind: .compact))
-                        .disabled(searching)
-                }
+                Button(searching ? "Searching…" : "Search Again") { Task { await search() } }
+                    .buttonStyle(DSButtonStyle(kind: .compact, busy: searching))
+                    .disabled(searching)
             }
             if tvs.isEmpty {
                 if searching {
-                    Text("Looking for LG, Samsung and Android TVs on the same network.").dsMuted()
+                    // Arama halkası: TV'ler bulundukça kart kart belirir.
+                    VStack(spacing: DS.space("m")) {
+                        DSSearchRings(size: 72)
+                        Text("Scanning the network…").font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                        Text("Looking for LG, Samsung and Android TVs on the same network.").dsMuted().multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.space("m"))
                 } else {
                     emptyState
                 }
             } else {
                 VStack(spacing: DS.space("xs")) {
-                    ForEach(tvs, id: \.host) { tv in row(tv) }
+                    ForEach(tvs, id: \.host) { tv in
+                        row(tv).transition(.opacity.combined(with: .offset(y: 14)))
+                    }
                 }
             }
         }
     }
 
+    /// TV kartı (Perde): simge karesi, ad + mono marka · adres, durum hapı ve kartta küçük "Bağlan"; seçiliyken amber
+    /// kenar + ışıma.
     private func row(_ tv: LGTV) -> some View {
         let status = status(of: tv)
         let selected = model.tv?.host == tv.host || currentPairingHost == tv.host
-        return Button { Task { await pair(tv) } } label: {
-            HStack(spacing: DS.space("s")) {
-                TVBrandMark(brand: tv.brand)
-                VStack(alignment: .leading, spacing: DS.space("line")) {
-                    Text(verbatim: tv.name.isEmpty ? TVBrandMark.name(tv.brand) : tv.name).font(.dsBodyStrong).lineLimit(1)
-                    Text(verbatim: tv.host).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsMuted)
-                }
-                Spacer(minLength: DS.space("xs"))
-                status.badge
-                if status == .found || status == .failed {
-                    Text("Connect")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.dsText)
-                        .padding(.horizontal, DS.space("s"))
-                        .frame(height: DS.size("chip"))
-                        .background(Color.dsSurface, in: Capsule(style: .circular))
-                        .overlay(Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsBorder))
-                }
+        return DSTVCard(name: tv.name.isEmpty ? TVBrandMark.name(tv.brand) : tv.name, detail: "\(TVBrandMark.name(tv.brand)) · \(tv.host)",
+                        status: status.text, statusTone: status.tone, selected: selected, action: { Task { await pair(tv) } }) {
+            if status == .found || status == .failed {
+                Text("Connect")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.dsText)
+                    .padding(.horizontal, DS.space("s"))
+                    .frame(height: DS.size("chip"))
+                    .background(Color.dsSurfaceRaised, in: Capsule(style: .circular))
+                    .overlay(Capsule(style: .circular).inset(by: 0.5).stroke(Color.dsBorder))
             }
         }
-        .buttonStyle(DSOptionStyle(selected: selected, minHeight: 64, radio: false))
         .disabled(currentPairingHost != nil)
         .accessibilityLabel(Text(verbatim: "\(tv.name) \(tv.host)"))
     }
@@ -184,16 +180,25 @@ struct TVSetupStep: View {
     enum RowStatus: Equatable {
         case found, connecting, approveOnTV, paired, installing, installed, needsUpdate, failed
 
-        var badge: some View {
+        var text: LocalizedStringKey {
             switch self {
-            case .found: DSBadge(text: "Found", tone: .unknown)
-            case .connecting: DSBadge(text: "Connecting…", tone: .amber)
-            case .approveOnTV: DSBadge(text: "Waiting for Approval on the TV", tone: .amber)
-            case .paired: DSBadge(text: "Paired", tone: .amber)
-            case .installing: DSBadge(text: "Installing…", tone: .amber)
-            case .installed: DSBadge(text: "Installed ✓", tone: .ok)
-            case .needsUpdate: DSBadge(text: "Update Needed", tone: .warn)
-            case .failed: DSBadge(text: "Error", tone: .warn)
+            case .found: "Found"
+            case .connecting: "Connecting…"
+            case .approveOnTV: "Waiting for Approval on the TV"
+            case .paired: "Paired"
+            case .installing: "Installing…"
+            case .installed: "Installed ✓"
+            case .needsUpdate: "Update Needed"
+            case .failed: "Error"
+            }
+        }
+
+        var tone: DSStatusChip.Tone {
+            switch self {
+            case .found: .muted
+            case .connecting, .approveOnTV, .paired, .installing: .amber
+            case .installed: .ok
+            case .needsUpdate, .failed: .live
             }
         }
     }
@@ -352,6 +357,7 @@ struct TVProgressCard: View {
     let pairing: Bool
     @EnvironmentObject private var model: AppModel
     @State private var since = Date()
+    @State private var slow = false
 
     enum Phase: Int { case pending, active, done, failed }
 
@@ -381,45 +387,28 @@ struct TVProgressCard: View {
     var body: some View {
         let list = steps
         let activeIndex = list.firstIndex { $0.1 == .active }
+        let installed: Bool = { if case .upToDate = model.tvApp { true } else { false } }()
         DSCard(scrolls: false) {
             DSCardHeader("Connection and Install")
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(list.enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .top, spacing: DS.space("s")) {
-                        VStack(spacing: 0) {
-                            marker(step.1)
-                            if index < list.count - 1 {
-                                Rectangle().fill(step.1 == .done ? Color.dsSuccess : Color.dsBorder).frame(width: 2, height: 22)
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: DS.unitHintGap) {
-                            Text(step.0).font(.dsBodyStrong)
-                                .foregroundStyle(step.1 == .pending ? Color.dsFaint : step.1 == .failed ? Color.dsLiveText : Color.dsText)
-                            if step.1 == .active, let tip = step.2 {
-                                TimelineView(.periodic(from: since, by: 5)) { context in
-                                    if context.date.timeIntervalSince(since) > 15 { Text(tip).dsMuted().transition(.opacity) }
-                                }
-                            }
-                        }
-                        .padding(.top, DS.space("xxs"))
-                    }
-                }
+            // Adım çizelgesi: biten amber + tik, şimdiki amber halka (hata olunca da şimdiki; neden hata kutusunda).
+            DSStepTimeline(steps: list.map { step in
+                .init(title: step.0, detail: step.1 == .active && slow ? step.2 : nil,
+                      state: step.1 == .done ? .done : step.1 == .active || step.1 == .failed ? .current : .todo)
+            })
+            if installed {
+                // TV uygulaması kuruldu: başarı anı (≤ 1 sn).
+                DSSuccessMoment(title: "Ready")
             }
         }
-        .onChange(of: activeIndex) { _ in since = Date() }
-    }
-
-    @ViewBuilder private func marker(_ phase: Phase) -> some View {
-        ZStack {
-            Circle().fill(phase == .done ? Color.dsSuccess : phase == .failed ? Color.dsLive : phase == .active ? Color.dsAmberSoft : Color.dsField)
-            switch phase {
-            case .done: Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
-            case .failed: Image(systemName: "exclamationmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
-            case .active: ProgressView().controlSize(.mini)
-            case .pending: EmptyView()
-            }
+        .onChange(of: activeIndex) { _ in
+            since = Date()
+            slow = false
         }
-        .frame(width: 24, height: 24)
+        .task(id: activeIndex) {
+            // Bir adım 15 sn'den uzun sürerse altında ipucu.
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            if !Task.isCancelled { slow = true }
+        }
     }
 }
 

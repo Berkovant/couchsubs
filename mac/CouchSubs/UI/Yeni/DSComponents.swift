@@ -560,37 +560,16 @@ struct DSAccountCard<Others: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: DS.space("s")) {
-                Text(verbatim: badge)
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
-                    .frame(width: 40, height: 40)
-                    .background {
-                        if signedIn {
-                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
-                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                        } else {
-                            Circle().fill(Color.dsCharcoal)
-                        }
-                    }
-                    // Bağlıyken 3 pt aralıklı amber halka.
-                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
-                    .padding(signedIn ? 4.5 : 0)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.space("line")) {
-                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
-                    HStack(spacing: DS.space("xxs")) {
-                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
-                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
-                        if let detail { Text(verbatim: "· \(detail)").font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
-                    }
+            // Dar sütunda (ör. 380 pt kurulum sütunu) düğme başlığın altına iner; durum yazısı kırpılmaz.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.space("s")) {
+                    identity.fixedSize()
+                    Spacer(minLength: DS.space("s"))
+                    action
                 }
-                Spacer(minLength: DS.space("s"))
-                if busy { ProgressView().controlSize(.small) }
-                if signedIn {
-                    Button("Sign In Again", action: signIn).buttonStyle(DSButtonStyle(kind: .compact)).disabled(busy)
-                } else {
-                    Button("Sign In", action: signIn).buttonStyle(DSButtonStyle(kind: .primary)).disabled(busy)
+                VStack(alignment: .leading, spacing: DS.space("s")) {
+                    identity
+                    action
                 }
             }
             .padding(DS.space("m"))
@@ -619,6 +598,46 @@ struct DSAccountCard<Others: View>: View {
             }
         }
         .dsElevation(signedIn ? .raised : .card, in: shape)
+    }
+
+    @ViewBuilder private var action: some View {
+        if signedIn {
+            Button(busy ? "Signing In…" : "Sign In Again", action: signIn)
+                .buttonStyle(DSButtonStyle(kind: .compact, busy: busy)).disabled(busy)
+        } else {
+            Button(busy ? "Signing In…" : "Sign In", action: signIn)
+                .buttonStyle(DSButtonStyle(kind: .primary, busy: busy)).disabled(busy)
+        }
+    }
+
+    private var identity: some View {
+            HStack(spacing: DS.space("s")) {
+                Text(verbatim: badge)
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
+                    .frame(width: 40, height: 40)
+                    .background {
+                        if signedIn {
+                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } else {
+                            Circle().fill(Color.dsCharcoal)
+                        }
+                    }
+                    // Bağlıyken 3 pt aralıklı amber halka.
+                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
+                    .padding(signedIn ? 4.5 : 0)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.space("line")) {
+                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    HStack(spacing: DS.space("xxs")) {
+                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
+                        if let detail { Text(verbatim: "· \(detail)").font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
+                    }
+                    .fixedSize()
+                }
+            }
     }
 }
 
@@ -1014,7 +1033,8 @@ struct DSLogoMark: View {
 struct DSBrand: View {
     var body: some View {
         HStack(spacing: DS.space("s")) {
-            DSLogoMark(height: 26)
+            // Üst çubukta durağan: SwiftUI'nin sonsuz animasyonu boştayken her kare çizim ister (boşta ≤ %2 işlemci).
+            DSLogoMark(height: 26, breathing: false)
             Text(verbatim: "CouchSubs").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.dsText)
         }
         .accessibilityElement(children: .ignore)

@@ -401,6 +401,8 @@ private struct DSAmbientLayers {
                     move.repeatCount = .infinity
                     move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                     move.timeOffset = half * Double(index) * 0.66
+                    // Birkaç yüzdelik, 12 sn'lik süzülme 15 kare/sn'de de akıcı; pencere her karede yeniden birleştirilmez.
+                    move.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 15, preferred: 15)
                     layer.add(move, forKey: "drift")
                 }
                 root.addSublayer(layer)

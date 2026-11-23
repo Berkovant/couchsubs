@@ -66,6 +66,20 @@ enum SettingsSection: Hashable, CaseIterable {
         }
     }
 
+    /// Perde simge karesinin tonu (tasarim.json: peach, olive, teal, plum, sky; ana ayar amber, geliştirici gri).
+    var tone: DSIconSquare.Tone {
+        switch self {
+        case .basics: .amber
+        case .appearance: .peach
+        case .advanced: .gray
+        case .area, .packs: .olive
+        case .dubbing: .plum
+        case .outputs: .teal
+        case .shortcuts: .sky
+        case .console: .gray
+        }
+    }
+
     static let main: [SettingsSection] = [.basics, .appearance, .advanced]
     static let pages: [SettingsSection] = [.area, .packs, .dubbing, .outputs, .shortcuts, .console]
 }
@@ -80,7 +94,9 @@ struct SettingsPage: View {
         HStack(alignment: .top, spacing: DS.space("l")) {
             SettingsNav(section: $section)
                 .frame(width: DS.size("settingsNav"))
-            Group {
+            VStack(alignment: .leading, spacing: DS.space("m")) {
+                SectionHeading(section: section)
+                Group {
                 switch section {
                 case .basics: BasicsSettings(section: $section)
                 case .appearance: SubtitleLookSettings()
@@ -91,6 +107,7 @@ struct SettingsPage: View {
                 case .outputs: OutputSettings()
                 case .shortcuts: SettingsScroll { ShortcutsCard() }
                 case .console: ConsoleSettings()
+                }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -139,15 +156,8 @@ private struct SettingsNav: View {
             let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
             Button(action: action) {
                 HStack(spacing: DS.space("s")) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: DS.radius("chip"), style: .continuous)
-                            .fill(selected ? item.tint : item.tint.opacity(0.16))
-                        Image(systemName: item.icon)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(selected ? Color.white : item.tint)
-                    }
-                    .frame(width: 30, height: 30)
-                    .accessibilityHidden(true)
+                    DSIconSquare(symbol: item.icon, tone: item.tone, size: 30)
+                        .opacity(selected || hovering ? 1 : 0.85)
                     VStack(alignment: .leading, spacing: DS.space("line")) {
                         Text(item.title).font(.dsBodyStrong).foregroundStyle(Color.dsText).lineLimit(1).minimumScaleFactor(0.8)
                         Text(item.hint).font(.dsCaption).foregroundStyle(selected ? Color.dsMuted : Color.dsFaint).lineLimit(1)
@@ -159,7 +169,8 @@ private struct SettingsNav: View {
                 .background {
                     if selected {
                         shape.fill(Color.dsAmberSoft)
-                            .overlay(shape.strokeBorder(Color.dsAmber.opacity(0.45)))
+                            .overlay(shape.strokeBorder(Color.dsAmberRing))
+                            .shadow(color: Color.dsAmberGlow.opacity(0.5), radius: 10)
                             .matchedGeometryEffect(id: "navSelection", in: namespace)
                     } else if hovering {
                         shape.fill(Color.dsField.opacity(0.8))
@@ -174,9 +185,8 @@ private struct SettingsNav: View {
     }
 }
 
-/// Menü kartının arkasındaki yavaş renk geçişi: üç yumuşak (radyal) amber / şeftali / zeytin leke 24 sn'lik döngüde
-/// dolaşır. En çok 15 kare/sn; pencere önde değilken, çeviri sürerken, "Hareketi azalt" ya da Ayarlar › Geçiş
-/// Animasyonları kapalıyken durur (durağan kare). Bulanıklık süzgeci yok, radyal dolgu: işlemciye yük bindirmez.
+/// Menü kartının arkasındaki sıcak renk lekeleri (amber, şeftali, gök mavisi; radyal, bulanıklık süzgeci yok). Durağan:
+/// hareket arkadaki pencere ortam ışığında.
 struct SettingsNavGlow: View {
     @Environment(\.dsMotionGate) private var gate
 
@@ -188,32 +198,44 @@ struct SettingsNavGlow: View {
     /// Tek hareket kapısı (Perde): çeviri, hareketi azalt, Geçiş Animasyonları, pencere önde değil.
     var animates: Bool { Self.forced ?? gate.ambient }
 
+    /// Durağan lekeler: renk adı (tasarim.json), merkez, opaklık.
+    static let blobs: [(String, CGFloat, CGFloat, Double)] = [("amber", 0.2, 0.12, 0.22), ("peach", 0.85, 0.5, 0.14), ("sky", 0.3, 0.92, 0.1)]
+
     var body: some View {
-        let running = animates
-        TimelineView(.animation(minimumInterval: 1 / Self.fps, paused: !running)) { context in
-            let time = running ? context.date.timeIntervalSinceReferenceDate : 0
-            Canvas(rendersAsynchronously: true) { canvas, size in
-                Self.draw(&canvas, size: size, time: time)
+        // Perde ortam ışığının lekeleri. Arkadaki pencere ortam ışığı zaten süzüldüğü için menüdeki kopya durağan
+        // (ikisi birden boşta %2'yi aşıyordu); yalnız ölçüm testi `forced` ile oynatır.
+        Group {
+            if Self.forced == true {
+                DSAmbientGlow(intensity: 1.4)
+            } else {
+                GeometryReader { geometry in
+                    let span = max(geometry.size.width, geometry.size.height)
+                    ZStack {
+                        ForEach(Self.blobs, id: \.0) { name, x, y, alpha in
+                            RadialGradient(colors: [DS.color(name).opacity(alpha), DS.color(name).opacity(0)],
+                                           center: UnitPoint(x: x, y: y), startRadius: 0, endRadius: span * 0.55)
+                        }
+                    }
+                }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+}
 
-    static func draw(_ canvas: inout GraphicsContext, size: CGSize, time: Double) {
-        let phase = time.truncatingRemainder(dividingBy: period) / period * 2 * .pi
-        let blobs: [(Color, CGFloat, CGFloat, CGFloat, Double)] = [
-            (.dsAmber, 0.25, 0.18, 0.9, 0),
-            (.dsPeach, 0.8, 0.55, 0.8, 2.1),
-            (.dsOlive, 0.3, 0.88, 0.75, 4.2),
-        ]
-        for (color, x, y, scale, offset) in blobs {
-            let radius = max(size.width, 220) * scale
-            let center = CGPoint(x: size.width * (x + 0.18 * CGFloat(sin(phase + offset))),
-                                 y: size.height * (y + 0.08 * CGFloat(cos(phase * 1 + offset * 0.7))))
-            let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-            canvas.fill(Path(ellipseIn: rect), with: .radialGradient(Gradient(colors: [color.opacity(0.16), color.opacity(0)]),
-                                                                     center: center, startRadius: 0, endRadius: radius))
+/// Seçili bölümün başlığı: renkli simge karesi + başlık (24) + iki kelimelik alt yazı.
+private struct SectionHeading: View {
+    let section: SettingsSection
+
+    var body: some View {
+        HStack(spacing: DS.space("s")) {
+            DSIconSquare(symbol: section.icon, tone: section.tone, size: 40)
+            VStack(alignment: .leading, spacing: DS.space("line")) {
+                Text(section.title).font(.dsH2).foregroundStyle(Color.dsText).accessibilityAddTraits(.isHeader)
+                Text(section.hint).dsMutedSmall()
+            }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -313,26 +335,38 @@ struct SubtitlePreviewBox: View {
     var body: some View {
         let style = model.settings.style
         let display = SubtitlePalette.display(style.fontSize)
-        DSScreenFrame {
-            VStack(spacing: DS.space("unitHint")) {
-                Spacer(minLength: 0)
-                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                    (Text(verbatim: model.settings.showSpeakerNames ? line.who + ": " : "").foregroundColor(nameColor(line.who, index: index, style: style))
-                     + Text(verbatim: line.text).foregroundColor(SubtitlePalette.color(SubtitlePalette.textHex(style)) ?? .white))
-                        .font(.system(size: CGFloat(display) * 0.5, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, DS.space("s"))
-                        .padding(.vertical, DS.space("unitHint"))
-                        .background((SubtitlePalette.color(style.backgroundColor) ?? .black).opacity(Double(style.background) / 100),
-                                    in: RoundedRectangle(cornerRadius: DS.radius("small")))
-                        .shadow(color: style.background == 0 ? .black.opacity(0.85) : .clear, radius: 1.5, y: 1)
+        let shape = RoundedRectangle(cornerRadius: DS.radius("preview"), style: .continuous)
+        // Perde: sıcak sahne + projeksiyon ışığı; altyazı ayarların renk, zemin ve boyuyla (TV'de nasılsa öyle).
+        DSPerdeScene()
+            .overlay { DSProjectorLight() }
+            .overlay {
+                VStack(spacing: DS.space("unitHint")) {
+                    Spacer(minLength: 0)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        (Text(verbatim: model.settings.showSpeakerNames ? line.who + ": " : "").foregroundColor(nameColor(line.who, index: index, style: style))
+                         + Text(verbatim: line.text).foregroundColor(SubtitlePalette.color(SubtitlePalette.textHex(style)) ?? .white))
+                            .font(.system(size: CGFloat(display) * 0.5, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.space("s"))
+                            .padding(.vertical, DS.space("unitHint"))
+                            .background((SubtitlePalette.color(style.backgroundColor) ?? .black).opacity(Double(style.background) / 100),
+                                        in: RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous))
+                            .shadow(color: style.background == 0 ? .black.opacity(0.85) : .black.opacity(0.3), radius: style.background == 0 ? 1.5 : 8,
+                                    y: style.background == 0 ? 1 : 5)
+                    }
                 }
+                .padding(DS.space("m"))
             }
-            .padding(DS.space("m"))
-        }
-        .frame(height: height)
-        .aspectRatio(height == nil ? 16 / 9 : nil, contentMode: .fit)
-        .animation(DS.animation(.medium, reduced: !model.settings.transitionAnimations), value: style)
+            .overlay(alignment: .topLeading) {
+                DSStatusChip("Live Preview", tone: .glass, dot: false)
+                    .environment(\.colorScheme, .dark)
+                    .padding(DS.space("s"))
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Color.white.opacity(0.06)))
+            .frame(height: height)
+            .aspectRatio(height == nil ? 16 / 9 : nil, contentMode: .fit)
+            .animation(DS.animation(.medium, reduced: !model.settings.transitionAnimations), value: style)
     }
 
     private func nameColor(_ who: String, index: Int, style: SubtitleStyle) -> Color {
@@ -357,9 +391,7 @@ private struct SubtitleLookSettings: View {
                 DSCardHeader("Subtitles on the TV")
                 SubtitlePreviewBox(lines: SubtitleSample.lines)
                 if SubtitlePalette.lowContrast(style) {
-                    Text("The text color is too close to the background; it may be hard to read on the TV.")
-                        .font(.dsSmall).foregroundStyle(Color.dsLive)
-                        .fixedSize(horizontal: false, vertical: true)
+                    DSNoticeBox(tone: .warning, text: "The text color is too close to the background; it may be hard to read on the TV.")
                         .transition(.opacity)
                 }
                 Text("The settings apply the same on the TV, phone and computer screen.").dsMuted()
@@ -775,17 +807,12 @@ private struct OutputSettings: View {
 
     /// TV satırı: ad, TV uygulamasının sürümü ve bağlantısı, "Eşli" rozeti; Deneme Altyazısı Gönder ve TV'yi Eşleştir.
     @ViewBuilder private var tvSection: some View {
-        HStack(spacing: DS.space("m")) {
-            Image(systemName: "tv").font(.system(size: 18)).foregroundStyle(Color.dsMuted).frame(width: 40, height: 40)
-                .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("control")))
-            VStack(alignment: .leading, spacing: DS.space("xxs")) {
-                Text(verbatim: model.tv?.name ?? "TV").font(.dsBodyStrong)
-                Text(tvState).dsMuted()
-            }
-            Spacer(minLength: DS.space("s"))
-            if model.hasTV { DSBadge(text: "Linked", tone: model.tvClients > 0 ? .ok : .unknown) }
-        }
-        .padding(.top, DS.space("xs"))
+        // Perde TV kartı: ad + mono marka · adres, sağda durum hapı (bağlıyken yeşil "Eşli").
+        DSTVCard(name: model.tv?.name ?? "TV",
+                 detail: model.tv.map { "\(TVBrandMark.name($0.brand)) · \($0.host)" } ?? "",
+                 status: model.hasTV ? "Linked" : nil, statusTone: model.tvClients > 0 ? .ok : .muted,
+                 selected: model.tvClients > 0)
+        Text(tvState).dsMuted()
         HStack(spacing: DS.space("xs")) {
             if sent {
                 DSSuccessBadge(text: "Sent")

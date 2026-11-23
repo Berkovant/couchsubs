@@ -34,11 +34,14 @@ struct HistoryPage: View {
             VStack(spacing: 0) {
                 header
                 if rows.isEmpty {
-                    Text(model.history.entries.isEmpty ? "No subtitles yet. Lines translated while you play appear here." : "No lines match this search.")
-                        .dsMuted(.dsBody)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(DS.space("xxl"))
+                    VStack(spacing: DS.space("m")) {
+                        DSIconSquare(symbol: model.history.entries.isEmpty ? "captions.bubble" : "magnifyingglass", tone: .gray, size: 48)
+                        Text(model.history.entries.isEmpty ? "No subtitles yet. Lines translated while you play appear here." : "No lines match this search.")
+                            .dsMuted(.dsBody)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(DS.space("xxl"))
                 } else {
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
@@ -49,9 +52,8 @@ struct HistoryPage: View {
                 DSDivider()
                 footer(count: rows.count)
             }
-            .background(Color.dsSurface, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous).strokeBorder(Color.dsBorder))
             .clipShape(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
+            .dsElevation(.card, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
         }
         .padding(DS.space("l"))
         .confirmationDialog("Clear the history?", isPresented: $confirmClear) {
@@ -102,7 +104,8 @@ struct HistoryPage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
-                DSBadge(text: entry.origin == .pack ? "Pack" : "Translation", tone: entry.origin == .pack ? .amber : .unknown)
+                DSStatusChip(entry.origin == .pack ? "Pack" : "Translation", tone: entry.origin == .pack ? .amber : .muted,
+                             icon: entry.origin == .pack ? "shippingbox.fill" : nil)
                 Spacer(minLength: 0)
             }
             .frame(width: Self.columns.source)
@@ -110,6 +113,9 @@ struct HistoryPage: View {
         .padding(.horizontal, DS.space("l"))
         .padding(.vertical, DS.space("s"))
         .background(isSelected ? Color.dsAmberSoft : Color.clear)
+        .overlay(alignment: .leading) {
+            if isSelected { Capsule(style: .circular).fill(Color.dsAmber).frame(width: 3).padding(.vertical, DS.space("xs")) }
+        }
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsTileBorder).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture { selected = isSelected ? nil : entry.id }
@@ -198,8 +204,8 @@ private struct SmallSecondary: ButtonStyle {
                 .lineLimit(1)
                 .padding(.horizontal, DS.space("m"))
                 .frame(height: DS.size("tab"))
-                .background(hovering || configuration.isPressed ? Color.dsField : Color.dsSurface, in: Capsule(style: .circular))
-                .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder))
+                .background(hovering || configuration.isPressed ? Color.dsSurfaceHigh : Color.dsSurfaceRaised, in: Capsule(style: .circular))
+                .overlay(Capsule(style: .circular).inset(by: 0.5).stroke(hovering ? Color.dsBorderStrong : Color.dsBorder))
                 .opacity(isEnabled ? 1 : 0.5)
                 .contentShape(Capsule(style: .circular))
                 .onHover { hovering = $0 }
