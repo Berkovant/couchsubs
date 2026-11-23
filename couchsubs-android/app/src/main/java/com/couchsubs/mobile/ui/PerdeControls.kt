@@ -518,7 +518,8 @@ fun AccountCards(onPsn: () -> Unit, onConsole: () -> Unit) {
     val signedIn = if (xbox) com.couchsubs.mobile.Services.xboxAuth.signedIn else settings.accountId != null
     val consoleName = if (xbox) settings.xboxConsole?.name else settings.console?.name
     val paired = if (xbox) settings.xboxConsole != null else settings.console != null
-    TwoColumns(
+    // iPhone gibi üstten hizalı iki kart (eşit yükseklik için iç ölçüm yok: dar kartta durum hapı alta iner, yazı kırpılmaz).
+    TopAlignedColumns(
         { modifier ->
             if (xbox) AccountTile("XB", PersonIcon, "Microsoft", "Xbox (Beta)", signedIn,
                 stringResource(if (signedIn) R.string.perde_signed_in else R.string.perde_not_signed_in),
@@ -534,6 +535,22 @@ fun AccountCards(onPsn: () -> Unit, onConsole: () -> Unit) {
                 if (paired) null else stringResource(if (xbox) R.string.perde_choose_xbox else R.string.perde_pair_ps5), modifier, onConsole)
         },
     )
+}
+
+/** İki sütun, üstten hizalı (iç ölçüm yok); yazı çok büyükken (1,5+) tek sütuna düşer. */
+@Composable
+private fun TopAlignedColumns(left: @Composable (Modifier) -> Unit, right: @Composable (Modifier) -> Unit) {
+    if (LocalDensity.current.fontScale >= 1.5f) {
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
+            left(Modifier.fillMaxWidth())
+            right(Modifier.fillMaxWidth())
+        }
+        return
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap), verticalAlignment = Alignment.Top) {
+        left(Modifier.weight(1f))
+        right(Modifier.weight(1f))
+    }
 }
 
 /** Ayarlar bölümünün simgesi (iPhone PhoneSettingsSection.icon). */
