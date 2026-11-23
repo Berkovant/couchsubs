@@ -391,10 +391,7 @@ struct TVProgressCard: View {
         DSCard(scrolls: false) {
             DSCardHeader("Connection and Install")
             // Adım çizelgesi: biten amber + tik, şimdiki amber halka (hata olunca da şimdiki; neden hata kutusunda).
-            DSStepTimeline(steps: list.map { step in
-                .init(title: step.0, detail: step.1 == .active && slow ? step.2 : nil,
-                      state: step.1 == .done ? .done : step.1 == .active || step.1 == .failed ? .current : .todo)
-            })
+            DSStepTimeline(steps: list.map(timelineStep))
             if installed {
                 // TV uygulaması kuruldu: başarı anı (≤ 1 sn).
                 DSSuccessMoment(title: "Ready")
@@ -409,6 +406,17 @@ struct TVProgressCard: View {
             try? await Task.sleep(nanoseconds: 15_000_000_000)
             if !Task.isCancelled { slow = true }
         }
+    }
+
+    private func timelineStep(_ step: (LocalizedStringKey, Phase, LocalizedStringKey?)) -> DSStepTimeline.Step {
+        let state: DSStepTimeline.Phase
+        switch step.1 {
+        case .done: state = .done
+        case .active, .failed: state = .current
+        case .pending: state = .todo
+        }
+        let detail: LocalizedStringKey? = step.1 == .active && slow ? step.2 : nil
+        return DSStepTimeline.Step(title: step.0, detail: detail, state: state)
     }
 }
 

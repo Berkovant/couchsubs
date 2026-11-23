@@ -331,6 +331,11 @@ final class WelcomeChoice: ObservableObject {
 
 // MARK: Adımlar
 
+/// Adım çizelgesindeki durum: bittiyse tik, sırası geldiyse şimdiki, değilse sıradaki.
+private func stepPhase(done: Bool, current: Bool) -> DSStepTimeline.Phase {
+    done ? .done : current ? .current : .todo
+}
+
 private struct StepBody: View {
     @EnvironmentObject private var model: AppModel
 
@@ -588,14 +593,18 @@ private struct ConnectPS5Step: View {
             let account = model.accountId != nil
             let found = model.console != nil || selected != nil
             let linked = model.console != nil && paired
-            DSStepTimeline(steps: [
-                .init(title: "PlayStation Account", detail: "Signed in with the second account.", state: account ? .done : .current),
-                .init(title: found ? "PS5 Found" : "Searching for the PS5",
-                      detail: selected.map { host in LocalizedStringKey(String(format: String(localized: "%@ selected."), consoles.first { $0.host == host }?.name ?? host)) },
-                      state: found ? .done : account ? .current : .todo),
-                .init(title: "Pairing and First Picture", detail: "Setting up an encrypted connection with the PS5.",
-                      state: linked ? .done : found ? .current : .todo),
-            ])
+            let chosen: LocalizedStringKey? = selected.map { host in
+                LocalizedStringKey(String(format: String(localized: "%@ selected."), consoles.first { $0.host == host }?.name ?? host))
+            }
+            let foundTitle: LocalizedStringKey = found ? "PS5 Found" : "Searching for the PS5"
+            let steps: [DSStepTimeline.Step] = [
+                DSStepTimeline.Step(title: "PlayStation Account", detail: "Signed in with the second account.",
+                                    state: stepPhase(done: account, current: true)),
+                DSStepTimeline.Step(title: foundTitle, detail: chosen, state: stepPhase(done: found, current: account)),
+                DSStepTimeline.Step(title: "Pairing and First Picture", detail: "Setting up an encrypted connection with the PS5.",
+                                    state: stepPhase(done: linked, current: found)),
+            ]
+            DSStepTimeline(steps: steps)
             Text("Turn on the PS5. As the second user, open Settings › System › Remote Play › Pair Device and enter the 8-digit code shown there.")
                 .dsMuted().padding(.top, DS.space("xs"))
             TextField("8-digit code", text: Binding(get: { pin }, set: { pin = $0; if !$0.isEmpty { paired = false } }), prompt: Text(verbatim: "12345678"))
@@ -895,17 +904,20 @@ private struct TryItStep: View {
                 let picture = model.console != nil || model.readsCaptureWindow || model.isXbox
                 let translation = model.translatorStatus == .ready
                 let shown = sent && (onComputer || model.tvClients > 0)
-                DSStepTimeline(steps: [
-                    .init(title: model.isXbox ? "Xbox · Beta" : "PS5 Connection",
-                          detail: LocalizedStringKey(model.console.map { $0.name.isEmpty ? "PS5" : $0.name } ?? model.pictureSourceName),
-                          state: picture ? .done : .current),
-                    .init(title: "Translation Working",
-                          detail: LocalizedStringKey(model.settings.translationEngine == .free ? String(localized: "Free Translation") : model.settings.translationEngine.displayName),
-                          state: translation ? .done : picture ? .current : .todo),
-                    .init(title: onComputer ? "Subtitle on This Screen" : "TV Shows the Subtitle",
-                          detail: LocalizedStringKey(model.tv?.name ?? String(localized: "This Mac")),
-                          state: shown ? .done : picture && translation ? .current : .todo),
-                ])
+                let consoleName: String = model.console.map { $0.name.isEmpty ? "PS5" : $0.name } ?? model.pictureSourceName
+                let engineName: String = model.settings.translationEngine == .free ? String(localized: "Free Translation")
+                    : model.settings.translationEngine.displayName
+                let screenName: String = model.tv?.name ?? String(localized: "This Mac")
+                let consoleTitle: LocalizedStringKey = model.isXbox ? "Xbox · Beta" : "PS5 Connection"
+                let screenTitle: LocalizedStringKey = onComputer ? "Subtitle on This Screen" : "TV Shows the Subtitle"
+                let steps: [DSStepTimeline.Step] = [
+                    DSStepTimeline.Step(title: consoleTitle, detail: LocalizedStringKey(consoleName), state: stepPhase(done: picture, current: true)),
+                    DSStepTimeline.Step(title: "Translation Working", detail: LocalizedStringKey(engineName),
+                                        state: stepPhase(done: translation, current: picture)),
+                    DSStepTimeline.Step(title: screenTitle, detail: LocalizedStringKey(screenName),
+                                        state: stepPhase(done: shown, current: picture && translation)),
+                ]
+                DSStepTimeline(steps: steps)
                 Button(testing ? "Testing…" : sent ? "Try Again" : "Send Test Subtitle") {
                     Task {
                         testing = true

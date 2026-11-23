@@ -343,16 +343,7 @@ struct SubtitlePreviewBox: View {
                 VStack(spacing: DS.space("unitHint")) {
                     Spacer(minLength: 0)
                     ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                        (Text(verbatim: model.settings.showSpeakerNames ? line.who + ": " : "").foregroundColor(nameColor(line.who, index: index, style: style))
-                         + Text(verbatim: line.text).foregroundColor(SubtitlePalette.color(SubtitlePalette.textHex(style)) ?? .white))
-                            .font(.system(size: CGFloat(display) * 0.5, weight: .semibold))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, DS.space("s"))
-                            .padding(.vertical, DS.space("unitHint"))
-                            .background((SubtitlePalette.color(style.backgroundColor) ?? .black).opacity(Double(style.background) / 100),
-                                        in: RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous))
-                            .shadow(color: style.background == 0 ? .black.opacity(0.85) : .black.opacity(0.3), radius: style.background == 0 ? 1.5 : 8,
-                                    y: style.background == 0 ? 1 : 5)
+                        sample(line, index: index, style: style, size: CGFloat(display) * 0.5)
                     }
                 }
                 .padding(DS.space("m"))
@@ -367,6 +358,22 @@ struct SubtitlePreviewBox: View {
             .frame(height: height)
             .aspectRatio(height == nil ? 16 / 9 : nil, contentMode: .fit)
             .animation(DS.animation(.medium, reduced: !model.settings.transitionAnimations), value: style)
+    }
+
+    /// Tek örnek satır: ad (ayarın renginde) + metin, zemin rengi ve koyuluğu; zeminsizken okunurluk gölgesi.
+    private func sample(_ line: (who: String, text: String), index: Int, style: SubtitleStyle, size: CGFloat) -> some View {
+        let name = Text(verbatim: model.settings.showSpeakerNames ? line.who + ": " : "").foregroundColor(nameColor(line.who, index: index, style: style))
+        let textColor: Color = SubtitlePalette.color(SubtitlePalette.textHex(style)) ?? .white
+        let body = Text(verbatim: line.text).foregroundColor(textColor)
+        let plate: Color = (SubtitlePalette.color(style.backgroundColor) ?? .black).opacity(Double(style.background) / 100)
+        let bare = style.background == 0
+        return (name + body)
+            .font(.system(size: size, weight: .semibold))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, DS.space("s"))
+            .padding(.vertical, DS.space("unitHint"))
+            .background(plate, in: RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous))
+            .shadow(color: .black.opacity(bare ? 0.85 : 0.3), radius: bare ? 1.5 : 8, y: bare ? 1 : 5)
     }
 
     private func nameColor(_ who: String, index: Int, style: SubtitleStyle) -> Color {

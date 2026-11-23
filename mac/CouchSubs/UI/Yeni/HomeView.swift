@@ -143,10 +143,7 @@ private struct HomePerde: View {
                 HStack(spacing: DS.space("xs")) {
                     GlassPill(live: running) { Text(running ? "LIVE" : "STOPPED").tracking(0.66) }
                     if running {
-                        GlassPill(mono: true) {
-                            Text(verbatim: [model.isXbox ? "Xbox" : model.readsCaptureWindow ? nil : "PS5",
-                                            String(format: String(localized: "%lld Frames/s"), ticker.fps)].compactMap { $0 }.joined(separator: " · "))
-                        }
+                        GlassPill(mono: true) { Text(verbatim: frameRate) }
                     }
                 }
                 .padding(DS.space("s"))
@@ -156,6 +153,14 @@ private struct HomePerde: View {
             // Perdenin altına düşen yumuşak amber yansıma (durağan gölge).
             .shadow(color: Color.dsAmberGlow.opacity(running ? 0.45 : 0.25), radius: 26, y: 14)
             .animation(DS.animation(.page, gate: gate), value: model.lastTranslation)
+    }
+
+    /// "PS5 · Saniyede 10 Kare" (pencereden okunurken kaynak adı yok).
+    private var frameRate: String {
+        let rate = String(format: String(localized: "%lld Frames/s"), ticker.fps)
+        let source: String? = model.isXbox ? "Xbox" : (model.readsCaptureWindow ? nil : "PS5")
+        guard let source else { return rate }
+        return source + " · " + rate
     }
 
     static func rect(_ region: CropRegion, size: CGSize) -> CGRect {
