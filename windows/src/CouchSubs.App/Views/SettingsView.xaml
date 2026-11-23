@@ -11,16 +11,20 @@
          iki kelimelik alt yazı; seçili bölümün amber yumuşak hapı satırlar arasında kayar; arkada yavaş renk geçişi). Kart
          içeriği kadar uzar ve sağdaki sayfa kayarken üstte sabit kalır. Sağda seçili sayfa: iki sütun, her ayar bir birim
          (başlık üstte, denetim altta, açıklama en altta; birimler arası 24, ayraç yok). -->
-    <Grid Margin="{t:Sp 'l'}">
+    <!-- Perde: sayfa bütün pencereyi kaplar; cam üst çubuk ve reklam şeridi içeriğin üstünde durur. Menü kartı çubukların
+         arasında sabit (shell.inset + 24); sağdaki sayfa kendi içinde kayar ve içeriği çubukların arkasından geçer (boşluk
+         kayan içeriğin içinde). Sağ sütunun başında seçili bölümün başlığı (renkli simge karesi + başlık + alt yazı). -->
+    <Grid Margin="{t:Sp 'l,0'}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="{t:Sp l}" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Grid x:Name="NavCard" Width="{DynamicResource size.settingsNav}" VerticalAlignment="Top">
+        <Border Padding="{DynamicResource shell.inset}" VerticalAlignment="Top">
+        <Grid x:Name="NavCard" Width="{DynamicResource size.settingsNav}" VerticalAlignment="Top" Margin="{t:Sp '0,l'}">
             <Border Background="{DynamicResource surfaceBrush}" CornerRadius="{DynamicResource radius.card}" />
             <c:NavGlow x:Name="Glow" />
-            <Border BorderBrush="{DynamicResource borderBrush}" BorderThickness="1" CornerRadius="{DynamicResource radius.card}" Padding="{t:Sp 's'}"
+            <Border BorderBrush="{DynamicResource cardEdgeBrush}" BorderThickness="1" CornerRadius="{DynamicResource radius.card}" Padding="{t:Sp 's'}"
                     SnapsToDevicePixels="True">
                 <Grid x:Name="NavHost">
                     <!-- Seçim hapı: seçili satırın konumuna kayar (SettingsView.MoveSelection). -->
@@ -32,19 +36,20 @@
                     <StackPanel x:Name="Nav">
                         <c:NavItem Content="{t:T 'Basics'}" Hint="{t:T 'Translation, Sound'}" Icon="&#xE9E9;" Tint="{DynamicResource amberBrush}" Tag="0" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
                         <c:NavItem Content="{t:T 'Subtitle Appearance'}" Hint="{t:T 'Size, Colors'}" Icon="&#xE8D2;" Tint="{DynamicResource peachBrush}" Tag="1" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
-                        <c:NavItem Content="{t:T 'Advanced'}" Hint="{t:T 'Engine, Experimental'}" Icon="&#xE713;" Tint="{DynamicResource liveBrush}" Tag="2" Checked="OnNav" />
+                        <c:NavItem Content="{t:T 'Advanced'}" Hint="{t:T 'Engine, Experimental'}" Icon="&#xE713;" Tint="{DynamicResource logoBackBrush}" Tag="2" Checked="OnNav" />
                         <Border Height="1" Background="{DynamicResource borderBrush}" Margin="{t:Sp 's,xs'}" />
-                        <c:NavItem Content="{t:T 'Subtitle Area'}" Hint="{t:T 'Frame, Extra Areas'}" Icon="&#xE8B3;" Tint="{DynamicResource amberBrush}" Tag="3" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
+                        <c:NavItem Content="{t:T 'Subtitle Area'}" Hint="{t:T 'Frame, Extra Areas'}" Icon="&#xE8B3;" Tint="{DynamicResource oliveBrush}" Tag="3" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
                         <c:NavItem Content="{t:T 'Game Packs'}" Hint="{t:T 'Ready Translations'}" Icon="&#xE7B8;" Tint="{DynamicResource oliveBrush}" Tag="4" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
                         <c:NavItem Content="{t:T 'Turkish Dubbing'}" Hint="{t:T 'Voices, Characters'}" Icon="&#xE8D6;" Tint="{DynamicResource plumBrush}" Tag="5" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
                         <c:NavItem Content="{t:T 'Output Screens'}" Hint="{t:T 'TV, OBS'}" Icon="&#xE7F4;" Tint="{DynamicResource tealBrush}" Tag="6" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
                         <c:NavItem Content="{t:T 'Keyboard Shortcuts'}" Hint="{t:T 'Translation Keys'}" Icon="&#xE765;" Tint="{DynamicResource skyBrush}" Tag="7" Checked="OnNav" Margin="{t:Sp '0,0,0,xxs'}" />
-                        <c:NavItem Content="{t:T 'Console and Source'}" Hint="{t:T 'PS5, Xbox'}" Icon="&#xE7FC;" Tint="{DynamicResource peachBrush}" Tag="8" Checked="OnNav" />
+                        <c:NavItem Content="{t:T 'Console and Source'}" Hint="{t:T 'PS5, Xbox'}" Icon="&#xE7FC;" Tint="{DynamicResource logoBackBrush}" Tag="8" Checked="OnNav" />
                     </StackPanel>
                 </Grid>
             </Border>
         </Grid>
-        <TabControl x:Name="Sections" Grid.Column="2" Style="{StaticResource PageTabs}" SelectionChanged="OnSection">
+        </Border>
+        <TabControl x:Name="Sections" Grid.Column="2" Style="{StaticResource SettingsPageTabs}" SelectionChanged="OnSection">
             <!-- ───── Temel ───── -->
             <TabItem x:Name="BasicsSection">
                 <Grid Margin="{t:Sp '0,0,0,l'}">
@@ -96,11 +101,8 @@
                     <!-- Altyazı görünümü özeti -->
                     <c:Card Grid.Column="2" Title="{t:T 'Subtitle appearance'}" VerticalAlignment="Top">
                         <c:SpacedStack>
-                            <Border Style="{StaticResource DeviceFrame}" Height="180">
-                                <Border x:Name="MiniSubtitle" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="{t:Sp 'm'}" Padding="{t:Sp 's,xs'}" CornerRadius="10">
-                                    <TextBlock x:Name="MiniSubtitleText" FontWeight="SemiBold" TextAlignment="Center" />
-                                </Border>
-                            </Border>
+                            <!-- Perde önizlemesi (16:9, 20 köşe, sıcak sahne + projeksiyon ışığı); altyazı ayarların renk ve boyuyla. -->
+                            <ContentControl x:Name="MiniPreview" Focusable="False" />
                             <TextBlock Style="{StaticResource HintText}"
                                        Text="{t:T 'Text size, background, text and character name colors. The settings apply the same on the TV, phone and computer screen.'}" />
                             <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnEditAppearance">
@@ -503,9 +505,7 @@
             <TabItem x:Name="PacksSection">
                 <c:SpacedStack Gap="l" Margin="{t:Sp '0,0,0,l'}">
                     <DockPanel>
-                        <Border x:Name="PacksPill" DockPanel.Dock="Right" Style="{StaticResource Pill}" VerticalAlignment="Top" Margin="{t:Sp 's,0,0,0'}" Visibility="Collapsed">
-                            <TextBlock x:Name="PacksPillText" VerticalAlignment="Center" />
-                        </Border>
+                        <c:Chip x:Name="PacksPill" DockPanel.Dock="Right" Tone="Amber" VerticalAlignment="Top" Margin="{t:Sp 's,0,0,0'}" Visibility="Collapsed" />
                         <TextBlock Style="{StaticResource SecondaryText}"
                                    Text="{t:T 'Ready-made Turkish translations for some games. A line found in a pack appears at once, without the translation engine.'}" />
                     </DockPanel>
@@ -513,14 +513,16 @@
                         <Button x:Name="ImportPack" Content="{t:T 'Import pack…'}" Click="OnImportPack" />
                         <!-- Telefonlardaki "Paketleri şimdi güncelle": beklerken düğme "Güncelleniyor…", sonuç iletide. -->
                         <Button x:Name="UpdatePacks" Content="{t:T 'Update the packs now'}" Click="OnUpdatePacks" />
-                        <ProgressBar x:Name="UpdatePacksProgress" IsIndeterminate="True" Width="96" VerticalAlignment="Center" Visibility="Collapsed" />
+                        <c:BarsLoader x:Name="UpdatePacksProgress" VerticalAlignment="Center" Visibility="Collapsed" />
                         <TextBlock x:Name="UpdatePacksStatus" Text="{t:T 'Updating the packs…'}" Style="{StaticResource HintText}"
                                    VerticalAlignment="Center" Visibility="Collapsed" />
                     </c:SpacedStack>
-                    <ItemsControl x:Name="PackList" Margin="{t:Sp '-xs,0,-xs,0'}" Focusable="False">
+                    <!-- Kapak rafı (Perde): her paket 3:4 kapak (seçilen görsel ya da adından degrade) + satır sayısı; oynanan
+                         oyunun kapağı amber halka ve kapak ışımasıyla. Tıklayınca kapak seçilir, sağ tıkta seç/kaldır. -->
+                    <ItemsControl x:Name="PackList" Margin="{t:Sp 'xxs,0,0,0'}" Focusable="False">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <UniformGrid Columns="2" VerticalAlignment="Top" />
+                                <WrapPanel VerticalAlignment="Top" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
@@ -576,9 +578,14 @@
                         <!-- TV durumu: bağlıyken "Bağlı", koptuysa bir dakika "Yeniden bağlanılıyor…" (TV alındısı), sonra bekleniyor. -->
                         <c:Card Title="TV" Visibility="{Binding ShowsOnTv, Converter={StaticResource VisibleIf}}">
                             <c:SpacedStack>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="TvStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="{t:Sp '0,0,xs,0'}" />
-                                    <TextBlock Text="{Binding TvStatusText}" Style="{StaticResource UnitTitleText}" VerticalAlignment="Center" />
+                                <!-- Perde TV kartı: simge karesi, ad + mono "Marka · adres", sağda "Eşli" hapı (bağlıyken yeşil, kart
+                                     amber kenarlı); altında durum cümlesi. -->
+                                <StackPanel>
+                                    <ContentControl x:Name="TvCardHost" Focusable="False" />
+                                    <StackPanel Orientation="Horizontal" Margin="{t:Sp '0,s,0,0'}">
+                                        <Ellipse x:Name="TvStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="{t:Sp '0,0,xs,0'}" />
+                                        <TextBlock Text="{Binding TvStatusText}" Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
                                 <WrapPanel>
                                     <Button Content="{t:T 'Send Test Subtitle'}" Margin="{t:Sp '0,0,xs,xs'}" Click="OnTest" />
@@ -761,7 +768,7 @@
                                 </Border>
                                 <!-- PS5 bilgi satırı (Mac DSRow): ad, altında IP (yoksa kısa açıklama), sağda Bağlı / Kurulmadı rozeti. -->
                                 <DockPanel x:Name="ConsolePlayStationHint" LastChildFill="True">
-                                    <c:Badge x:Name="ConsolePs5Badge" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="{t:Sp 's,0,0,0'}" />
+                                    <c:Chip x:Name="ConsolePs5Badge" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="{t:Sp 's,0,0,0'}" />
                                     <c:SectionTitle x:Name="ConsolePs5Row" Title="PS5" Text="{t:T 'With Remote Play and a second PSN account.'}" />
                                 </DockPanel>
                                 <c:SpacedStack x:Name="ConsoleXboxPanel">

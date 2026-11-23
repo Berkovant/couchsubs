@@ -2052,4 +2052,34 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Ayarlar sayfaları (Perde): sekme başlıkları görünmez (gezinme soldaki kartta); seçili sayfa kendi içinde kayar ve cam
+         üst çubuğun / reklam şeridinin arkasından geçer (boşluk shell.inset kayan içeriğin içinde). Başta bölüm başlığı (Tag). -->
+    <Style x:Key="SettingsPageTabs" TargetType="TabControl">
+        <Setter Property="Foreground" Value="{DynamicResource textPrimaryBrush}" />
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="TabItem">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid>
+                        <StackPanel IsItemsHost="True" Visibility="Collapsed" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <Border Padding="{DynamicResource shell.inset}">
+                                <StackPanel Margin="0,24,8,0">
+                                    <ContentPresenter Content="{TemplateBinding Tag}" />
+                                    <ContentPresenter ContentSource="SelectedContent" />
+                                </StackPanel>
+                            </Border>
+                        </ScrollViewer>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

@@ -23,7 +23,7 @@ public sealed class TrayPopup : Window
     private readonly AppController controller;
     private readonly System.Windows.Forms.NotifyIcon icon;
     private readonly TextBlock detail = new() { FontSize = 12, Margin = Sp.T("0", "xxs", "0", "0"), TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
-    private readonly Badge badge = new();
+    private readonly Chip badge = new();
     private readonly Button main = new() { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 44, MinHeight = 44 };
     private readonly SwitchRow clicks;
     private bool updating;
@@ -41,8 +41,11 @@ public sealed class TrayPopup : Window
         SizeToContent = SizeToContent.Height;
         SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "textPrimaryBrush");
 
-        var tile = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(12), Child = new CouchLogo { Width = 26, Height = 19, Animated = false } };
-        tile.SetResourceReference(Border.BackgroundProperty, "surface2Brush");
+        // Logo karesi e2 (Perde): yükseltilmiş yüzey, güçlü kıl çizgi, gölge.
+        var tile = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = new CouchLogo { Width = 26, Height = 19, Animated = false },
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 4, Direction = 270, Opacity = 0.3, Color = Colors.Black } };
+        tile.SetResourceReference(Border.BackgroundProperty, "surfaceRaisedBrush");
+        tile.SetResourceReference(Border.BorderBrushProperty, "raisedEdgeBrush");
         detail.SetResourceReference(TextBlock.ForegroundProperty, "textSecondaryBrush");
         var names = new StackPanel { Margin = Sp.T("s", "0", "s", "0"), VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(new TextBlock { Text = "CouchSubs", FontSize = 15, FontWeight = FontWeights.SemiBold });
@@ -84,9 +87,13 @@ public sealed class TrayPopup : Window
         stack.Children.Add(place);
         stack.Children.Add(Divider());
         stack.Children.Add(open);
-        var card = new Border { Child = stack, Padding = Sp.T("m"), CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Margin = Sp.T("m") };
+        // Arkada üstten düşen durağan projeksiyon ışığı (Perde).
+        var lit = new Grid();
+        lit.Children.Add(new RoundClip { Radius = 20, Child = new ProjectorLight(), Margin = new Thickness(-Sp.V("m")) });
+        lit.Children.Add(stack);
+        var card = new Border { Child = lit, Padding = Sp.T("m"), CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Margin = Sp.T("m") };
         card.SetResourceReference(Border.BackgroundProperty, "surfaceBrush");
-        card.SetResourceReference(Border.BorderBrushProperty, "borderBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, "cardEdgeBrush");
         card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 40, ShadowDepth = 16, Direction = 270, Opacity = 0.14, Color = Color.FromRgb(0x1D, 0x1E, 0x22) };
         Content = card;
         Deactivated += (_, _) => Hide();
@@ -147,8 +154,8 @@ public sealed class TrayPopup : Window
         if (controller.ShowsOnTv && controller.Tv?.Name is { Length: > 0 } tv) parts.Add(tv);
         detail.Text = string.Join(" · ", parts);
         var running = controller.IsRunning;
-        badge.Content = text[controller.DemoMode ? "Demo Mode" : running ? "Translation On" : "Ready"];
-        badge.Tone = running ? PillTone.Success : controller.DemoMode ? PillTone.Attention : PillTone.Idle;
+        badge.Text = text[controller.DemoMode ? "Demo Mode" : running ? "Translation On" : "Ready"];
+        badge.Tone = running ? ChipTone.Live : controller.DemoMode ? ChipTone.Amber : ChipTone.Muted;
         main.SetResourceReference(StyleProperty, running || controller.DemoMode ? "LiveButton" : "PrimaryButton");
         main.Content = text[controller.IsStarting ? "Starting…" : controller.DemoMode ? "Exit Demo Mode" : running ? "Stop Translating" : "Start Translating"];
         main.IsEnabled = !controller.IsStarting && (running || controller.DemoMode || controller.CanStart);
