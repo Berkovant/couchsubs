@@ -413,7 +413,7 @@ jobs:
           if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "ekran görüntüsü aracı zamanında bitmedi" }
           if (Test-Path screens/errors.txt) { Get-Content screens/errors.txt; throw "ekranlardan biri hata verdi" }
           $count = (Get-ChildItem screens -Filter *.png).Count
-          if ($count -lt 22) { throw "beklenen 22 ekran görüntüsü, bulunan: $count" }
+          if ($count -lt 86) { throw "beklenen 86 ekran görüntüsü (ScreenRenderer.ExpectedCount), bulunan: $count" }
 
       # Antivirüs bir DLL'i karantinaya alınca uygulama sessizce kapanmamalı, eksik dosyayı söylemeli.
       - name: Eksik DLL ile açılış

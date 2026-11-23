@@ -18,8 +18,8 @@ using CouchSubs.Shell;
 namespace CouchSubs.App.Views;
 
 /// <summary>
-/// Ana ekran (yeni arayüz): durum çipleri, oyun görüntüsü ve üç düğme, bildirimler, Durum ya da "Sorun Var" kartı,
-/// Canlı Akış. Saniyede bir kare hızı, sessizlik ve durum karoları yenilenir.
+/// Ana ekran (Perde): perde ve üç düğme, dört durum karosu, bildirimler, Canlı Akış ya da "Sorun Var" kartı. Saniyede bir
+/// kare hızı, sessizlik ve sayılar yenilenir. Çeviri sürerken yalnız canlı nabız atar (hareket kapısı).
 /// </summary>
 public partial class MainView : UserControl
 {
@@ -246,6 +246,24 @@ public partial class MainView : UserControl
 
     private void OnSettings(object sender, RoutedEventArgs e) => SettingsView.Open(Window.GetWindow(this), controller);
 
+    // Durum karoları ilgili ayara gider (Mac HomeTile): konsol → Konsol ve Kaynak, TV → Ayarlar (TV kurulmadıysa TV adımı),
+    // oyun → "Hangi Oyun?", çeviri → Çeviri.
+    private void OnConsoleTile(object sender, RoutedEventArgs e)
+    {
+        if (controller.NeedsXboxLink) controller.LinkXbox();
+        else SettingsView.Open(Window.GetWindow(this), controller, SettingsSection.PictureSource);
+    }
+
+    private void OnTvTile(object sender, RoutedEventArgs e)
+    {
+        if (controller.ShowsOnTv && !controller.HasTv) controller.Step = OnboardingStep.Tv;
+        else SettingsView.Open(Window.GetWindow(this), controller, SettingsSection.Appearance);
+    }
+
+    private void OnGameTile(object sender, RoutedEventArgs e) => controller.AskGame();
+
+    private void OnEngineTile(object sender, RoutedEventArgs e) => SettingsView.Open(Window.GetWindow(this), controller, SettingsSection.Translation);
+
     private void OnTranslationSettings(object sender, RoutedEventArgs e) =>
         SettingsView.Open(Window.GetWindow(this), controller, SettingsSection.Translation);
 
@@ -262,8 +280,8 @@ public partial class MainView : UserControl
     }
 
     /// <summary>
-    /// Dört durum çipi: konsol (ya da seçilen pencere / deneme), TV (ya da bilgisayar ekranı), oynanan oyun, çeviri motoru.
-    /// Yeşil tik hazır ya da bağlı, kırmızı ünlem sorun, gri nokta kurulmamış ya da bekliyor demektir.
+    /// Dört durum karosu (Mac StatusTiles): konsol (ya da seçilen pencere / deneme), TV (ya da bilgisayar ekranı), oynanan oyun
+    /// (kapağıyla), çeviri motoru. Yeşil nokta hazır ya da bağlı, kırmızı sorun, gri kurulmamış ya da bekliyor demektir.
     /// </summary>
     private void ShowChips()
     {
@@ -271,29 +289,35 @@ public partial class MainView : UserControl
         var settings = controller.Settings;
         var running = controller.IsRunning;
         var consoleTone = controller.DemoMode ? StatusTone.Good : running ? controller.Ps5Tone : controller.CanStart ? StatusTone.Good : StatusTone.Idle;
-        var consoleValue = controller.DemoMode ? text["Demo Mode"]
-            : running ? controller.Ps5Tone switch { StatusTone.Good => text["Connected"], StatusTone.Warning => text["Not Connected"], _ => text["Connecting…"] }
-            : controller.CanStart ? text["Ready"] : text["Not Set Up"];
-        ConsoleChip.Show(controller.ConsoleTitle, consoleValue, controller.Console?.Name is { Length: > 0 } name && !controller.IsXbox ? name : null, consoleTone);
+        var shortState = running ? controller.Ps5Tone switch { StatusTone.Good => text["Connected"], StatusTone.Warning => text["Not Connected"], _ => text["Connecting…"] } : null;
+        if (controller.DemoMode)
+            ConsoleTile.Show(text["Demo Mode"], text["Sample pictures"], null, consoleTone, Glyphs.Play, IconTone.Amber);
+        else if (controller.IsXbox ? controller.XboxReadsWindow : controller.Settings.FrameSource == FrameSource.CaptureWindow)
+            ConsoleTile.Show(text["Window"], controller.ConsoleTitle, shortState, consoleTone, "\uE8A7", IconTone.Gray);
+        else if (controller.IsXbox)
+            ConsoleTile.Show(text["Xbox · Beta"], "Xbox", shortState, consoleTone, "\uE7FC", IconTone.Olive);
+        else
+            ConsoleTile.Show("PS5", controller.Console?.Name is { Length: > 0 } name ? name : controller.CanStart ? "PS5" : text["Not Set Up"],
+                shortState ?? (controller.CanStart ? text["Ready"] : null), consoleTone, "\uE7FC", IconTone.Gray);
 
-        if (!controller.ShowsOnTv) TvChip.Show("TV", text["Computer Screen"], null, StatusTone.Good);
-        else if (!controller.HasTv) TvChip.Show("TV", text["Not Set Up"], null, StatusTone.Idle);
+        if (!controller.ShowsOnTv) TvTile.Show(text["Computer Screen"], text["This PC"], null, StatusTone.Good, "\uE7F8", IconTone.Teal);
+        else if (!controller.HasTv) TvTile.Show("TV", text["Not Set Up"], null, StatusTone.Idle, "\uE7F4", IconTone.Gray);
         else
         {
             var tone = controller.TvTone == StatusTone.Warning ? StatusTone.Warning : controller.TvClients > 0 || !running ? StatusTone.Good : StatusTone.Idle;
             // TV koptuysa bir dakika "Yeniden bağlanılıyor…" (TV alındısı; Mac ile aynı), sonra "Bekleniyor".
             var more = controller.TvClients > 0 ? null : controller.TvReconnecting ? text["Reconnecting…"] : running ? text["Waiting"] : null;
-            TvChip.Show("TV", controller.Tv?.Name ?? "TV", more, tone);
+            TvTile.Show("TV", controller.Tv?.Name ?? "TV", more, tone, "\uE7F4", IconTone.Amber);
         }
 
         var packs = GameCatalog.PackShelf(controller.InstalledPacks);
         var game = controller.PlayedGame;
         var hasPack = game is not null && settings.GamePacks && packs.Any(item => item.Titles.Append(item.Title).Any(title => GameName.Key(title) == GameName.Key(game)));
-        GameChip.Show(text["Game"], game ?? text["Unknown Game"], hasPack ? text["Pack"] : null, game is null ? StatusTone.Idle : StatusTone.Good);
+        GameTile.Show(text["Game"], game ?? text["Unknown Game"], hasPack ? text["Pack"] : null, game is null ? StatusTone.Idle : StatusTone.Good, "\uE9CE", IconTone.Gray, game);
 
         var engineTone = controller.TranslatorStatus == TranslatorStatus.EngineFailed || (running && controller.OnlineIssue is not null) ? StatusTone.Warning : StatusTone.Good;
         var engine = settings.Engine == TranslationEngine.Free ? text["Free Translation"] : settings.Engine.DisplayName();
-        EngineChip.Show(text["Translation"], engine, $"{settings.SourceLanguage.ToUpperInvariant()}→{settings.TargetLanguage.ToUpperInvariant()}", engineTone);
+        EngineTile.Show(text["Translation"], engine, $"{settings.SourceLanguage.ToUpperInvariant()}→{settings.TargetLanguage.ToUpperInvariant()}", engineTone, "\uF2B7", IconTone.Sky);
 
         // Ekranı Çevir düğmesinin kısayolu ipucunda (Ayarlar › Klavye Kısayolları).
         ScreenButton.ToolTip = HotkeyText.Title(settings, HotkeyAction.Screen, "Translate the screen (%@)");
@@ -332,11 +356,11 @@ public partial class MainView : UserControl
         var share = lines.Count == 0 ? 0 : (int)Math.Round(100.0 * fromPack / lines.Count);
         PackCount.Text = fromPack.ToString(CultureInfo.CurrentCulture);
         PackShare.Text = text.Format("From Pack · %lld%%", share);
-        PackRing.Fraction = share / 100.0;
         var delays = controller.RecentDelaysMs;
         DelayValue.Text = delays.Count == 0 ? "–" : $"{(int)Math.Round(delays.Average())} ms";
-        DelayBars.Values = delays.Select(value => (double)value).ToList();
-        StateTitle.Text = text[!controller.IsRunning ? "Translation Stopped" : lines.Count > 0 ? "Subtitles Flowing" : "Waiting for Subtitles"];
+        // Akış boşken durum hapı: çeviri sürüyorsa amber "Altyazı Bekleniyor", değilse gri "Çeviri Durdu".
+        StateChip.Text = text[controller.IsRunning ? "Waiting for Subtitles" : "Translation Stopped"];
+        StateChip.Tone = controller.IsRunning ? ChipTone.Amber : ChipTone.Muted;
     }
 
     /// <summary>
@@ -350,7 +374,7 @@ public partial class MainView : UserControl
         var kind = HomeProblem.For(controller.IsRunning, controller.DemoMode, controller.LastFrameAt is { } at ? now - at : null,
             controller.ScreenMenuOpen, controller.ShowsSubtitleOffTip);
         ProblemCard.Visibility = kind == HomeProblemKind.None ? Visibility.Collapsed : Visibility.Visible;
-        StatusCard.Visibility = kind == HomeProblemKind.None ? Visibility.Visible : Visibility.Collapsed;
+        FeedCard.Visibility = kind == HomeProblemKind.None ? Visibility.Visible : Visibility.Collapsed;
         if (kind == HomeProblemKind.None)
         {
             shownProblem = kind;
@@ -358,7 +382,7 @@ public partial class MainView : UserControl
         }
         var lastLine = controller.History.FirstOrDefault()?.Date;
         var silent = HomeProblem.SilentSeconds(now, lastLine, sessionStartedAt ?? now);
-        SilentFor.Text = text.Format("%lld S SILENT", silent);
+        SilentFor.Text = controller.IsRunning ? text.Format("%lld s silent", silent) : text["Issue"];
         var pictureGap = controller.LastFrameAt is { } last ? (int)(now - last).TotalSeconds : 0;
         switch (kind)
         {
@@ -432,7 +456,11 @@ public partial class MainView : UserControl
     {
         var since = controller.IsRunning ? sessionStartedAt ?? DateTime.MinValue : DateTime.MinValue;
         var lines = controller.History.Where(entry => entry.Date >= since).Take(FeedLineCount).ToList();
-        Feed.ItemsSource = lines;
+        Feed.ItemsSource = lines.Select((entry, index) =>
+        {
+            var (speaker, line) = SubtitlePlate.Split(entry.Translation);
+            return new FeedLine(speaker?.TrimEnd(':'), line, entry.Source, Math.Min(index, 2));
+        }).ToList();
         FeedEmpty.Visibility = lines.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -514,11 +542,8 @@ public partial class MainView : UserControl
         var wasAsking = GameAsk.Visibility == Visibility.Visible;
         GameAsk.Visibility = asking ? Visibility.Visible : Visibility.Collapsed;
         // Kart açıkken ana ekran bulanıklaşır ve soluklaşır (tasarım: filter blur(2px), opacity .5).
-        foreach (var part in new UIElement[] { ChipsCard, Body })
-        {
-            part.Effect = asking ? new System.Windows.Media.Effects.BlurEffect { Radius = 4 } : null;
-            part.Opacity = asking ? 0.5 : 1;
-        }
+        Body.Effect = asking ? new System.Windows.Media.Effects.BlurEffect { Radius = 4 } : null;
+        Body.Opacity = asking ? 0.5 : 1;
         if (asking && !wasAsking) Theme.Motion.EnterFrom((FrameworkElement)GameAsk.Children[0], 12, Theme.Motion.Page);
         PlayedGameText.Text = controller.PlayedGame ?? text["Not known"];
         GameChangeButton.Content = text[controller.PlayedGame is null ? "Choose" : "Change"];
@@ -547,7 +572,10 @@ public partial class MainView : UserControl
     private void OnDeclineAreaProfile(object sender, RoutedEventArgs e) => controller.DeclineOfferedAreaProfile();
     private void OnUndoAreaProfile(object sender, RoutedEventArgs e) => controller.UndoAreaProfile();
 
-    /// <summary>Oyun seçenekleri: en çok beş; seçenek kartı 64 yüksek, solda 40'lık kapak, ad, sağda rozet.</summary>
+    /// <summary>
+    /// Kapak rafı (Perde DSCoverShelf): en çok beş öneri, 3:4 kapak (adından degrade, kalın beyaz ad); paketi olan "Paket Var",
+    /// son oynanan "Son Oynanan" cam hapıyla; seçili oyun amber halka + kapak ışıması.
+    /// </summary>
     private void ShowGameSuggestions()
     {
         var text = Localizer.Current;
@@ -556,31 +584,17 @@ public partial class MainView : UserControl
         var suggestions = controller.GameSuggestions(typed).Take(5).ToList();
         var last = controller.LastPlayedGame;
         var shelf = GameCatalog.PackShelf(controller.InstalledPacks);
+        var chosen = controller.PlayedGame is { } played ? GameName.Key(played) : null;
         GameList.Children.Clear();
         foreach (var name in suggestions)
         {
-            var row = new DockPanel();
-            var cover = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(10), Margin = Sp.T("0", "0", "m", "0") };
-            cover.SetResourceReference(Border.BackgroundProperty, "tileBrush");
-            cover.Child = new TextBlock { Text = Monogram(name), FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            DockPanel.SetDock(cover, Dock.Left);
-            row.Children.Add(cover);
             var hasPack = shelf.Any(item => item.Titles.Append(item.Title).Any(title => GameName.Key(title) == GameName.Key(name)));
-            if (hasPack || name == last)
-            {
-                var tag = new Controls.Badge { Content = text[hasPack ? "Pack Available" : "Last Played"], Tone = hasPack ? Controls.PillTone.Attention : Controls.PillTone.Idle };
-                DockPanel.SetDock(tag, Dock.Right);
-                row.Children.Add(tag);
-            }
-            row.Children.Add(new TextBlock { Text = name, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
-            var option = new Controls.OptionCard { Content = row, GroupName = "playedGame", MinHeight = 64, Margin = Sp.T("0", "0", "0", "xs") };
-            option.Checked += (_, _) => controller.ChooseGame(name);
-            GameList.Children.Add(option);
+            var status = hasPack ? text["Pack Available"] : name == last ? text["Last Played"] : null;
+            var cover = new GameCover(name, status, GameName.Key(name) == chosen) { Margin = GameList.Children.Count == 0 ? new Thickness(0) : Sp.T("s", "0", "0", "0") };
+            cover.Click += (_, _) => controller.ChooseGame(name);
+            GameList.Children.Add(cover);
         }
     }
-
-    private static string Monogram(string name) =>
-        new string([.. name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(word => char.ToUpperInvariant(word[0]))]);
 
     private void OnChangeGame(object sender, RoutedEventArgs e) => controller.AskGame();
 

@@ -126,7 +126,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="c:ErrorBox">
                     <Grid>
-                        <Border CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource liveBrush}" Opacity="0.06" />
+                        <Border CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource liveSoftBrush}" />
                         <Border CornerRadius="{DynamicResource radius.tile}" BorderBrush="{DynamicResource liveRingBrush}" BorderThickness="1" Padding="{m:Sp 'm'}">
                             <c:SpacedStack Gap="s">
                                 <StackPanel Orientation="Horizontal">

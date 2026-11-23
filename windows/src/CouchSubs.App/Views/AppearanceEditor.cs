@@ -89,7 +89,7 @@ public sealed class AppearanceEditor : Grid
         // Yazı boyutu (DSSliderRow): başlık solda, değer sağda (mono), çubuk altta, uçlarda 16 / 50.
         var sizeUnit = new StackPanel();
         var sizeHead = new DockPanel { Margin = Sp.T("0", "0", "0", "unitTitle") };
-        sizeValue.SetResourceReference(StyleProperty, "MonoText");
+        sizeValue.SetResourceReference(StyleProperty, "SliderValueText");
         sizeValue.VerticalAlignment = VerticalAlignment.Bottom;
         DockPanel.SetDock(sizeValue, Dock.Right);
         sizeHead.Children.Add(sizeValue);

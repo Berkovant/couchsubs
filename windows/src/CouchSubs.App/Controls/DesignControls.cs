@@ -40,8 +40,8 @@ public class StatusPill : Control
     public PillTone Tone { get => (PillTone)GetValue(ToneProperty); set => SetValue(ToneProperty, value); }
 }
 
-/// <summary>Durum hapının ve rozetin tonu: boşta (gri), başarı (yeşil), canlı/uyarı (kırmızı), dikkat (amber).</summary>
-public enum PillTone { Idle, Success, Live, Attention }
+/// <summary>Durum hapının ve rozetin tonu: boşta (gri), başarı (yeşil), canlı/uyarı (kırmızı), dikkat (amber), açık (çeviri akıyor: canlı noktası nabız atar).</summary>
+public enum PillTone { Idle, Success, Live, Attention, On }
 
 /// <summary>Küçük rozet (24 yüksek, tam yuvarlak): Açık / Kapalı / Bilinmiyor gibi denetim sonuçları.</summary>
 public class Badge : ContentControl

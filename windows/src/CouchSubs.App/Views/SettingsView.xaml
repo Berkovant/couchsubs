@@ -314,7 +314,7 @@
                                 <!-- Kaydırıcı birimi: başlık solda, değer sağda (mono); çubuk altta; açıklama en altta. -->
                                 <StackPanel>
                                     <DockPanel Margin="{t:Sp '0,0,0,unitTitle'}">
-                                        <TextBlock x:Name="MisreadWaitValue" DockPanel.Dock="Right" Style="{StaticResource MonoText}" VerticalAlignment="Bottom" />
+                                        <TextBlock x:Name="MisreadWaitValue" DockPanel.Dock="Right" Style="{StaticResource SliderValueText}" />
                                         <TextBlock Text="{t:T 'Wait for a Misread Line'}" Style="{StaticResource UnitTitleText}" />
                                     </DockPanel>
                                     <Slider x:Name="MisreadWait" Minimum="0" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True"
@@ -324,7 +324,7 @@
                                 </StackPanel>
                                 <StackPanel>
                                     <DockPanel Margin="{t:Sp '0,0,0,unitTitle'}">
-                                        <TextBlock x:Name="PartialWaitValue" DockPanel.Dock="Right" Style="{StaticResource MonoText}" VerticalAlignment="Bottom" />
+                                        <TextBlock x:Name="PartialWaitValue" DockPanel.Dock="Right" Style="{StaticResource SliderValueText}" />
                                         <TextBlock Text="{t:T 'Wait for a half-read line'}" Style="{StaticResource UnitTitleText}" />
                                     </DockPanel>
                                     <Slider x:Name="PartialWait" Minimum="0" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True"
@@ -414,7 +414,7 @@
                                 <c:SpacedStack x:Name="CustomPanel">
                                     <StackPanel>
                                         <DockPanel Margin="{t:Sp '0,0,0,unitTitle'}">
-                                            <TextBlock x:Name="VerticalPositionValue" DockPanel.Dock="Right" Style="{StaticResource MonoText}" VerticalAlignment="Bottom"
+                                            <TextBlock x:Name="VerticalPositionValue" DockPanel.Dock="Right" Style="{StaticResource SliderValueText}"
                                                        Typography.NumeralAlignment="Tabular" />
                                             <TextBlock Text="{t:T 'Vertical position'}" Style="{StaticResource UnitTitleText}" />
                                         </DockPanel>
@@ -423,7 +423,7 @@
                                     </StackPanel>
                                     <StackPanel>
                                         <DockPanel Margin="{t:Sp '0,0,0,unitTitle'}">
-                                            <TextBlock x:Name="AreaHeightValue" DockPanel.Dock="Right" Style="{StaticResource MonoText}" VerticalAlignment="Bottom"
+                                            <TextBlock x:Name="AreaHeightValue" DockPanel.Dock="Right" Style="{StaticResource SliderValueText}"
                                                        Typography.NumeralAlignment="Tabular" />
                                             <TextBlock Text="{t:T 'Height'}" Style="{StaticResource UnitTitleText}" />
                                         </DockPanel>

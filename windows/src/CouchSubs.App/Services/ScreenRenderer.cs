@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -28,6 +29,8 @@ public static class ScreenRenderer
         Directory.CreateDirectory(folder);
         // Açılan ilk pencere kendiliğinden ana pencere sayılır; kapanınca uygulama da kapanmasın.
         app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        // Görüntüler durağan karelerle alınır (ortam ışığı, nabız, arama halkası; hareket kapısı kapalı).
+        MotionGate.Forced = false;
         var log = Path.Combine(folder, "errors.txt");
         // Bir ekranın hatası diğerlerini durdurmasın; hatalar dosyaya yazılır.
         app.DispatcherUnhandledException += (_, e) =>
@@ -82,9 +85,23 @@ public static class ScreenRenderer
             Save(() => new HistoryView(Demo(OnboardingStep.Done)), Width, Height, Path.Combine(folder, $"gecmis-{suffix}.png"));
             // Uygulamanın gerçek penceresi: XAML'ı (simge dahil) açılıştaki gibi yüklenir.
             Save(() => Detach(new ShellWindow(Demo(OnboardingStep.Done))), Width, Height, Path.Combine(folder, $"pencere-{suffix}.png"));
+            // Perde: pencerenin tamamı (cam üst çubuk, reklam şeridi), Mac mac-*.png karşılıkları. Ana ekran çeviri sürerken
+            // (CANLI, Canlı Akış satırları), Geçmiş, "Hangi Oyun?", Ayarlar'ın bütün sayfaları ve geniş pencere.
+            Save(() => Detach(Shell(Running(), ShellTab.Home)), Width, Height, Path.Combine(folder, $"pencere-ana-{suffix}.png"));
+            Save(() => Detach(Shell(Running(), ShellTab.Home)), 1680, 945, Path.Combine(folder, $"pencere-genis-ana-{suffix}.png"));
+            Save(() => Detach(Shell(Running(), ShellTab.History)), Width, Height, Path.Combine(folder, $"pencere-gecmis-{suffix}.png"));
+            Save(() =>
+            {
+                var controller = Running();
+                var window = Shell(controller, ShellTab.Home);
+                controller.AskGame();
+                return Detach(window);
+            }, Width, Height, Path.Combine(folder, $"pencere-oyun-sor-{suffix}.png"));
+            foreach (var (index, name) in SettingsPages)
+                Save(() => Detach(Shell(Demo(OnboardingStep.Done), ShellTab.Settings, index)), Width, Height, Path.Combine(folder, $"pencere-ayarlar-{name}-{suffix}.png"));
             Save(() => new SettingsView(Demo(OnboardingStep.Done)), Width, Height, Path.Combine(folder, $"ayarlar-{suffix}.png"));
             // Ayarların diğer sayfaları (Mac ayarlar-*.png ile aynı adlar).
-            foreach (var (index, name) in new[] { (1, "appearance"), (2, "advanced"), (3, "area"), (4, "packs"), (5, "dubbing"), (6, "outputs"), (7, "shortcuts"), (8, "console") })
+            foreach (var (index, name) in SettingsPages.Skip(1))
                 Save(() =>
                 {
                     var page = new SettingsView(Demo(OnboardingStep.Done));
@@ -94,6 +111,38 @@ public static class ScreenRenderer
             Save(() => Detach(new AboutWindow()), 460, 640, Path.Combine(folder, $"hakkinda-{suffix}.png"));
         }
         app.Shutdown();
+    }
+
+    /// <summary>Ayarlar'ın sayfaları (sıra numarası ve Mac ayarlar-*.png adı).</summary>
+    private static readonly (int Index, string Name)[] SettingsPages =
+        [(0, "basics"), (1, "appearance"), (2, "advanced"), (3, "area"), (4, "packs"), (5, "dubbing"), (6, "outputs"), (7, "shortcuts"), (8, "console")];
+
+    /// <summary>Bir ekran görüntüsünde çizilen PNG sayısı (iki tema): sürekli tümleştirme bu sayıyı bekler.</summary>
+    public const int ExpectedCount = 86;
+
+    /// <summary>Uygulama penceresi, istenen sekme (ve Ayarlar sayfası) açık.</summary>
+    private static ShellWindow Shell(AppController controller, ShellTab tab, int? settingsPage = null)
+    {
+        var window = new ShellWindow(controller);
+        window.ShowForRender(tab, settingsPage);
+        return window;
+    }
+
+    /// <summary>Çeviri sürüyormuş gibi örnek oturum (Mac mac-ana ile aynı satırlar): CANLI, son çeviri ve Canlı Akış.</summary>
+    private static AppController Running()
+    {
+        var controller = Demo(OnboardingStep.Done);
+        var history = (SubtitleHistory)typeof(AppController).GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(controller)!;
+        foreach (var (source, translation) in new[]
+                 {
+                     ("I gotta tell you this, Franklin.", "Bunu sana söylemem lazım, Franklin."),
+                     ("Take out the Lost.", "Lost üyelerini ortadan kaldır."),
+                     ("Are you listening to me?", "Dinliyor musun beni?"),
+                 })
+            history.Add(source, translation, LineOrigin.Engine);
+        typeof(AppController).GetProperty(nameof(AppController.IsRunning))!.GetSetMethod(nonPublic: true)!.Invoke(controller, [true]);
+        typeof(AppController).GetProperty(nameof(AppController.LastTranslation))!.GetSetMethod(nonPublic: true)!.Invoke(controller, ["Dinliyor musun beni?"]);
+        return controller;
     }
 
     /// <summary>Pencerenin içeriğini başka bir pencerede çizebilmek için kendi penceresinden ayırır.</summary>
