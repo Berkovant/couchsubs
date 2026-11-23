@@ -1173,76 +1173,264 @@ extension DSPerdePreview where Overlay == EmptyView {
     }
 }
 
-/// Görüntü gelmeden önceki sıcak sahne (yeşil-kum degrade, sağ üstte güneş).
+/// Görüntü gelmeden önceki sahne: özgün, soyut sinematik manzara (telifli görsel yok, tamamıyla çizim). Alacakaranlık
+/// göğü, ufukta batan güneş ve göğe vuran ışık hüzmeleri, katman katman tepeler, ufka koşan yol ve ince amber ufuk
+/// çizgisi. Durağan (hareket yok; hareket kapısına yük getirmez).
 struct DSPerdeScene: View {
     var body: some View {
         GeometryReader { geometry in
-            let span = max(geometry.size.width, geometry.size.height)
-            ZStack {
-                LinearGradient(colors: [Color(red: 0.369, green: 0.455, blue: 0.384), Color(red: 0.557, green: 0.482, blue: 0.341),
-                                        Color(red: 0.22, green: 0.204, blue: 0.18)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [Color(red: 0.871, green: 0.659, blue: 0.376).opacity(0.65), .clear],
-                               center: UnitPoint(x: 0.72, y: 0.3), startRadius: 0, endRadius: span * 0.4)
-                RadialGradient(colors: [Color(red: 0.275, green: 0.376, blue: 0.329).opacity(0.8), .clear],
-                               center: UnitPoint(x: 0.2, y: 0.7), startRadius: 0, endRadius: span * 0.4)
+            let w = geometry.size.width
+            let h = geometry.size.height
+            let horizon = h * 0.6
+            let sunX = w * 0.66
+            ZStack(alignment: .topLeading) {
+                DSSceneSky()
+                // Işık hüzmeleri: güneşten göğe yelpaze.
+                DSSceneBeams(origin: CGPoint(x: sunX, y: horizon))
+                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.85, blue: 0.6).opacity(0.2), .clear],
+                                         startPoint: .bottom, endPoint: .top))
+                // Güneş ve hâlesi.
+                RadialGradient(colors: [Color(red: 1, green: 0.78, blue: 0.47).opacity(0.8),
+                                        Color(red: 0.95, green: 0.5, blue: 0.25).opacity(0.22), .clear],
+                               center: UnitPoint(x: 0.66, y: 0.6), startRadius: 0, endRadius: max(w, h) * 0.42)
+                Circle().fill(Color(red: 1, green: 0.9, blue: 0.72))
+                    .frame(width: h * 0.16, height: h * 0.16)
+                    .position(x: sunX, y: horizon)
+                // Uzak ve yakın tepeler (güneşin altını örter).
+                DSSceneRidge(base: horizon, amplitude: h * 0.07, phase: 0.2, waves: 2.3)
+                    .fill(Color(red: 0.231, green: 0.153, blue: 0.188).opacity(0.92))
+                DSSceneRidge(base: horizon + h * 0.035, amplitude: h * 0.05, phase: 1.4, waves: 3.1)
+                    .fill(Color(red: 0.122, green: 0.09, blue: 0.118))
+                DSSceneGround(top: horizon + h * 0.05)
+                    .fill(LinearGradient(colors: [Color(red: 0.122, green: 0.09, blue: 0.118), Color(red: 0.035, green: 0.035, blue: 0.043)],
+                                         startPoint: .top, endPoint: .bottom))
+                // Ufka koşan yol (perspektif) ve ince amber ufuk çizgisi.
+                DSSceneRoad(vanish: CGPoint(x: sunX, y: horizon + h * 0.05))
+                    .fill(LinearGradient(colors: [Color.dsAmber.opacity(0.3), Color.dsAmber.opacity(0.04)], startPoint: .top, endPoint: .bottom))
+                DSSceneGround(top: horizon + h * 0.05, height: 1)
+                    .fill(LinearGradient(colors: [.clear, Color.dsAmber.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing))
             }
+            .frame(width: w, height: h)
+            .clipped()
         }
         .accessibilityHidden(true)
     }
 }
 
+/// Gök: üstte gece mavisi, ufka doğru kızıl-amber.
+private struct DSSceneSky: View {
+    var body: some View {
+        LinearGradient(stops: [.init(color: Color(red: 0.067, green: 0.078, blue: 0.122), location: 0),
+                               .init(color: Color(red: 0.188, green: 0.149, blue: 0.188), location: 0.36),
+                               .init(color: Color(red: 0.62, green: 0.329, blue: 0.231), location: 0.52),
+                               .init(color: Color(red: 0.937, green: 0.612, blue: 0.29), location: 0.62),
+                               .init(color: Color(red: 0.937, green: 0.612, blue: 0.29), location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// Güneşten yukarı açılan beş ince ışık kaması.
+private struct DSSceneBeams: Shape {
+    let origin: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let spans: [(CGFloat, CGFloat)] = [(-0.8, -0.66), (-0.44, -0.33), (-0.1, 0.0), (0.2, 0.28), (0.52, 0.66)]
+        for (from, to) in spans {
+            path.move(to: origin)
+            path.addLine(to: CGPoint(x: origin.x + rect.width * from, y: rect.minY))
+            path.addLine(to: CGPoint(x: origin.x + rect.width * to, y: rect.minY))
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
+/// Yumuşak dalgalı tepe sırası (iki sinüsün toplamı), alta kadar dolu.
+private struct DSSceneRidge: Shape {
+    let base: CGFloat
+    let amplitude: CGFloat
+    let phase: CGFloat
+    let waves: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        let steps = 48
+        for index in 0...steps {
+            let t = CGFloat(index) / CGFloat(steps)
+            let wave = 0.6 * sin(t * .pi * waves + phase) + 0.4 * sin(t * .pi * waves * 2.7 + phase * 1.7)
+            path.addLine(to: CGPoint(x: rect.minX + rect.width * t, y: base - amplitude * wave - amplitude * 0.3))
+        }
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Ön plan zemini (`height` verilirse yalnız o kalınlıkta bir şerit: ufuk çizgisi).
+private struct DSSceneGround: Shape {
+    let top: CGFloat
+    var height: CGFloat?
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX, y: top, width: rect.width, height: height ?? max(rect.maxY - top, 0)))
+    }
+}
+
+/// Ufuktaki kaçış noktasına daralan yol.
+private struct DSSceneRoad: Shape {
+    let vanish: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: vanish.x - 1.5, y: vanish.y))
+        path.addLine(to: CGPoint(x: vanish.x + 1.5, y: vanish.y))
+        path.addLine(to: CGPoint(x: vanish.x + rect.width * 0.2, y: rect.maxY))
+        path.addLine(to: CGPoint(x: vanish.x - rect.width * 0.34, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
 // MARK: Oyun kapağı
 
-/// Kapak görseli yoksa oyunun adından türetilen degrade (her oyun hep aynı renkte; marka öğesi yok).
+/// Oyun kapağı: kapak görseli yoksa oyunun adından ÖZGÜN TİPOGRAFİK kapak (gerçek kapak/logo kullanılmaz; telif ve
+/// mağaza riski). Her oyuna kararlı bir degrade (adın karmasından), çapraz ışık bandı ve oyunun kısaltması (GTA, RDR; sıra numarası yanında küçük)
+/// iri, sıkı aralıklı ağır yazıyla. Küçük boyda (simge karesi, kapak yığını) yalnız kısaltma ortada okunur.
 struct DSCoverArt: View {
     let seed: String
     var image: Image?
 
+    /// (üst, alt, ışık, yazı). Son palet (gri) iPhone kapak yığınında kullanılmaz.
     static let palettes: [(Color, Color, Color, Color)] = [
-        (Color(red: 0.949, green: 0.651, blue: 0.353), Color(red: 0.784, green: 0.271, blue: 0.416), Color(red: 0.165, green: 0.086, blue: 0.212), Color(red: 1, green: 0.816, blue: 0.541)),
-        (Color(red: 0.788, green: 0.471, blue: 0.243), Color(red: 0.541, green: 0.231, blue: 0.184), Color(red: 0.141, green: 0.078, blue: 0.059), Color(red: 0.969, green: 0.851, blue: 0.627)),
-        (Color(red: 0.243, green: 0.369, blue: 0.525), Color(red: 0.122, green: 0.169, blue: 0.267), Color(red: 0.051, green: 0.063, blue: 0.094), Color(red: 0.624, green: 0.847, blue: 1)),
-        (Color(red: 0.494, green: 0.604, blue: 0.353), Color(red: 0.247, green: 0.322, blue: 0.208), Color(red: 0.071, green: 0.102, blue: 0.063), Color(red: 0.906, green: 0.941, blue: 0.69)),
-        (Color(red: 0.949, green: 0.882, blue: 0.29), Color(red: 0.878, green: 0.2, blue: 0.431), Color(red: 0.102, green: 0.043, blue: 0.133), Color(red: 1, green: 0.608, blue: 0.816)),
-        (Color(red: 0.49, green: 0.529, blue: 0.58), Color(red: 0.227, green: 0.247, blue: 0.286), Color(red: 0.071, green: 0.078, blue: 0.094), Color(red: 0.914, green: 0.863, blue: 0.776)),
+        (Color(red: 0.957, green: 0.6, blue: 0.267), Color(red: 0.6, green: 0.157, blue: 0.157), Color(red: 1, green: 0.851, blue: 0.6), Color(red: 1, green: 0.957, blue: 0.886)),
+        (Color(red: 0.878, green: 0.243, blue: 0.396), Color(red: 0.247, green: 0.071, blue: 0.247), Color(red: 1, green: 0.616, blue: 0.69), Color(red: 1, green: 0.925, blue: 0.937)),
+        (Color(red: 0.204, green: 0.431, blue: 0.851), Color(red: 0.059, green: 0.098, blue: 0.282), Color(red: 0.592, green: 0.792, blue: 1), Color(red: 0.902, green: 0.949, blue: 1)),
+        (Color(red: 0.137, green: 0.682, blue: 0.651), Color(red: 0.035, green: 0.184, blue: 0.231), Color(red: 0.588, green: 0.969, blue: 0.894), Color(red: 0.89, green: 1, blue: 0.976)),
+        (Color(red: 0.537, green: 0.333, blue: 0.91), Color(red: 0.122, green: 0.075, blue: 0.29), Color(red: 0.792, green: 0.69, blue: 1), Color(red: 0.957, green: 0.937, blue: 1)),
+        (Color(red: 0.961, green: 0.749, blue: 0.239), Color(red: 0.71, green: 0.31, blue: 0.075), Color(red: 1, green: 0.941, blue: 0.69), Color(red: 0.165, green: 0.086, blue: 0.035)),
+        (Color(red: 0.937, green: 0.4, blue: 0.29), Color(red: 0.318, green: 0.094, blue: 0.408), Color(red: 1, green: 0.749, blue: 0.588), Color(red: 1, green: 0.937, blue: 0.91)),
+        (Color(red: 0.42, green: 0.455, blue: 0.51), Color(red: 0.11, green: 0.122, blue: 0.149), Color(red: 0.8, green: 0.82, blue: 0.86), Color(red: 0.937, green: 0.945, blue: 0.957)),
     ]
 
     /// Kararlı karma (Swift'in hashValue'su her açılışta değişir).
     static func palette(for seed: String) -> (Color, Color, Color, Color) {
+        palettes[paletteIndex(seed)]
+    }
+
+    static func paletteIndex(_ seed: String) -> Int {
         let sum = seed.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value }
-        return palettes[Int(sum % UInt32(palettes.count))]
+        return Int(sum % UInt32(palettes.count))
+    }
+
+    /// Oyunun kısaltması (yalnız harf, en çok 3): baştaki büyük harf kısaltma (GTA V → GTA), yoksa en çok üç anlamlı
+    /// sözcüğün baş harfi (Grand Theft Auto VI → GTA, Red Dead Redemption 2 → RDR); tek sözcük → ilk iki harf (Mafia → Ma).
+    /// Sondaki sayı ya da Roma rakamı ayrı (`numeral`): kapakta kısaltmanın yanında küçük yazılır (V ile VI karışmaz).
+    static func monogram(_ title: String) -> String {
+        let words = words(title)
+        guard let first = words.first else { return "?" }
+        let english = Locale(identifier: "en_US")
+        if (2...4).contains(first.count), first == first.uppercased(with: english), first.allSatisfy(\.isLetter), !isRoman(first) {
+            return String(first.prefix(3))
+        }
+        let skip: Set<String> = ["the", "of", "a", "an", "and", "to", "in", "on", "for"]
+        let significant = words.filter { !skip.contains($0.lowercased(with: english)) && !isNumeral($0) }
+        if significant.count >= 2 {
+            return significant.prefix(3).map { $0.prefix(1).uppercased(with: english) }.joined()
+        }
+        let word = significant.first ?? first
+        return word.prefix(1).uppercased(with: english) + word.dropFirst().prefix(1).lowercased(with: english)
+    }
+
+    /// Adın sonundaki sayı ya da Roma rakamı (Red Dead Redemption 2 → 2, Grand Theft Auto VI → VI); yoksa nil.
+    static func numeral(_ title: String) -> String? {
+        let words = words(title)
+        guard words.count > 1, let last = words.last, isNumeral(last), last.count <= 4 else { return nil }
+        return last
+    }
+
+    /// Kesme işaretli ekler ("Assassin's" → "s") sözcük sayılmaz.
+    private static func words(_ title: String) -> [String] {
+        title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            .filter { $0.count > 1 || $0.first?.isUppercase == true || $0.first?.isNumber == true }
+    }
+
+    private static func isNumeral(_ word: String) -> Bool {
+        word.allSatisfy(\.isNumber) || isRoman(word)
+    }
+
+    private static func isRoman(_ word: String) -> Bool {
+        !word.isEmpty && word.count <= 4 && word.allSatisfy { "IVX".contains($0) }
     }
 
     var body: some View {
         if let image {
             image.resizable().aspectRatio(contentMode: .fill)
         } else {
-            let (top, middle, bottom, light) = Self.palette(for: seed)
             GeometryReader { geometry in
-                ZStack {
-                    LinearGradient(colors: [top, middle, bottom], startPoint: UnitPoint(x: 0.4, y: 0), endPoint: UnitPoint(x: 0.6, y: 1))
-                    RadialGradient(colors: [light, .clear], center: UnitPoint(x: 0.62, y: 0.3), startRadius: 0,
-                                   endRadius: geometry.size.width * 0.55)
-                    DSSkyline().fill(Color.black.opacity(0.5))
-                        .frame(height: geometry.size.height * 0.42)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                }
+                DSTypeCover(seed: seed, size: geometry.size)
             }
+            .accessibilityHidden(true)
         }
     }
 }
 
-/// Kapağın altındaki şehir silueti (süs).
-private struct DSSkyline: Shape {
-    func path(in rect: CGRect) -> Path {
-        let points: [(CGFloat, CGFloat)] = [(0, 0.4), (0.08, 0.3), (0.12, 0.45), (0.2, 0.18), (0.26, 0.38), (0.34, 0.26), (0.4, 0.48),
-                                            (0.5, 0.22), (0.56, 0.36), (0.64, 0.12), (0.7, 0.4), (0.8, 0.28), (0.86, 0.44), (0.94, 0.2), (1, 0.35)]
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        for (x, y) in points { path.addLine(to: CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)) }
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.closeSubpath()
-        return path
+/// Tipografik kapağın çizimi (DSCoverArt): degrade, köşe ışığı, çapraz bant, kısaltma.
+private struct DSTypeCover: View {
+    let seed: String
+    let size: CGSize
+
+    var body: some View {
+        let (top, bottom, light, ink) = DSCoverArt.palette(for: seed)
+        let w = size.width
+        let h = size.height
+        let span = max(w, h)
+        let mark = DSCoverArt.monogram(seed)
+        let small = min(w, h) < 72
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [top, bottom], startPoint: UnitPoint(x: 0.15, y: 0), endPoint: UnitPoint(x: 0.85, y: 1))
+            RadialGradient(colors: [light.opacity(0.7), .clear], center: UnitPoint(x: 0.9, y: 0.05), startRadius: 0, endRadius: span * 0.7)
+            Rectangle()
+                .fill(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.16), .white.opacity(0)], startPoint: .leading, endPoint: .trailing))
+                .frame(width: span * 0.3, height: span * 2.2)
+                .rotationEffect(.degrees(28))
+                .position(x: w * 0.64, y: h * 0.4)
+            if small {
+                Text(verbatim: mark)
+                    .font(.system(size: min(w, h) * (mark.count > 2 ? 0.34 : 0.44), weight: .heavy))
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(width: w, height: h)
+            } else {
+                // İri kısaltma üst bölgede; altında kısa çizgi. Başlık (DSGameCover) alttaki scrim'in üstünde kalır.
+                let fontSize = w * (mark.count > 2 ? 0.42 : 0.56)
+                VStack(alignment: .leading, spacing: fontSize * 0.1) {
+                    Text(verbatim: mark)
+                        .font(.system(size: fontSize, weight: .black))
+                        .tracking(-fontSize * 0.03)
+                        .foregroundStyle(ink.opacity(0.94))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .shadow(color: bottom.opacity(0.5), radius: w * 0.03, y: w * 0.015)
+                    HStack(alignment: .center, spacing: w * 0.04) {
+                        Capsule().fill(ink.opacity(0.75)).frame(width: w * 0.2, height: max(2, w * 0.02))
+                        if let numeral = DSCoverArt.numeral(seed) {
+                            Text(verbatim: numeral)
+                                .font(.system(size: w * 0.13, weight: .heavy))
+                                .foregroundStyle(ink.opacity(0.9))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.leading, w * 0.09)
+                .padding(.trailing, w * 0.06)
+                .padding(.top, h * 0.1)
+            }
+        }
+        .frame(width: w, height: h)
+        .clipped()
     }
 }
 
@@ -1385,7 +1573,7 @@ struct DSTVCard<Trailing: View>: View {
             DSIconSquare(symbol: "tv", tone: selected ? .amber : .gray, size: 36)
             VStack(alignment: .leading, spacing: DS.space("line")) {
                 Text(verbatim: name).font(.dsBodyStrong).foregroundStyle(Color.dsText).lineLimit(1)
-                Text(verbatim: detail).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Color.dsMuted)
+                Text(verbatim: detail).font(.system(size: 11, weight: .medium).monospacedDigit()).foregroundStyle(Color.dsMuted)
                     .lineLimit(1).truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

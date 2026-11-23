@@ -40,7 +40,7 @@ struct InstallListTitle: View {
             Text(verbatim: text).font(Mobile.TypeScale.cardTitle).foregroundStyle(Mobile.Palette.text)
             Spacer(minLength: 0)
             if searching {
-                ProgressView().controlSize(.small).tint(Mobile.Palette.accentText)
+                DSSearchRings(size: 22)
                 Text(verbatim: TVText.searching).font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
             }
         }
@@ -51,9 +51,10 @@ struct InstallListTitle: View {
 /// Tarama sürerken listenin yerinde duran boş kart.
 struct InstallSearching: View {
     var body: some View {
+        // Perde arama halkası: amber eş merkezli halkalar (Core Animation; hareket azaltılmışken durağan).
         Tile {
             HStack(spacing: Mobile.Space.gap) {
-                ProgressView().tint(Mobile.Palette.accentText)
+                DSSearchRings(size: 40)
                 Text(verbatim: TVText.searching).font(Mobile.TypeScale.body).foregroundStyle(Mobile.Palette.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: Mobile.Control.row, alignment: .leading)
@@ -132,14 +133,11 @@ struct InstallCandidateRow: View {
     var symbol = "tv"
 
     var body: some View {
+        // Perde TV kartı: simge karesi (seçiliyken amber), ad + mono ayrıntı, durum hapı; seçiliyken 2 pt amber kenar,
+        // amber yumuşak dolgu ve ışıma.
         Tile(emphasis: selected ? .selected : .none, spacing: Mobile.Space.inline) {
             HStack(alignment: .top, spacing: Mobile.Space.gap) {
-                Image(systemName: symbol)
-                    .font(.system(.body, weight: .medium))
-                    .foregroundStyle(Mobile.Palette.text)
-                    .frame(width: 40, height: 40)
-                    .background(Mobile.Palette.surface2, in: Circle())
-                    .accessibilityHidden(true)
+                DSIconSquare(symbol: symbol, tone: selected ? .amber : .gray, size: 40)
                 VStack(alignment: .leading, spacing: Mobile.Space.hair) {
                     Text(verbatim: name).font(Mobile.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: detail).font(.system(.caption, design: .monospaced)).foregroundStyle(Mobile.Palette.secondary)
@@ -155,6 +153,7 @@ struct InstallCandidateRow: View {
             }
         }
         .contentShape(Rectangle())
+        .onChange(of: selected) { on in if on { Haptics.selection() } }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : [.isButton])
     }
@@ -202,7 +201,7 @@ struct InstallTimeline: View {
                     VStack(spacing: 0) {
                         marker(state)
                         if stage != .ready {
-                            Rectangle().fill(state == 2 ? Color.dsSuccess : Mobile.Palette.border).frame(width: 2).frame(minHeight: Mobile.Space.gap)
+                            Rectangle().fill(state == 2 ? Color.dsAmber : Color.dsBorderStrong).frame(width: 2).frame(minHeight: Mobile.Space.gap)
                         }
                     }
                     VStack(alignment: .leading, spacing: Mobile.Space.hair) {
@@ -225,13 +224,15 @@ struct InstallTimeline: View {
         ZStack {
             switch state {
             case 2:
-                Circle().fill(Color.dsSuccess)
-                Image(systemName: "checkmark").font(.caption2.weight(.heavy)).foregroundStyle(.white)
+                Circle().fill(Color.dsAmber)
+                Image(systemName: "checkmark").font(.caption2.weight(.heavy)).foregroundStyle(Color.dsOnAmber)
             case 1:
-                Circle().fill(Mobile.Palette.accentSoft)
-                ProgressView().controlSize(.mini).tint(Mobile.Palette.accentText)
+                Circle().fill(Color.dsSurfaceRaised)
+                    .overlay(Circle().strokeBorder(Color.dsAmber, lineWidth: 2))
+                    .shadow(color: Color.dsAmberGlow, radius: 7)
+                DSBarsLoader(scale: 0.6)
             default:
-                Circle().strokeBorder(Mobile.Palette.borderStrong, lineWidth: 2)
+                Circle().fill(Color.dsField)
             }
         }
         .frame(width: 22, height: 22)
@@ -252,6 +253,9 @@ struct InstallResult: View {
             Tile { InstallTimeline(step: step) }
         case .done(let version, let installed):
             Tile(emphasis: .selected, spacing: Mobile.Space.gap) {
+                // Perde başarı anı (≤ 1 sn; hareket azaltılmışken yalnız tik).
+                DSCelebration(size: 64)
+                    .frame(maxWidth: .infinity)
                 InstallTimeline(step: nil, done: true)
                 Label(installed ? TVText.done(version) : TVText.upToDate(version), systemImage: "checkmark.circle.fill")
                     .font(Mobile.TypeScale.headline).foregroundStyle(Mobile.Palette.successText)
@@ -286,6 +290,8 @@ struct InstallErrorBox: View {
             ShareLink(item: InstallLog.shared.file) { Label(TVText.shareLog, systemImage: "square.and.arrow.up") }
                 .buttonStyle(DSButtonStyle(kind: .secondary, fullWidth: false))
         }
+        // Kutu belirince hata titreşimi.
+        .onAppear { Haptics.error() }
     }
 
     /// İlk paragrafın ilk cümlesi başlık, kalan cümleleri numaralı adımlar; sonraki paragraflar ayrıntı.

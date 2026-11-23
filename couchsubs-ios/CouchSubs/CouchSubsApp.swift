@@ -270,6 +270,10 @@ struct RootView: View {
     @EnvironmentObject private var promo: PromoController
     @AppStorage("welcomeSeen") private var welcomeSeen = false
     @State private var path: [Route] = []
+    /// Perde: üç sekme (Ana Ekran · Geçmiş · Ayarlar); her sekmenin kökü gezinme yığınının kökünde.
+    @State private var tab: PhoneTab = .home
+    /// Klavye açıkken sekme çubuğu gizlenir (yazı alanının üstünde yer kaplamasın).
+    @State private var keyboardShown = false
     @State private var pairingPrompt = TVPairingPrompt()
 
     var body: some View {
@@ -285,7 +289,10 @@ struct RootView: View {
                 home
             }
         }
-        .onChange(of: model.demoMode) { _ in path = [] }
+        .onChange(of: model.demoMode) { _ in
+            path = []
+            tab = .home
+        }
         #if DEBUG
         // Hata ayıklama: COUCHSUBS_ROUTE=settings,packs gibi ekranları sırayla açar (simülatör ekran görüntüleri için).
         .task {
@@ -309,6 +316,8 @@ struct RootView: View {
                                            "advanced": .settingsPage(.advanced), "area": .settingsPage(.area),
                                            "dubbing": .settingsPage(.dubbing), "outputs": .settingsPage(.outputs),
                                            "console": .settingsPage(.console)]
+            let tabs: [String: PhoneTab] = ["tab:home": .home, "tab:history": .history, "tab:settings": .settings]
+            if let first = names.split(separator: ",").first, let chosen = tabs[String(first)] { tab = chosen }
             path = names.split(separator: ",").compactMap { routes[String($0)] }
         }
         #endif
@@ -378,13 +387,41 @@ struct RootView: View {
         }
     }
 
+    /// Sekme çubuğunda vurgulanan sekme: açık sayfa bir sekmeye aitse (Geçmiş, Ayarlar ve bölümleri) o, değilse seçili sekme.
+    private var activeTab: PhoneTab { path.first?.tab ?? tab }
+
+    /// Sekme çubuğu: kurulum adımlarında (konsol, giriş, eşleme, TV kurulumu) ve klavye açıkken yok; uygulama
+    /// sayfalarında var (her ekranın alt çubuğunda, reklam şeridinin altında).
+    private func tabBar(_ route: Route?) -> PerdeTabBarState? {
+        guard route?.showsAdBand ?? true, !keyboardShown else { return nil }
+        return PerdeTabBarState(active: activeTab, select: select)
+    }
+
+    private func select(_ chosen: PhoneTab) {
+        // Aynı sekmeye yeniden dokunmak o sekmenin köküne döner (iOS alışkanlığı).
+        path.removeAll()
+        tab = chosen
+    }
+
+    /// TV kurulumu bitince "Ana Ekrana Geç".
+    private func goHome() {
+        path.removeAll()
+        tab = .home
+    }
+
     private var home: some View {
         NavigationStack(path: $path) {
             Group {
-                if model.isRunning { RunningScreen(path: $path) } else { HomeScreen(path: $path) }
+                switch tab {
+                case .home:
+                    if model.isRunning { RunningScreen(path: $path) } else { HomeScreen(path: $path) }
+                case .history: HistoryScreen()
+                case .settings: SettingsScreen(path: $path)
+                }
             }
             // Reklam şeridi boştaki ana ekranda; çeviri sürerken (oyun görüntüsü) yok.
             .environment(\.mobileAdBand, !model.isRunning && !model.demoMode)
+            .environment(\.perdeTabBar, tabBar(nil))
             .navigationDestination(for: Route.self) { route in
                 Group {
                 // Ekranlar yığını `removeLast()` ile değil `pop(route)` ile kapatır: kapanma animasyonu sürerken ikinci
@@ -392,7 +429,8 @@ struct RootView: View {
                 switch route {
                 case .settings: SettingsScreen(path: $path)
                 case .settingsPage(let section): SettingsPageScreen(section: section, path: $path)
-                case .profile: ProfileScreen(path: $path)
+                // Profil Ayarlar'a katıldı (hesap kartları, cihazlar, bildirimler); eski bağlantılar Ayarlar'ı açar.
+                case .profile: SettingsScreen(path: $path)
                 case .packs: PacksScreen()
                 case .target: TargetScreen(setup: false) { path.pop(route) }
                 // Kurulum atlandıysa PSN girişi yoktur: PS5 eşlemeden önce giriş yapılır, ardından eşlemeye geçilir.
@@ -415,15 +453,18 @@ struct RootView: View {
                 case .psn: PSNScreen(onBack: { path.pop(route) }, onDone: { path.pop(route) })
                 case .about: AboutScreen()
                 case .history: HistoryScreen()
-                case .tvInstall: TVInstallScreen(onDone: { path.removeAll() })
-                case .tvUpdate: TVInstallScreen(update: model.tvAppUpdate, onDone: { path.removeAll() })
+                case .tvInstall: TVInstallScreen(onDone: goHome)
+                case .tvUpdate: TVInstallScreen(update: model.tvAppUpdate, onDone: goHome)
                 }
                 }
                 .environment(\.mobileAdBand, route.showsAdBand && !model.demoMode)
+                .environment(\.perdeTabBar, tabBar(route))
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in
-            if !app.tourDone && path.isEmpty && !model.isRunning && !model.demoMode {
+            if !app.tourDone && path.isEmpty && tab == .home && !model.isRunning && !model.demoMode {
                 CoachTour(anchors: anchors) { withAnimation { app.tourDone = true } }
             }
         }
@@ -438,7 +479,7 @@ struct RootView: View {
     }
 
     private var promoMoment: PromoMoment {
-        PromoMoment(onHome: path.isEmpty, sessionActive: model.isRunning || model.isStarting, demo: model.demoMode,
+        PromoMoment(onHome: path.isEmpty && tab == .home, sessionActive: model.isRunning || model.isStarting, demo: model.demoMode,
                     onboarding: !welcomeSeen || model.step != .done, tour: !app.tourDone,
                     inApp: Date().timeIntervalSince(promo.foregroundAt))
     }

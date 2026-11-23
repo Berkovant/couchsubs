@@ -37,6 +37,7 @@ struct WelcomeFlow: View {
             // Kurulumdan önce: konsolu olmayan (ve App Store incelemesi) uygulamayı örnek görüntülerle dener.
             DemoModeButton(kind: .ghost)
         }
+        .perdeAmbient()
         // Ayarlar › Temel › Açılış Sesi: karşılama yalnız ilk açılışta görünür; ses Mac'teki açılış adımıyla aynı.
         .onAppear { if model.settings.startupSound { StartupChime.shared.play() } }
         .onDisappear { StartupChime.shared.stop() }
@@ -123,6 +124,7 @@ struct SetupHeader: View {
                 HStack(spacing: Mobile.Space.hair) {
                     ForEach(1...3, id: \.self) { index in
                         Capsule().fill(index <= step ? Mobile.Palette.accent : Mobile.Palette.borderStrong).frame(height: 4)
+                            .shadow(color: index <= step ? Color.dsAmberGlow : .clear, radius: 4)
                     }
                 }
                 if let onSkip { Button("Skip for Now", action: onSkip).buttonStyle(.mobileGhost).fixedSize() }
@@ -370,6 +372,8 @@ struct PS5PairScreen: View {
     @State private var working = false
     @State private var error: String?
     @State private var showManual = false
+    /// Perde başarı anı: "Eşleşti" (ışın + yaylı tik + başarı titreşimi), ardından sonraki adım.
+    @State private var paired = false
     @FocusState private var codeFocused: Bool
 
     private var host: String {
@@ -453,6 +457,12 @@ struct PS5PairScreen: View {
                 .buttonStyle(.mobilePrimary)
                 .disabled(working || pin.count != 8 || host.isEmpty)
         }
+        .overlay {
+            if paired {
+                PerdeSuccessOverlay(title: "Paired", message: consoles.first(where: { $0.host == host })?.name ?? host)
+            }
+        }
+        .perdeAmbient()
         .task { await search() }
         .sheet(isPresented: $showManual) {
             VStack(alignment: .leading, spacing: Mobile.Space.gap) {
@@ -486,8 +496,11 @@ struct PS5PairScreen: View {
         error = nil
         do {
             try await model.register(host: host, pin: pin)
+            withAnimation(.easeOut(duration: 0.2)) { paired = true }
+            try? await Task.sleep(nanoseconds: UInt64(DSCelebration.duration * 1_100_000_000))
             onDone()
         } catch {
+            Haptics.error()
             self.error = error.localizedDescription
         }
         working = false

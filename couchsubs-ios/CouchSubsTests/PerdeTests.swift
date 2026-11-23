@@ -84,6 +84,67 @@ final class PerdeTests: XCTestCase {
         }
     }
 
+    /// Perde iPhone ekranları (adım 5): `COUCHSUBS_PERDE_PHONE` (klasör) verilince ana ekranlar iki boyda (SE 375×667,
+    /// Pro Max 440×956) ve iki temada `iphone-<ekran>-<boy>-<tema>.png` olarak çekilir. Sekme çubuğu ve reklam şeridi
+    /// uygulamadaki gibi.
+    func testCapturePhoneScreens() async throws {
+        guard let path = ProcessInfo.processInfo.environment["COUCHSUBS_PERDE_PHONE"] else { throw XCTSkip("COUCHSUBS_PERDE_PHONE verilmedi") }
+        let folder = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let store = EphemeralStore()
+        store.save(Data([1, 2, 3]), for: StoreKey.accountId)
+        store.save(RegisteredConsole(host: "192.168.1.103", name: "PS5-002", registKey: Data(), morning: Data()), for: StoreKey.console)
+        store.save(LGTV(name: "Salon TV", host: "192.168.1.50", brand: .lg), for: StoreKey.tv)
+        store.save("demo", for: StoreKey.tvKey)
+        store.save(true, for: StoreKey.setupComplete)
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let library = GamePackLibrary(bundled: GamePackLibrary.bundledDirectory, user: nil)
+        let model = PhoneModel(services: LivePhoneServices(), store: store, defaults: defaults, packs: library)
+        model.reloadPackList()
+        let app = AppModel(analytics: SilentAnalytics(), packStore: nil, library: library, defaults: defaults)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        func shell(_ tab: PhoneTab, ad: Bool = true, @ViewBuilder _ screen: () -> some View) -> AnyView {
+            AnyView(NavigationStack {
+                screen().environment(\.mobileAdBand, ad).environment(\.perdeTabBar, PerdeTabBarState(active: tab) { _ in })
+            }
+            .environmentObject(model).environmentObject(app))
+        }
+        let screens: [(String, AnyView)] = [
+            ("ana", shell(.home) { HomeScreen(path: .constant([])) }),
+            ("ayarlar", shell(.settings) { SettingsScreen(path: .constant([])) }),
+            ("altyazi-gorunumu", shell(.settings) { SettingsPageScreen(section: .appearance, path: .constant([])) }),
+            ("paketler", shell(.settings) { PacksScreen() }),
+            ("gecmis", shell(.history) { HistoryScreen() }),
+            ("tv-kurulum", AnyView(NavigationStack { TVInstallScreen() }.environmentObject(model).environmentObject(app))),
+            ("ps5-esleme", AnyView(PS5PairScreen(onDone: {}).environmentObject(model).environmentObject(app))),
+            ("karsilama", AnyView(WelcomeFlow(onFinish: {}).environmentObject(model).environmentObject(app))),
+        ]
+        let sizes: [(String, CGSize)] = [("se", CGSize(width: 375, height: 667)), ("promax", CGSize(width: 440, height: 956))]
+        for (theme, style) in [("koyu", UIUserInterfaceStyle.dark), ("acik", .light)] {
+            for (sizeName, size) in sizes {
+                for (name, view) in screens {
+                    try await snapshot(view, size: size, style: style)
+                        .write(to: folder.appendingPathComponent("iphone-\(name)-\(sizeName)-\(theme).png"))
+                }
+                // Canlı çeviri: deneme modu (örnek kareler) çalışırken.
+                if model.isRunning {
+                    try await snapshot(shell(.home, ad: false) { RunningScreen(path: .constant([])) }, size: size, style: style)
+                        .write(to: folder.appendingPathComponent("iphone-canli-\(sizeName)-\(theme).png"))
+                }
+            }
+            if !model.isRunning {
+                await model.startDemo()
+                try await Task.sleep(nanoseconds: 6_000_000_000)
+                for (sizeName, size) in sizes {
+                    try await snapshot(shell(.home, ad: false) { RunningScreen(path: .constant([])) }, size: size, style: style)
+                        .write(to: folder.appendingPathComponent("iphone-canli-\(sizeName)-\(theme).png"))
+                }
+            }
+        }
+        model.exitDemo()
+    }
+
     /// Görünümü uygulamanın sahnesinde bir pencerede açar ve PNG'ye çizer (malzeme/cam katmanları dahil).
     private func snapshot(_ view: AnyView, size: CGSize, style: UIUserInterfaceStyle, layer: Bool = false) async throws -> Data {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

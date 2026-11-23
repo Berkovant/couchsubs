@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Profil (hesapsız: cihazlar, PSN hesabı, bildirim, havuz, kullanım verisi) ve ayarlar (tuvaldeki Telefon · Profil,
-// Ayarlar). Uygulama tamamen ücretsizdir ve hesap istemez.
+// Ayarlar sekmesi (Perde; tuvaldeki DL-iPhone-Ayarlar): en üstte hesap kartları, Mac'teki Ayarlar menüsünün bölümleri,
+// ardından eski Profil sayfasının içeriği (cihazlar ve bağlantı, bildirimler, arka planda sürdürme, gizlilik, yardım,
+// hakkında). Uygulama tamamen ücretsizdir ve hesap istemez.
 
 import CouchSubsCore
 import RemotePlay
 import SwiftUI
 
-// MARK: - Profil
+// MARK: - Ayarlar
 
-struct ProfileScreen: View {
+/// Ayarlar: hesap kartları, Mac'teki Ayarlar menüsünün bölümleri (aynı ad, sıra ve alt yazı; her biri kendi sayfasını
+/// açar) ve telefona özgü ayarlar (eski Profil). Sekme kökünde büyük başlık; Ana ekrandan açılınca geri düğmesi.
+struct SettingsScreen: View {
     @EnvironmentObject private var model: PhoneModel
     @EnvironmentObject private var app: AppModel
     @Binding var path: [Route]
@@ -18,30 +21,27 @@ struct ProfileScreen: View {
 
     var body: some View {
         MobileScreen {
-            BackHeader(title: "Profile")
+            BackHeader(title: "Settings")
         } content: {
-            Tile {
-                HStack(spacing: Mobile.Space.gap) {
-                    DSLogoMark(height: 40)
-                    VStack(alignment: .leading, spacing: Mobile.Space.hair) {
-                        Text(verbatim: "CouchSubs").font(Mobile.TypeScale.title)
-                        Text("Free, no account needed").font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            BentoGrid {
-                Button { path.append(.target) } label: {
-                    StatTile(symbol: "tv", tint: .ok, label: "Devices", value: devicesText)
-                }
-                .buttonStyle(.plain)
-                Button { path.append(.psn) } label: {
-                    StatTile(symbol: "person.2.fill", label: "PSN account",
-                             value: model.accountId == nil ? String(localized: "Not set up") : String(localized: "Signed in"))
-                }
-                .buttonStyle(.plain)
-            }
+            PerdeAccountCards(path: $path)
             Tile(spacing: 0) {
+                ForEach(Array(PhoneSettingsSection.allCases.enumerated()), id: \.element) { index, section in
+                    if index > 0 { RowDivider() }
+                    NavigationLink(value: section.route) { SettingsSectionRow(section: section) }
+                }
+            }
+            .buttonStyle(.plain)
+            // Telefona özgü ayarlar (eski Profil sayfası).
+            SectionTitle("Profile")
+                .padding(.top, Mobile.Space.inline)
+            Tile(spacing: 0) {
+                NavigationLink(value: Route.target) { ListRow(symbol: "tv", title: "Devices", detail: devicesText) }
+                RowDivider()
+                NavigationLink(value: Route.psn) {
+                    ListRow(symbol: "person.2.fill", title: "PSN account",
+                            detail: model.accountId == nil ? String(localized: "Not set up") : String(localized: "Signed in"))
+                }
+                RowDivider()
                 NavigationLink(value: Route.platform) {
                     ListRow(symbol: "gamecontroller.fill", title: "Console", detail: model.isXbox ? "Xbox (Beta)" : "PlayStation 5")
                 }
@@ -68,7 +68,7 @@ struct ProfileScreen: View {
             }
             .buttonStyle(.plain)
             // Bildirimler ve arka planda sürdürme telefona özgü (Mac'te karşılığı yok: masaüstü uygulaması arka planda zaten
-            // sürer); çeviri ve görünüm ayarları Ayarlar'ın bölümlerinde (Mac ile aynı yer ve ad).
+            // sürer); çeviri ve görünüm ayarları yukarıdaki bölümlerde (Mac ile aynı yer ve ad).
             Tile(spacing: 0) {
                 toggleRow("Notifications", "New packs and updates", isOn: $notifyPackUpdates)
                 RowDivider()
@@ -87,16 +87,25 @@ struct ProfileScreen: View {
                 NavigationLink(value: Route.about) { ListRow(symbol: "info.circle", title: "About", detail: AppIdentity.version) }
             }
             .buttonStyle(.plain)
-            Text(verbatim: "CouchSubs \(AppIdentity.version) · © 2026 Enmera · AGPL-3.0")
-                .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary).frame(maxWidth: .infinity)
+            HStack(spacing: Mobile.Space.gap) {
+                DSLogoMark(height: 28)
+                VStack(alignment: .leading, spacing: Mobile.Space.micro) {
+                    Text(verbatim: "CouchSubs").font(Mobile.TypeScale.headline)
+                    Text(verbatim: "CouchSubs \(AppIdentity.version) · © 2026 Enmera · AGPL-3.0")
+                        .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
+                    Text("Free, no account needed").font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.tertiary)
+                }
+                Spacer(minLength: 0)
+            }
             DeveloperSignature()
         } bottom: {
+            // Deneme altyazısı Altyazı Görünümü ve Çıkış Ekranları'nda (Mac ile aynı yer).
             EmptyView()
         }
         // Bağlantı bildirimi açılınca izin hemen istenir (yoksa ilk çeviride).
         .onChange(of: notifyDisconnect) { value in if value { model.requestNotificationPermission() } }
         .onChange(of: notifyPackUpdates) { value in if value { model.requestNotificationPermission() } }
-        .onAppear { app.analytics.screen("profile") }
+        .onAppear { app.analytics.screen("settings") }
         .confirmationDialog("Sign out of PSN?", isPresented: $confirmPSNSignOut, titleVisibility: .visible) {
             Button("Sign out", role: .destructive) { model.signOutPSN() }
         } message: {
@@ -123,38 +132,6 @@ struct ProfileScreen: View {
             }
         }
         .padding(.vertical, Mobile.Space.gap)
-    }
-}
-
-// MARK: - Ayarlar
-
-/// Ayarlar: Mac'teki Ayarlar menüsünün bölümleri (aynı ad, sıra ve alt yazı); her biri kendi sayfasını açar.
-struct SettingsScreen: View {
-    @EnvironmentObject private var model: PhoneModel
-    @EnvironmentObject private var app: AppModel
-    @Binding var path: [Route]
-
-    var body: some View {
-        MobileScreen {
-            BackHeader(title: "Settings")
-        } content: {
-            Tile(spacing: 0) {
-                ForEach(Array(PhoneSettingsSection.allCases.enumerated()), id: \.element) { index, section in
-                    if index > 0 { RowDivider() }
-                    NavigationLink(value: section.route) { SettingsSectionRow(section: section) }
-                }
-            }
-            .buttonStyle(.plain)
-            Tile(spacing: 0) {
-                NavigationLink(value: Route.about) { ListRow(symbol: "info.circle", title: "About", detail: AppIdentity.version) }
-            }
-            .buttonStyle(.plain)
-            DeveloperSignature()
-        } bottom: {
-            // Deneme altyazısı Altyazı Görünümü ve Çıkış Ekranları'nda (Mac ile aynı yer).
-            EmptyView()
-        }
-        .onAppear { app.analytics.screen("settings") }
     }
 }
 

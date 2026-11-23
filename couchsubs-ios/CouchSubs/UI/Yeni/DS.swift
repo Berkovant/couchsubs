@@ -109,6 +109,9 @@ extension Color {
     static let dsLiveSoft = DS.color("liveSoft")
     static let dsLiveRing = DS.color("liveRing")
     static let dsLiveDot = DS.color("liveDot")
+    /// Çeviriyi durduran dolu düğme (Durdur): canlı turuncu-kırmızı zemin, beyaz yazı (iki temada ≥ 3:1, kalın yazı).
+    static let dsStopFill = DS.color("stopFill")
+    static let dsOnStop = DS.color("onStop")
     static let dsScreenFrame = DS.color("screenFrame")
     static let dsScrim = DS.color("scrim")
     // Ayarlar bölümlerinin simge tonları (Mac'teki SettingsSection.tint ile aynı palet).

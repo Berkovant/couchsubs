@@ -156,42 +156,31 @@ internal fun AndroidTvInstallScreen(onBack: () -> Unit, onDone: () -> Unit, bran
     // "TV uygulamasını güncelle"den gelindiyse kurulum hemen başlar (kullanıcı ana ekranda onayladı).
     LaunchedEffect(preset) { if (preset != null && state is AndroidState.Idle && address.isNotBlank()) install() }
 
-    ScreenScaffold(top = { TopBar(onBack = onBack) }, bottom = {
+    ScreenScaffold(top = { TopBar(onBack = onBack) }, ambient = true, bottom = {
         if (state is AndroidState.Done) PrimaryButton(stringResource(R.string.tvinstall_go_home), onClick = onDone)
         else PrimaryButton(stringResource(if (state is AndroidState.Failed) R.string.tvinstall_retry else R.string.tvinstall_button),
-            enabled = !working && address.isNotBlank() && !TvAddress.isPhoneAddress(address, phoneIp)) { install() }
+            enabled = !working && address.isNotBlank() && !TvAddress.isPhoneAddress(address, phoneIp), busy = working) { install() }
     }) {
         Heading(stringResource(R.string.tvinstall_title), stringResource(R.string.tvinstall_android_body))
         if (!working) brandPicker()
         NoteTile(stringResource(R.string.tvinstall_android_supported), Tokens.Color.secondary)
 
-        TileLabel(stringResource(R.string.tvinstall_android_tvs))
+        InstallListTitle(stringResource(R.string.tvinstall_android_tvs), searching = candidates == null)
         when (val list = candidates) {
-            null -> Tile(Modifier.fillMaxWidth()) { Text(stringResource(R.string.tvinstall_searching), style = Tokens.Type.body, color = Tokens.Color.secondary) }
+            null -> InstallSearching()
             else -> {
-                if (list.isEmpty()) Tile(Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.tvinstall_android_none), style = Tokens.Type.body, color = Tokens.Color.secondary)
-                }
+                if (list.isEmpty()) InstallEmpty(stringResource(R.string.tvinstall_android_none))
                 list.forEach { tv ->
                     val selected = AndroidTvInstaller.parseAddress(address)?.first == tv.host
-                    Tile(Modifier.fillMaxWidth(), style = if (selected) TileStyle.ACTIVE else TileStyle.NORMAL,
-                        onClick = {
-                            if (!working) {
-                                address = tv.host
-                                wireless = AdbMode.prefersWireless(tv.legacyAdbReachable)
-                            }
-                        }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                            TileIcon(CouchIcons.Tv)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
-                                Text(tv.name, style = Tokens.Type.headline, color = Tokens.Color.text)
-                                Text(tv.host, style = Tokens.Type.caption, color = Tokens.Color.secondary)
-                                StatusLabel(stringResource(if (tv.legacyAdbReachable) R.string.tvinstall_android_debug_on else R.string.tvinstall_android_debug_off),
-                                    ok = tv.legacyAdbReachable)
-                            }
-                            if (selected) SelectedCheck()
+                    TvCard(tv.name, "Android TV · ${tv.host}", selected, status = {
+                        StatusChip(stringResource(if (tv.legacyAdbReachable) R.string.tvinstall_android_debug_on else R.string.tvinstall_android_debug_off),
+                            if (tv.legacyAdbReachable) ChipTone.OK else ChipTone.AMBER)
+                    }, onClick = {
+                        if (!working) {
+                            address = tv.host
+                            wireless = AdbMode.prefersWireless(tv.legacyAdbReachable)
                         }
-                    }
+                    })
                 }
             }
         }
@@ -209,40 +198,24 @@ internal fun AndroidTvInstallScreen(onBack: () -> Unit, onDone: () -> Unit, bran
                 keyboard = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
         }
 
-        Tile(Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.tvinstall_android_steps_title), style = Tokens.Type.headline, color = Tokens.Color.text)
-            Text(stringResource(R.string.tvinstall_android_step1), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            if (wireless) {
-                Text(stringResource(R.string.tvinstall_android_wireless_step2), style = Tokens.Type.body, color = Tokens.Color.secondary)
-                Text(stringResource(R.string.tvinstall_android_wireless_step3), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            } else {
-                Text(stringResource(R.string.tvinstall_android_step2), style = Tokens.Type.body, color = Tokens.Color.secondary)
-                Text(stringResource(R.string.tvinstall_android_step3), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            }
-        }
+        InstallSteps(stringResource(R.string.tvinstall_android_steps_title), listOf(stringResource(R.string.tvinstall_android_step1)) +
+            if (wireless) listOf(stringResource(R.string.tvinstall_android_wireless_step2), stringResource(R.string.tvinstall_android_wireless_step3))
+            else listOf(stringResource(R.string.tvinstall_android_step2), stringResource(R.string.tvinstall_android_step3)))
 
         when (val current = state) {
             AndroidState.Idle -> Unit
-            is AndroidState.Working -> Tile(Modifier.fillMaxWidth()) { StatusLabel(stepText(current.step), live = true) }
-            is AndroidState.Done -> Tile(Modifier.fillMaxWidth(), style = TileStyle.ACTIVE) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                    TileIcon(Icons.Filled.Check, Tokens.Color.success)
-                    Text(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version),
-                        style = Tokens.Type.headline, color = Tokens.Color.text)
-                }
-                // Telefondan kuranların çoğunun bilgisayarı yoktur; TV'nin bekleme ekranı hata sanılıyordu (#113).
-                Text(stringResource(R.string.tvinstall_next), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-            }
+            is AndroidState.Working -> InstallWorking(current.step)
+            is AndroidState.Done -> InstallDone(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version))
             is AndroidState.Failed -> {
-                if (AdbMode.offersWireless(wireless, current.error)) {
-                    // Eskiden yalnız genel "TV yanıt vermedi" yazısı vardı; 5555 kapalı TV'de çözüm kablosuz hata ayıklamadır.
-                    NoteTile(stringResource(R.string.tvinstall_android_err_legacy_closed))
-                    SecondaryButton(stringResource(R.string.tvinstall_android_try_wireless), Modifier.fillMaxWidth()) { switchToWireless() }
-                } else NoteTile(androidFailureText(current))
-                // TV'deki başka imzalı kopya yalnız kullanıcı isterse kaldırılır (TV uygulamasının ayarları da silinir).
-                if (current.error == AndroidInstallError.REPLACE_NEEDED)
-                    DestructiveButton(stringResource(R.string.tvinstall_android_replace), Modifier.fillMaxWidth()) { install(allowReplace = true) }
-                GhostButton(stringResource(R.string.tvinstall_share_log)) { shareLog(context, logFile) }
+                // Eskiden yalnız genel "TV yanıt vermedi" yazısı vardı; 5555 kapalı TV'de çözüm kablosuz hata ayıklamadır.
+                val wirelessFix = AdbMode.offersWireless(wireless, current.error)
+                InstallErrorBox(if (wirelessFix) stringResource(R.string.tvinstall_android_err_legacy_closed) else androidFailureText(current),
+                    onShareLog = { shareLog(context, logFile) }) {
+                    if (wirelessFix) SecondaryButton(stringResource(R.string.tvinstall_android_try_wireless), Modifier.fillMaxWidth()) { switchToWireless() }
+                    // TV'deki başka imzalı kopya yalnız kullanıcı isterse kaldırılır (TV uygulamasının ayarları da silinir).
+                    if (current.error == AndroidInstallError.REPLACE_NEEDED)
+                        DestructiveButton(stringResource(R.string.tvinstall_android_replace), Modifier.fillMaxWidth()) { install(allowReplace = true) }
+                }
             }
         }
     }
