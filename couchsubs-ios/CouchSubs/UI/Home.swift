@@ -125,9 +125,8 @@ struct HomeScreen: View {
 
     var body: some View {
         MobileScreen {
-            HomeHeader {
-                DSStatusChip(model.canStart ? "Ready" : "Almost ready", tone: model.canStart ? .ok : .amber)
-            }
+            // Durum tek yerde: büyük başlık ("Hazır"). Sağ üstte ayrıca durum hapı yok.
+            HomeHeader { EmptyView() }
         } content: {
             ScreenTitle(title: model.canStart ? "Ready" : "Almost ready",
                         message: model.canStart ? "Open the game on the PS5, then start." : "Finish the setup to start translating.")
@@ -158,8 +157,9 @@ struct HomeScreen: View {
                 }
                 .buttonStyle(DSFocusPlainStyle())
                 Button { path.append(.target) } label: {
+                    // Durum rozeti "Hazır" değil, anlamlı kısa bilgi: TV'nin markası (LG, Samsung, Android TV) ya da yeri.
                     StatTile(symbol: model.settings.output == .computer ? "iphone" : "tv", tint: .accent, label: "Subtitles",
-                             value: targetName, status: targetReady ? "Ready" : "Not set up", statusOK: targetReady)
+                             value: targetName, status: targetStatus, statusOK: targetReady)
                 }
                 .buttonStyle(DSFocusPlainStyle())
                 .tourTarget(.target)
@@ -244,6 +244,17 @@ struct HomeScreen: View {
     private var coverTitles: [String] {
         let shelf = GameCatalog.packShelf(model.installedPacks).map(\.title)
         return shelf.isEmpty ? ["Grand Theft Auto V", "Red Dead Redemption 2", "Mafia"] : shelf
+    }
+
+    /// Altyazı karosunun rozeti: TV'nin markası; telefon ve OBS'te nerede göründüğü; TV yoksa "Kurulmadı".
+    private var targetStatus: String {
+        switch model.settings.output {
+        case .computer: return String(localized: "On this screen")
+        case .obs: return "OBS"
+        default:
+            guard targetReady, let tv = model.tv else { return String(localized: "Not set up") }
+            return TargetScreen.brandName(tv.brand)
+        }
     }
 
     /// Altyazının gideceği yer hazır mı (TV seçiliyse eşlenmiş TV var mı).

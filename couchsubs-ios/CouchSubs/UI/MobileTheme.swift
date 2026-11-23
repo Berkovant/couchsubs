@@ -634,7 +634,12 @@ struct MobileScreen<Header: View, Content: View, Bottom: View>: View {
                 if let tabBar { PerdeTabBar(active: tabBar.active, select: tabBar.select) }
             }
             .padding(.horizontal, Mobile.Space.screen)
+            .padding(.top, tabBar != nil || adBand ? Mobile.Space.gap : 0)
             .padding(.bottom, tabBar != nil ? Mobile.Space.hair : adBand ? Mobile.Space.inline : Mobile.Space.screen)
+            // Ana eylem, reklam şeridi ve sekme çubuğu tek cam bölge: içerik arkasından kayar (iOS sekme çubuğu gibi) ama
+            // yoğun malzeme + zemin rengi arkadaki yazıyı okunur gürültü olmaktan çıkarır; düğme hiçbir kartın yazısını yarım
+            // bırakacak biçimde içeriğin üstünde yüzmez, cam bölgenin parçasıdır.
+            .background { if tabBar != nil || adBand { BottomGlass() } }
         }
         .foregroundStyle(Mobile.Palette.text)
         .background(MobileBackground())
@@ -660,6 +665,21 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// Alt cam bölge (ana eylem + reklam şeridi + sekme çubuğu): ekranın altına kadar, üst kenarda kıl çizgi ve kısa yumuşak
+/// geçiş. Malzeme arkadaki içeriği bulandırır; zemin rengi koyu ve açık temada yazıyı bastırır (iOS sekme çubuğu yoğunluğu).
+struct BottomGlass: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.regularMaterial)
+            Mobile.Palette.bg.opacity(0.82)
+        }
+        .overlay(alignment: .top) { Rectangle().fill(Color.dsBorder).frame(height: 0.5) }
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

@@ -15670,6 +15670,7 @@
     "Home": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Home"}}, "tr": {"stringUnit": {"state": "translated", "value": "Ana Ekran"}}}},
     "Translation On": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Translation On"}}, "tr": {"stringUnit": {"state": "translated", "value": "Çeviri Açık"}}}},
     "Needs Attention": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Needs Attention"}}, "tr": {"stringUnit": {"state": "translated", "value": "Sorun Var"}}}},
+    "On this screen": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "On this screen"}}, "tr": {"stringUnit": {"state": "translated", "value": "Bu ekranda"}}}},
     "Setup Incomplete": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Setup Incomplete"}}, "tr": {"stringUnit": {"state": "translated", "value": "Kurulum Eksik"}}}},
     "Demo Mode": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Demo Mode"}}, "tr": {"stringUnit": {"state": "translated", "value": "Deneme Modu"}}}},
     "AD": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "AD"}}, "tr": {"stringUnit": {"state": "translated", "value": "REKLAM"}}}},
