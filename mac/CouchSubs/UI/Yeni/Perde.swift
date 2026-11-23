@@ -1296,7 +1296,7 @@ private struct DSSceneRoad: Shape {
 // MARK: Oyun kapağı
 
 /// Oyun kapağı: kapak görseli yoksa oyunun adından ÖZGÜN TİPOGRAFİK kapak (gerçek kapak/logo kullanılmaz; telif ve
-/// mağaza riski). Her oyuna kararlı bir degrade (adın karmasından), çapraz ışık bandı ve oyunun kısaltması (GTA, RD2)
+/// mağaza riski). Her oyuna kararlı bir degrade (adın karmasından), çapraz ışık bandı ve oyunun kısaltması (GTA, RDR; sıra numarası yanında küçük)
 /// iri, sıkı aralıklı ağır yazıyla. Küçük boyda (simge karesi, kapak yığını) yalnız kısaltma ortada okunur.
 struct DSCoverArt: View {
     let seed: String
@@ -1324,29 +1324,36 @@ struct DSCoverArt: View {
         return Int(sum % UInt32(palettes.count))
     }
 
-    /// Oyunun kısaltması: baştaki büyük harf kısaltma (GTA V → GTA), yoksa ilk iki anlamlı sözcüğün baş harfi + sondaki
-    /// sayı ya da Roma rakamı sığarsa (Red Dead Redemption 2 → RD2); tek sözcük → ilk iki harf (Mafia → Ma). En çok 4 karakter.
+    /// Oyunun kısaltması (yalnız harf, en çok 3): baştaki büyük harf kısaltma (GTA V → GTA), yoksa en çok üç anlamlı
+    /// sözcüğün baş harfi (Grand Theft Auto VI → GTA, Red Dead Redemption 2 → RDR); tek sözcük → ilk iki harf (Mafia → Ma).
+    /// Sondaki sayı ya da Roma rakamı ayrı (`numeral`): kapakta kısaltmanın yanında küçük yazılır (V ile VI karışmaz).
     static func monogram(_ title: String) -> String {
-        // Kesme işaretli ekler ("Assassin's" → "s") sözcük sayılmaz.
-        let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-            .filter { $0.count > 1 || $0.first?.isUppercase == true || $0.first?.isNumber == true }
+        let words = words(title)
         guard let first = words.first else { return "?" }
         let english = Locale(identifier: "en_US")
         if (2...4).contains(first.count), first == first.uppercased(with: english), first.allSatisfy(\.isLetter), !isRoman(first) {
-            return first
+            return String(first.prefix(3))
         }
         let skip: Set<String> = ["the", "of", "a", "an", "and", "to", "in", "on", "for"]
-        let numeral = words.count > 1 ? words.last.flatMap { isNumeral($0) ? $0 : nil } : nil
         let significant = words.filter { !skip.contains($0.lowercased(with: english)) && !isNumeral($0) }
-        var result: String
         if significant.count >= 2 {
-            result = significant.prefix(2).map { $0.prefix(1).uppercased(with: english) }.joined()
-        } else {
-            let word = significant.first ?? first
-            result = word.prefix(1).uppercased(with: english) + word.dropFirst().prefix(1).lowercased(with: english)
+            return significant.prefix(3).map { $0.prefix(1).uppercased(with: english) }.joined()
         }
-        if let numeral, result.count + numeral.count <= 3 { result += numeral }
-        return result
+        let word = significant.first ?? first
+        return word.prefix(1).uppercased(with: english) + word.dropFirst().prefix(1).lowercased(with: english)
+    }
+
+    /// Adın sonundaki sayı ya da Roma rakamı (Red Dead Redemption 2 → 2, Grand Theft Auto VI → VI); yoksa nil.
+    static func numeral(_ title: String) -> String? {
+        let words = words(title)
+        guard words.count > 1, let last = words.last, isNumeral(last), last.count <= 4 else { return nil }
+        return last
+    }
+
+    /// Kesme işaretli ekler ("Assassin's" → "s") sözcük sayılmaz.
+    private static func words(_ title: String) -> [String] {
+        title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            .filter { $0.count > 1 || $0.first?.isUppercase == true || $0.first?.isNumber == true }
     }
 
     private static func isNumeral(_ word: String) -> Bool {
@@ -1407,7 +1414,15 @@ private struct DSTypeCover: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .shadow(color: bottom.opacity(0.5), radius: w * 0.03, y: w * 0.015)
-                    Capsule().fill(ink.opacity(0.75)).frame(width: w * 0.2, height: max(2, w * 0.02))
+                    HStack(alignment: .center, spacing: w * 0.04) {
+                        Capsule().fill(ink.opacity(0.75)).frame(width: w * 0.2, height: max(2, w * 0.02))
+                        if let numeral = DSCoverArt.numeral(seed) {
+                            Text(verbatim: numeral)
+                                .font(.system(size: w * 0.13, weight: .heavy))
+                                .foregroundStyle(ink.opacity(0.9))
+                                .lineLimit(1)
+                        }
+                    }
                 }
                 .padding(.leading, w * 0.09)
                 .padding(.trailing, w * 0.06)
