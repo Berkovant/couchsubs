@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -25,8 +26,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -115,10 +114,6 @@ fun SettingsPage(
     }
 }
 
-/** Başlık (yeni satırda açıklama) ve sağda anahtar. */
-@Composable
-private fun SwitchRow(title: String, note: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) =
-    RowItem(title, note) { Switch(checked, onChange) }
 
 /** Ayar birimi: başlık, altında denetim, en altta isteğe bağlı açıklama (Mac DSUnit gibi). */
 @Composable
@@ -215,9 +210,12 @@ private fun SubtitlePreview(lines: Int, version: Int = 0) {
     val display = SubtitlePalette.display(style.fontSize)
     val text = color(SubtitlePalette.textHex(style)) ?: Color.White
     val background = (color(style.backgroundColor) ?: Color.Black).copy(alpha = style.background / 100f)
+    // Perde önizlemesi: sıcak oyun sahnesi, 16:9, 20 köşe, ekran çerçevesi (tasarim.json screenFrame).
+    val shape = RoundedCornerShape(Tokens.Radius.preview)
+    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape).border(4.dp, Tokens.Color.screenFrame, shape)) {
+    PerdeScene()
     Column(
-        Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(Tokens.Radius.control))
-            .background(Color(0xFF6D6A5D)).border(4.dp, Color(0xFF26272B), RoundedCornerShape(Tokens.Radius.control)).padding(Tokens.Space.gap),
+        Modifier.fillMaxSize().padding(Tokens.Space.gap),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair, Alignment.Bottom), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         sampleLines.take(lines).forEachIndexed { index, (who, line) ->
@@ -235,6 +233,7 @@ private fun SubtitlePreview(lines: Int, version: Int = 0) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.background(background, RoundedCornerShape(4.dp)).padding(horizontal = Tokens.Space.inline, vertical = Tokens.Space.hair))
         }
+    }
     }
 }
 
@@ -303,13 +302,11 @@ private fun AppearancePage() {
     Tile(Modifier.fillMaxWidth()) {
         // Yazı Boyutu: 16–50 px (TV'deki boy SubtitlePalette ile eşlenir); sürüklerken TV'de deneme altyazısı.
         var size by remember { mutableStateOf(SubtitlePalette.display(settings.fontSize).toFloat()) }
-        SliderHeader(stringResource(R.string.set_text_size), stringResource(R.string.set_px, size.toInt()))
-        Slider(size, { value ->
+        // Çubuk kartın iç genişliğini tam kaplar; 16 ve 50 çubuğun uçlarıyla hizalı.
+        SliderRow(stringResource(R.string.set_text_size), stringResource(R.string.set_px, size.toInt()), size, { value ->
             size = value
             look.change { fontSize = SubtitlePalette.fontSize(value.toInt()) }
-        }, valueRange = 16f..50f, steps = 33, onValueChangeFinished = { test() }, colors = couchSliderColors())
-        Row { Text("16", style = Tokens.Type.caption, color = Tokens.Color.secondary); Spacer(Modifier.weight(1f))
-            Text("50", style = Tokens.Type.caption, color = Tokens.Color.secondary) }
+        }, valueRange = 16f..50f, steps = 33, ends = "16" to "50", onValueChangeFinished = { test() })
         // Zemin Rengi: zeminsiz seçilince koyuluk 0; renk seçilince zemin yoksa Orta.
         val backgroundSelected = if (style.background == 0) null else style.backgroundColor
         val backgroundSwatch = SubtitlePalette.backgrounds.firstOrNull { it.hex == backgroundSelected }
@@ -419,11 +416,11 @@ private fun AdvancedPage() {
         // Türler yalnız ayar açıkken görünür; dört platformda aynı ad ve sıra (bkz. ScreenTextKind).
         if (autoScreenText) Column(Modifier.padding(start = 16.dp)) {
             Text(stringResource(R.string.settings_screen_text_kinds), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-            RowItem(stringResource(R.string.settings_screen_text_phone)) { Switch(kindPhone, { kindPhone = it; settings.screenTextPhone = it }) }
-            RowItem(stringResource(R.string.settings_screen_text_mission)) { Switch(kindMission, { kindMission = it; settings.screenTextMission = it }) }
-            RowItem(stringResource(R.string.settings_screen_text_help)) { Switch(kindHelp, { kindHelp = it; settings.screenTextHelp = it }) }
-            RowItem(stringResource(R.string.settings_screen_text_menus)) { Switch(kindMenus, { kindMenus = it; settings.screenTextMenus = it }) }
-            RowItem(stringResource(R.string.settings_screen_text_other)) { Switch(kindOther, { kindOther = it; settings.screenTextOther = it }) }
+            SwitchRow(stringResource(R.string.settings_screen_text_phone), checked = kindPhone) { kindPhone = it; settings.screenTextPhone = it }
+            SwitchRow(stringResource(R.string.settings_screen_text_mission), checked = kindMission) { kindMission = it; settings.screenTextMission = it }
+            SwitchRow(stringResource(R.string.settings_screen_text_help), checked = kindHelp) { kindHelp = it; settings.screenTextHelp = it }
+            SwitchRow(stringResource(R.string.settings_screen_text_menus), checked = kindMenus) { kindMenus = it; settings.screenTextMenus = it }
+            SwitchRow(stringResource(R.string.settings_screen_text_other), checked = kindOther) { kindOther = it; settings.screenTextOther = it }
             Text(stringResource(R.string.settings_screen_text_manual), style = Tokens.Type.caption, color = Tokens.Color.secondary)
         }
         SwitchRow(stringResource(R.string.set_auto_phone), stringResource(R.string.set_auto_phone_note), gamePhone) {
@@ -699,8 +696,11 @@ private fun OutputsPage(onTarget: () -> Unit, onTvInstall: () -> Unit) {
     if (target.showsOnPhone) {
         // Bu telefonda: ekran açık kalsın (telefon kilitlenince ne olduğu açıkça yazar).
         var screenOn by remember { mutableStateOf(settings.keepScreenOn) }
-        RowList(listOf { RowItem(stringResource(R.string.settings_screen_on)) { Switch(screenOn, { screenOn = it; settings.keepScreenOn = it }) } })
-        Text(stringResource(R.string.settings_screen_on_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
+        Tile(Modifier.fillMaxWidth()) {
+            SwitchRow(stringResource(R.string.settings_screen_on), stringResource(R.string.settings_screen_on_note), screenOn) {
+                screenOn = it; settings.keepScreenOn = it
+            }
+        }
         BackgroundLimitNote()
     }
     // Altyazı hedefi (TV arama, eşleme, OBS; iPhone'daki Çıkış Ekranları › Altyazı hedefi satırı).
@@ -772,11 +772,10 @@ private fun PlacementTile(target: SubtitleTarget) {
             settings.tvPlacement = placement
         }
         if (placement == SubtitlePlacement.FIXED) {
-            SliderHeader(stringResource(R.string.settings_position_height), "%${bottomPercent.toInt()}")
-            Slider(bottomPercent, { bottomPercent = it; settings.tvBottomPercent = it.toInt() }, valueRange = 0f..85f,
-                onValueChangeFinished = { TranslationService.testSubtitle(context, context.getString(R.string.test_subtitle_text)) },
-                colors = couchSliderColors())
-            Text(stringResource(R.string.settings_placement_fixed_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
+            SliderRow(stringResource(R.string.settings_position_height), "%${bottomPercent.toInt()}", bottomPercent,
+                { bottomPercent = it; settings.tvBottomPercent = it.toInt() }, valueRange = 0f..85f,
+                note = stringResource(R.string.settings_placement_fixed_note),
+                onValueChangeFinished = { TranslationService.testSubtitle(context, context.getString(R.string.test_subtitle_text)) })
         } else {
             Text(stringResource(R.string.settings_placement_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
         }
@@ -817,8 +816,10 @@ private fun ConsolePage(onPairing: () -> Unit, onPlatform: () -> Unit, onDemo: (
         if (settings.xbox) ({ RowItem("Xbox", settings.xboxConsole?.name ?: stringResource(R.string.profile_not_paired), onClick = onPairing) })
         else ({ RowItem(stringResource(R.string.settings_ps5), settings.console?.name ?: stringResource(R.string.profile_not_paired), onClick = onPairing) }),
         // Yalnız Xbox: uzaktan oynatmada Xbox sesi istemciye verip TV'yi susturabilir (PS5'te ses TV'de kalır).
-        if (settings.xbox) ({ RowItem(stringResource(R.string.settings_xbox_audio), stringResource(R.string.settings_xbox_audio_short)) {
-            Switch(xboxAudio, { xboxAudio = it; settings.xboxAudioOnDevice = it })
+        if (settings.xbox) ({ Box(Modifier.padding(vertical = Tokens.Space.gap)) {
+            SwitchRow(stringResource(R.string.settings_xbox_audio), stringResource(R.string.settings_xbox_audio_short), xboxAudio) {
+                xboxAudio = it; settings.xboxAudioOnDevice = it
+            }
         } }) else null,
     ))
     XboxSignOutRow()

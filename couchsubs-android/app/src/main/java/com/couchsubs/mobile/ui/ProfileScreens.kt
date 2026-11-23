@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Profil (cihazlar ve tercihler; hesap yok) ve ayarlar (tuval: Telefon-Profil, -Ayarlar).
+// Ayarlar sekmesi (Perde): hesap kartları, ayar bölümleri ve telefona özgü ayarlar (eski Profil; hesap yok).
 package com.couchsubs.mobile.ui
 
 import androidx.compose.animation.AnimatedVisibility
@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -22,8 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,59 +74,15 @@ import com.couchsubs.mobile.tv.TvDiscovery
 
 
 /**
- * Profil (tuval Telefon-Profil, hesapsız): cihazlar (PS5, TV'ler), ikinci PSN hesabı, bildirimler, küçük pencere ve
- * gizlilik. Ayarlar (havuz, kullanım verisi, deneysel ayarlar…) Mac'teki gibi Ayarlar'ın bölümlerinde (iPhone ile aynı).
+ * Ayarlar sekmesi (Perde; iPhone SettingsScreen ile aynı yapı): en üstte hesap kartları, Mac'in yeni arayüzündeki
+ * bölümler aynı ad, alt yazı ve sırayla (renkli simge kareleri; Klavye Kısayolları telefonda yok), ardından eski Profil
+ * sayfasının içeriği (cihazlar, PSN hesabı, bildirimler, arka planda sürdürme, gizlilik, yardım, hakkında). Sekme kökünde
+ * büyük başlık; başka bir sayfadan açılınca ([onBack]) geri düğmesi. Bölüme dokununca o bölümün sayfası açılır (bkz.
+ * SettingsPages.kt); geri tuşu bölüm listesine döner.
  */
 @Composable
-fun ProfileScreen(onBack: () -> Unit, onSettings: () -> Unit, onPairing: () -> Unit, onTarget: () -> Unit, onPsn: () -> Unit) {
-    val context = LocalContext.current
-    val settings = Services.settings
-    var tvs by remember { mutableStateOf<List<FoundTv>?>(null) }
-    var notifyDisconnect by remember { mutableStateOf(settings.notifyDisconnect) }
-    var notifyPacks by remember { mutableStateOf(settings.notifyNewPacks) }
-    var backgroundPip by remember { mutableStateOf(settings.backgroundPip) }
-    LaunchedEffect(Unit) { tvs = withContext(Dispatchers.IO) { runCatching { TvDiscovery.search() }.getOrDefault(emptyList()) } }
-    ScreenScaffold(top = { TopBar(stringResource(R.string.profile), onBack = onBack) { SettingsAction(onSettings) } }) {
-        TwoColumns(
-            { StatusTile(CouchIcons.Gamepad, "PS5", settings.console?.name ?: stringResource(R.string.profile_not_paired), it,
-                corner = { if (settings.console != null) StatusLabel(stringResource(R.string.main_paired)) }, chevron = true, onClick = onPairing) },
-            { StatusTile(Icons.Filled.Person, stringResource(R.string.profile_psn),
-                stringResource(if (settings.accountId != null) R.string.profile_psn_linked_short else R.string.profile_psn_missing), it,
-                chevron = true, onClick = onPsn) },
-        )
-        Tile(Modifier.fillMaxWidth(), onClick = onTarget) {
-            TileLabel(stringResource(R.string.profile_tvs))
-            Text(targetName(settings), style = Tokens.Type.title, color = Tokens.Color.text)
-            when (val found = tvs) {
-                null -> Text(stringResource(R.string.target_searching), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-                else -> Text(if (found.isEmpty()) stringResource(R.string.target_tvs_none) else found.joinToString { "${it.name} (${brandName(it.brand)})" },
-                    style = Tokens.Type.caption, color = Tokens.Color.secondary)
-            }
-        }
-        RowList(listOf(
-            { RowItem(stringResource(R.string.notify_disconnect)) { Switch(notifyDisconnect, { notifyDisconnect = it; settings.notifyDisconnect = it }) } },
-            // iPhone ile aynı ad ve açıklama (orada Resim içinde resim penceresi çeviriyi ayakta tutar).
-            { RowItem(stringResource(R.string.settings_background_pip), stringResource(R.string.settings_background_pip_short)) {
-                Switch(backgroundPip, { backgroundPip = it; settings.backgroundPip = it })
-            } },
-            { RowItem(stringResource(R.string.notify_packs)) { Switch(notifyPacks, { notifyPacks = it; settings.notifyNewPacks = it }) } },
-        ))
-        RowList(listOf(
-            { RowItem(stringResource(R.string.profile_privacy), onClick = { open(context, context.getString(R.string.url_privacy)) }) },
-            { RowItem(stringResource(R.string.profile_help), onClick = { open(context, context.getString(R.string.url_help)) }) },
-        ))
-        Text(stringResource(R.string.profile_no_account), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-        DeveloperSignature()
-    }
-}
-
-/**
- * Ayarlar: Mac'in yeni arayüzündeki bölümler aynı ad, alt yazı ve sırayla (iPhone ile aynı; Klavye Kısayolları telefonda
- * yok). Bölüme dokununca o bölümün sayfası açılır (bkz. SettingsPages.kt); geri tuşu bölüm listesine döner.
- */
-@Composable
-fun SettingsScreen(onBack: () -> Unit, onPacks: () -> Unit, onTarget: () -> Unit, onPairing: () -> Unit, onTvInstall: () -> Unit = {},
-                   onPlatform: () -> Unit = {}, onDemo: () -> Unit = {}) {
+fun SettingsScreen(onBack: (() -> Unit)?, onPacks: () -> Unit, onTarget: () -> Unit, onPairing: () -> Unit, onTvInstall: () -> Unit = {},
+                   onPlatform: () -> Unit = {}, onDemo: () -> Unit = {}, onPsn: () -> Unit = onPairing) {
     var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val open = section?.let { name -> SettingsSection.entries.firstOrNull { it.name == name } }
     if (open != null) {
@@ -132,16 +91,74 @@ fun SettingsScreen(onBack: () -> Unit, onPacks: () -> Unit, onTarget: () -> Unit
             onPairing = onPairing, onTvInstall = onTvInstall, onPlatform = onPlatform, onDemo = onDemo)
         return
     }
+    val context = LocalContext.current
+    val settings = Services.settings
     var showAbout by remember { mutableStateOf(false) }
+    var tvs by remember { mutableStateOf<List<FoundTv>?>(null) }
+    var notifyDisconnect by remember { mutableStateOf(settings.notifyDisconnect) }
+    var notifyPacks by remember { mutableStateOf(settings.notifyNewPacks) }
+    var backgroundPip by remember { mutableStateOf(settings.backgroundPip) }
+    LaunchedEffect(Unit) { tvs = withContext(Dispatchers.IO) { runCatching { TvDiscovery.search() }.getOrDefault(emptyList()) } }
     ScreenScaffold(top = { TopBar(stringResource(R.string.settings), onBack = onBack) }) {
+        AccountCards(onPsn = onPsn, onConsole = onPairing)
         RowList(SettingsSection.entries.map { item ->
-            { RowItem(stringResource(item.title), stringResource(item.hint), onClick = { section = item.name }) }
+            { SectionRow(item.icon, item.tint(), stringResource(item.title), stringResource(item.hint)) { section = item.name } }
         })
-        RowList(listOf { RowItem(stringResource(R.string.settings_about), BuildConfig.VERSION_NAME, onClick = { showAbout = true }) })
+        // Telefona özgü ayarlar (eski Profil sayfası).
+        Text(stringResource(R.string.profile), style = Tokens.Type.cardTitle, color = Tokens.Color.text,
+            modifier = Modifier.padding(top = Tokens.Space.inline).semantics { heading() })
+        RowList(listOf(
+            { RowItem(stringResource(R.string.profile_tvs), when (val found = tvs) {
+                null -> "${targetName(settings)} · ${stringResource(R.string.target_searching)}"
+                else -> listOf(targetName(settings)).plus(if (found.isEmpty()) listOf(stringResource(R.string.target_tvs_none))
+                    else found.map { "${it.name} (${brandName(it.brand)})" }).joinToString(" · ")
+            }, onClick = onTarget) },
+            { RowItem(stringResource(R.string.profile_psn),
+                stringResource(if (settings.accountId != null) R.string.profile_psn_linked_short else R.string.profile_psn_missing), onClick = onPsn) },
+            { RowItem("PS5", settings.console?.name?.let { "$it · " + stringResource(R.string.main_paired) } ?: stringResource(R.string.profile_not_paired),
+                onClick = onPairing) },
+        ))
+        // Bildirimler ve arka planda sürdürme telefona özgü (Mac'te karşılığı yok: masaüstü uygulaması arka planda zaten sürer).
+        Tile(Modifier.fillMaxWidth(), spacing = Tokens.Space.unit) {
+            SwitchRow(stringResource(R.string.notify_disconnect), checked = notifyDisconnect) { notifyDisconnect = it; settings.notifyDisconnect = it }
+            // iPhone ile aynı ad ve açıklama (orada Resim içinde resim penceresi çeviriyi ayakta tutar).
+            SwitchRow(stringResource(R.string.settings_background_pip), stringResource(R.string.settings_background_pip_short), backgroundPip) {
+                backgroundPip = it; settings.backgroundPip = it
+            }
+            SwitchRow(stringResource(R.string.notify_packs), checked = notifyPacks) { notifyPacks = it; settings.notifyNewPacks = it }
+        }
+        RowList(listOf(
+            { RowItem(stringResource(R.string.profile_privacy), onClick = { open(context, context.getString(R.string.url_privacy)) }) },
+            { RowItem(stringResource(R.string.profile_help), onClick = { open(context, context.getString(R.string.url_help)) }) },
+            { RowItem(stringResource(R.string.settings_about), BuildConfig.VERSION_NAME, onClick = { showAbout = true }) },
+        ))
         if (showAbout) AboutDialog { showAbout = false }
-        Text(stringResource(R.string.settings_copyright), style = Tokens.Type.caption, color = Tokens.Color.secondary,
-            modifier = Modifier.padding(top = Tokens.Space.inline))
+        // Künye (iPhone ile aynı): logo, uygulama adı, sürüm ve telif (Enmera adına), hesapsız ve ücretsiz.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap),
+            modifier = Modifier.padding(top = Tokens.Space.inline)) {
+            LogoMark(28.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.micro)) {
+                Text("CouchSubs", style = Tokens.Type.headline, color = Tokens.Color.text)
+                Text("${BuildConfig.VERSION_NAME} · " + stringResource(R.string.settings_copyright), style = Tokens.Type.small, color = Tokens.Color.secondary)
+                Text(stringResource(R.string.perde_free_no_account), style = Tokens.Type.small, color = Tokens.Color.tertiary)
+            }
+        }
+        Text(stringResource(R.string.profile_no_account), style = Tokens.Type.muted, color = Tokens.Color.secondary)
         DeveloperSignature()
+    }
+}
+
+/** Ayarlar menüsündeki bölüm satırı (iPhone SettingsSectionRow): renkli simge karesi, ad ve iki kelimelik alt yazı. */
+@Composable
+private fun SectionRow(icon: ImageVector, tint: Color, title: String, hint: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = Tokens.Space.inline),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
+        SoftIconTile(icon, tint)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
+            Text(title, style = Tokens.Type.headline, color = Tokens.Color.text)
+            Text(hint, style = Tokens.Type.caption, color = Tokens.Color.secondary)
+        }
+        Chevron()
     }
 }
 
@@ -229,7 +246,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
         title = { Text("CouchSubs ${BuildConfig.VERSION_NAME}") },
         text = {
             Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Tokens.Space.inline)) {
-                Text("Copyright © 2026 Sinan Yorulmaz", style = Tokens.Type.caption, color = Tokens.Color.secondary)
+                Text("© 2026 Enmera", style = Tokens.Type.caption, color = Tokens.Color.secondary)
                 Text(stringResource(R.string.about_body), style = Tokens.Type.body, color = Tokens.Color.secondary)
                 // Uygulamanın günlükleri tek dosyada, kişisel veri maskelenmiş (iPhone'da da aynı; masaüstünde "Günlük
                 // dosyasını göster").
@@ -294,12 +311,8 @@ internal fun deepLUsageText(usage: KeyCheck.DeepLUsage): String = when {
 internal fun WaitSlider(title: String, note: String, ms: Int, onChange: (Int) -> Unit) {
     val max = com.couchsubs.mobile.core.SubtitlePipeline.WAIT_SLIDER_MAX_MS
     val seconds = ms.coerceIn(0, max) / 1000f
-    Column {
-        SliderHeader(title, "${String.format(java.util.Locale.getDefault(), "%.1f", seconds)} ${stringResource(R.string.unit_seconds)}")
-        Slider(seconds, { onChange(Math.round(it * 10) * 100) }, valueRange = 0f..max / 1000f, steps = max / 100 - 1,
-            colors = couchSliderColors())
-        Text(note, style = Tokens.Type.caption, color = Tokens.Color.secondary)
-    }
+    SliderRow(title, "${String.format(java.util.Locale.getDefault(), "%.1f", seconds)} ${stringResource(R.string.unit_seconds)}", seconds,
+        { onChange(Math.round(it * 10) * 100) }, valueRange = 0f..max / 1000f, steps = max / 100 - 1, note = note)
 }
 
 @Composable

@@ -51,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -126,9 +127,9 @@ fun TvInstallScreen(onBack: () -> Unit, onDone: () -> Unit = onBack) {
             val found = withContext(Dispatchers.IO) { runCatching { TvDiscovery.search() }.getOrDefault(emptyList()) }
             brand = found.firstOrNull { it.brand != TvBrand.ANDROID_TV }?.brand ?: found.firstOrNull()?.brand ?: TvBrand.SAMSUNG
         }
-        ScreenScaffold(top = { TopBar(onBack = onBack) }) {
+        ScreenScaffold(top = { TopBar(onBack = onBack) }, ambient = true) {
             Heading(stringResource(R.string.tvinstall_title), stringResource(R.string.tvinstall_any_body))
-            Tile(Modifier.fillMaxWidth()) { StatusLabel(stringResource(R.string.tvinstall_searching), live = true) }
+            InstallSearching()
         }
         return
     }
@@ -249,69 +250,44 @@ private fun SamsungInstallScreen(onBack: () -> Unit, onDone: () -> Unit, brandPi
         return
     }
 
-    ScreenScaffold(top = { TopBar(onBack = onBack) }, bottom = {
-        if (!manual && !working) GhostButton(stringResource(R.string.tvinstall_not_found)) { manual = true }
+    ScreenScaffold(top = { TopBar(onBack = onBack) }, ambient = true, bottom = {
         if (state is InstallState.Done) PrimaryButton(stringResource(R.string.tvinstall_go_home), onClick = onDone)
         else PrimaryButton(stringResource(if (state is InstallState.Failed) R.string.tvinstall_retry else R.string.tvinstall_button),
-            enabled = !working && host.isNotBlank() && !TvAddress.isPhoneAddress(host, phoneIp)) { install() }
+            enabled = !working && host.isNotBlank() && !TvAddress.isPhoneAddress(host, phoneIp), busy = working) { install() }
     }) {
         Heading(stringResource(R.string.tvinstall_title), stringResource(R.string.tvinstall_body))
         if (!working) brandPicker()
         NoteTile(stringResource(R.string.tvinstall_supported), Tokens.Color.secondary)
 
-        TileLabel(stringResource(R.string.tvinstall_tvs))
+        InstallListTitle(stringResource(R.string.tvinstall_tvs), searching = candidates == null)
         when (val list = candidates) {
-            null -> Tile(Modifier.fillMaxWidth()) { Text(stringResource(R.string.tvinstall_searching), style = Tokens.Type.body, color = Tokens.Color.secondary) }
+            null -> InstallSearching()
             else -> {
-                if (list.isEmpty()) Tile(Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.tvinstall_none), style = Tokens.Type.body, color = Tokens.Color.secondary)
-                }
+                if (list.isEmpty()) InstallEmpty(stringResource(R.string.tvinstall_none))
                 list.forEach { tv ->
-                    Tile(Modifier.fillMaxWidth(), style = if (host == tv.host) TileStyle.ACTIVE else TileStyle.NORMAL,
-                        onClick = { if (!working) host = tv.host }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                            TileIcon(CouchIcons.Tv)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
-                                Text(tv.name, style = Tokens.Type.headline, color = Tokens.Color.text)
-                                Text(listOfNotNull(tv.info?.model, tv.host).joinToString(" · "), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-                                developerState(tv.info, phoneIp)?.let { (text, ok) -> StatusLabel(text, ok = ok) }
-                            }
-                            if (host == tv.host) SelectedCheck()
-                        }
-                    }
+                    TvCard(tv.name, listOfNotNull("Samsung", tv.info?.model, tv.host).joinToString(" · "), host == tv.host,
+                        status = developerState(tv.info, phoneIp)?.let { (text, ok) -> { StatusChip(text, if (ok) ChipTone.OK else ChipTone.AMBER) } },
+                        onClick = { if (!working) host = tv.host })
                 }
             }
         }
+        // iPhone ile aynı yer: "TV Listede Yok mu?" listenin hemen altında, alt çubukta yalnız ana düğme.
+        if (!manual && !working) GhostButton(stringResource(R.string.tvinstall_not_found)) { manual = true }
         if (manual) TvAddressField(host, { host = it.trim() }, phoneIp)
 
-        Tile(Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.tvinstall_steps_title), style = Tokens.Type.headline, color = Tokens.Color.text)
-            Text(stringResource(R.string.tvinstall_step1), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(stringResource(R.string.tvinstall_step2), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(stringResource(R.string.tvinstall_step3), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(phoneIp ?: stringResource(R.string.tvinstall_phone_ip_unknown), style = Tokens.Type.title, color = Tokens.Color.accentText)
-            Text(stringResource(R.string.tvinstall_step4), style = Tokens.Type.body, color = Tokens.Color.secondary)
+        InstallSteps(stringResource(R.string.tvinstall_steps_title), listOf(stringResource(R.string.tvinstall_step1),
+            stringResource(R.string.tvinstall_step2), stringResource(R.string.tvinstall_step3), stringResource(R.string.tvinstall_step4))) {
+            // Host PC IP olarak yazılacak adres (3. adımın hemen altında; mono, amber).
+            Text(phoneIp ?: stringResource(R.string.tvinstall_phone_ip_unknown), style = Tokens.Type.monoValue, color = Tokens.Color.accentText,
+                modifier = Modifier.padding(start = 36.dp))
         }
         Text(stringResource(R.string.tvinstall_signin_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
 
         when (val current = state) {
             InstallState.Idle -> Unit
-            is InstallState.Working -> Tile(Modifier.fillMaxWidth()) {
-                StatusLabel(stepText(current.step), live = true)
-            }
-            is InstallState.Done -> Tile(Modifier.fillMaxWidth(), style = TileStyle.ACTIVE) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                    TileIcon(Icons.Filled.Check, Tokens.Color.success)
-                    Text(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version),
-                        style = Tokens.Type.headline, color = Tokens.Color.text)
-                }
-                // Telefondan kuranların çoğunun bilgisayarı yoktur; TV'nin bekleme ekranı hata sanılıyordu (#113).
-                Text(stringResource(R.string.tvinstall_next), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-            }
-            is InstallState.Failed -> {
-                NoteTile(failureText(current, phoneIp))
-                GhostButton(stringResource(R.string.tvinstall_share_log)) { shareLog(context, logFile) }
-            }
+            is InstallState.Working -> InstallWorking(current.step)
+            is InstallState.Done -> InstallDone(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version))
+            is InstallState.Failed -> InstallErrorBox(failureText(current, phoneIp), onShareLog = { shareLog(context, logFile) })
         }
     }
 }

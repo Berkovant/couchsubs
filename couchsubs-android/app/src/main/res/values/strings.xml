@@ -5,8 +5,8 @@
     <string name="channel_translation">Altyazı çevirisi</string>
     <string name="notification_title">CouchSubs çeviriyor</string>
     <string name="notification_text">Altyazılar okunup Türkçeye çevriliyor; ekran kilitliyken de sürer</string>
-    <string name="stop">Çeviriyi durdur</string>
-    <string name="start">Çeviriyi başlat</string>
+    <string name="stop">Çeviriyi Durdur</string>
+    <string name="start">Çeviriyi Başlat</string>
     <string name="next">İleri</string>
     <string name="skip">Geç</string>
     <string name="skip_for_now">Şimdilik geç</string>
@@ -397,7 +397,7 @@
     <string name="settings_passcode_field">4 hane</string>
     <string name="settings_passcode_note">Yalnız ikinci hesabın PS5\'te giriş şifresi varsa gerekir. PS5 isteyince CouchSubs girer; şifre telefonda şifreli saklanır.</string>
     <string name="settings_about">Hakkında</string>
-    <string name="settings_copyright">CouchSubs · © 2026 Sinan Yorulmaz · AGPL-3.0 · Enmera</string>
+    <string name="settings_copyright">© 2026 Enmera · AGPL-3.0</string>
     <string name="about_body">CouchSubs ücretsiz ve açık kaynaklıdır (AGPL-3.0). Remote Play için chiaki-ng (AGPL-3.0) kullanılır.</string>
     <string name="about_source">Kaynak kodu</string>
     <string name="share_logs">Günlükleri paylaş</string>
@@ -869,4 +869,32 @@
     <string name="set_free_gemini">Daha iyi çeviri için ücretsiz Gemini anahtarı alın.</string>
     <string name="set_free_gemini_button">Ücretsiz Anahtar Al</string>
     <string name="url_gemini_key" translatable="false">https://aistudio.google.com/apikey</string>
+    <!-- Perde tasarım dili (iPhone ile aynı metinler) -->
+    <string name="tab_home">Ana Ekran</string>
+    <string name="ad_label">Reklam</string>
+    <string name="ad_coming_soon">Yakında</string>
+    <string name="perde_signed_in">Giriş yapıldı</string>
+    <string name="perde_not_signed_in">Giriş yapılmadı</string>
+    <string name="perde_paired">Eşleşti</string>
+    <string name="perde_sign_in">Giriş Yap</string>
+    <string name="perde_pair_ps5">PS5\'i eşle</string>
+    <string name="perde_choose_xbox">Xbox\'ınızı seçin</string>
+    <string name="perde_almost_ready">Neredeyse hazır</string>
+    <string name="perde_preview_line">Siz oynarken altyazılar burada görünecek.</string>
+    <string name="perde_installed_packs">Kurulu paketler</string>
+    <string name="perde_installed">Kurulu</string>
+    <string name="perde_now_playing">Oynanıyor</string>
+    <string name="perde_off">Kapalı</string>
+    <string name="perde_install_failed">Kurulum Tamamlanamadı</string>
+    <string name="stage_connect">Bağlanılıyor</string>
+    <string name="stage_approve">TV\'de Onay</string>
+    <string name="stage_send">Uygulama Gönderiliyor</string>
+    <string name="stage_install">Kuruluyor</string>
+    <string name="stage_open">Açılıyor</string>
+    <string name="stage_ready">Hazır</string>
+    <string name="perde_area_read">Okunan Alan</string>
+    <string name="perde_free_no_account">Ücretsiz, hesap gerekmez</string>
+    <string name="perde_done">Bitti</string>
+    <string name="perde_not_set_up">Kurulmadı</string>
+    <string name="perde_ready_translation">Hazır çeviri</string>
 </resources>

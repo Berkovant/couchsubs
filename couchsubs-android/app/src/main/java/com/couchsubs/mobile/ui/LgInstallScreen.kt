@@ -159,71 +159,47 @@ internal fun LgInstallScreen(onBack: () -> Unit, onDone: () -> Unit, brandPicker
     // "TV uygulamasını güncelle"den gelindiyse ve anahtar kayıtlıysa kurulum hemen başlar; değilse parola beklenir.
     LaunchedEffect(preset) { if (preset != null && state is LgState.Idle && hasKey) install() }
 
-    ScreenScaffold(top = { TopBar(onBack = onBack) }, bottom = {
-        if (!manual && !working) GhostButton(stringResource(R.string.tvinstall_not_found)) { manual = true }
+    ScreenScaffold(top = { TopBar(onBack = onBack) }, ambient = true, bottom = {
         // Kurulum bitince ana düğme ana ekrana götürür; kurulumda geri düğmesi 3. adıma dönüyor, kullanıcı orada kalıyordu (#113).
         if (state is LgState.Done) PrimaryButton(stringResource(R.string.tvinstall_go_home), onClick = onDone)
         else PrimaryButton(stringResource(if (state is LgState.Failed) R.string.tvinstall_retry else R.string.tvinstall_button),
-            enabled = !working && host.isNotBlank() && !TvAddress.isPhoneAddress(host, phoneIp) && (passphrase.isNotBlank() || hasKey)) { install() }
+            enabled = !working && host.isNotBlank() && !TvAddress.isPhoneAddress(host, phoneIp) && (passphrase.isNotBlank() || hasKey),
+            busy = working) { install() }
     }) {
         Heading(stringResource(R.string.tvinstall_title), stringResource(R.string.tvinstall_lg_body))
         if (!working) brandPicker()
         NoteTile(stringResource(R.string.tvinstall_lg_supported), Tokens.Color.secondary)
 
-        TileLabel(stringResource(R.string.tvinstall_lg_tvs))
+        InstallListTitle(stringResource(R.string.tvinstall_lg_tvs), searching = candidates == null)
         when (val list = candidates) {
-            null -> Tile(Modifier.fillMaxWidth()) { Text(stringResource(R.string.tvinstall_searching), style = Tokens.Type.body, color = Tokens.Color.secondary) }
+            null -> InstallSearching()
             else -> {
-                if (list.isEmpty()) Tile(Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.tvinstall_lg_none), style = Tokens.Type.body, color = Tokens.Color.secondary)
-                }
+                if (list.isEmpty()) InstallEmpty(stringResource(R.string.tvinstall_lg_none))
                 list.forEach { tv ->
-                    Tile(Modifier.fillMaxWidth(), style = if (host == tv.host) TileStyle.ACTIVE else TileStyle.NORMAL,
-                        onClick = { if (!working) host = tv.host }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                            TileIcon(CouchIcons.Tv)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
-                                Text(tv.name, style = Tokens.Type.headline, color = Tokens.Color.text)
-                                Text(tv.host, style = Tokens.Type.caption, color = Tokens.Color.secondary)
-                                StatusLabel(stringResource(if (tv.devMode) R.string.tvinstall_dev_on else R.string.tvinstall_dev_off), ok = tv.devMode)
-                            }
-                            if (host == tv.host) SelectedCheck()
-                        }
-                    }
+                    TvCard(tv.name, "LG · ${tv.host}", host == tv.host, status = {
+                        StatusChip(stringResource(if (tv.devMode) R.string.tvinstall_dev_on else R.string.tvinstall_dev_off),
+                            if (tv.devMode) ChipTone.OK else ChipTone.AMBER)
+                    }, onClick = { if (!working) host = tv.host })
                 }
             }
         }
+        // iPhone ile aynı yer: "TV Listede Yok mu?" listenin hemen altında, alt çubukta yalnız ana düğme.
+        if (!manual && !working) GhostButton(stringResource(R.string.tvinstall_not_found)) { manual = true }
         if (addressError) NoteTile(stringResource(R.string.address_invalid))
         if (manual) TvAddressField(host, { host = it.trim(); addressError = false }, phoneIp)
         Field(passphrase, { passphrase = it.trim().uppercase() },
             stringResource(if (hasKey) R.string.tvinstall_lg_passphrase_saved else R.string.tvinstall_lg_passphrase),
             keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii))
 
-        Tile(Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.tvinstall_lg_steps_title), style = Tokens.Type.headline, color = Tokens.Color.text)
-            Text(stringResource(R.string.tvinstall_lg_step1), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(stringResource(R.string.tvinstall_lg_step2), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(stringResource(R.string.tvinstall_lg_step3), style = Tokens.Type.body, color = Tokens.Color.secondary)
-            Text(stringResource(R.string.tvinstall_lg_step4), style = Tokens.Type.body, color = Tokens.Color.secondary)
-        }
-        Text(stringResource(R.string.tvinstall_lg_session_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
+        InstallSteps(stringResource(R.string.tvinstall_lg_steps_title), listOf(stringResource(R.string.tvinstall_lg_step1),
+            stringResource(R.string.tvinstall_lg_step2), stringResource(R.string.tvinstall_lg_step3), stringResource(R.string.tvinstall_lg_step4)))
+        NoticeBox(stringResource(R.string.tvinstall_lg_session_note), NoticeTone.INFO)
 
         when (val current = state) {
             LgState.Idle -> Unit
-            is LgState.Working -> Tile(Modifier.fillMaxWidth()) { StatusLabel(stepText(current.step), live = true) }
-            is LgState.Done -> Tile(Modifier.fillMaxWidth(), style = TileStyle.ACTIVE) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                    TileIcon(Icons.Filled.Check, Tokens.Color.success)
-                    Text(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version),
-                        style = Tokens.Type.headline, color = Tokens.Color.text)
-                }
-                // Telefondan kuranların çoğunun bilgisayarı yoktur; TV'nin bekleme ekranı hata sanılıyordu (#113).
-                Text(stringResource(R.string.tvinstall_next), style = Tokens.Type.caption, color = Tokens.Color.secondary)
-            }
-            is LgState.Failed -> {
-                NoteTile(lgFailureText(current))
-                GhostButton(stringResource(R.string.tvinstall_share_log)) { shareLog(context, logFile) }
-            }
+            is LgState.Working -> InstallWorking(current.step)
+            is LgState.Done -> InstallDone(stringResource(if (current.installed) R.string.tvinstall_done else R.string.tvinstall_up_to_date, current.version))
+            is LgState.Failed -> InstallErrorBox(lgFailureText(current), onShareLog = { shareLog(context, logFile) })
         }
     }
 }
