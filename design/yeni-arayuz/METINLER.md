@@ -814,6 +814,11 @@ install CouchSubs?", "Remove And Install", "Cancel".
 | Choose Dark under Subtitle Appearance to fully hide the English subtitle in the game. A full-width band also covers the sides. | Oyundaki İngilizce altyazıyı tamamen gizlemek için Altyazı Görünümü'nde Koyu'yu seçin. Tam genişlik bant yanları da örter. |
 | Xbox · Beta | Xbox · Beta |
 | Beta | Beta |
+| Live Preview | Canlı Önizleme |
+| Pack Installed | Paket Kuruldu |
+| Playing | Oynanıyor |
+| Suggestions | Öneriler |
+| Signing In… | Giriş Yapılıyor… |
 
 ## Kaydırıcı, seçici ve ek alan düzeni (22 Kas, Sinan Bey geri bildirimi)
 

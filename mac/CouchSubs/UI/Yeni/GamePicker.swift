@@ -42,23 +42,16 @@ private struct GamePickerCard: View {
                 .textFieldStyle(DSTextFieldStyle())
                 .focused($focused)
                 .onSubmit { if !typed.isEmpty { choice.choose(typed) } }
-            VStack(spacing: DS.space("xs")) {
+            // Kapak rafı (Perde): öneriler 3:4 kapak; paketi olan ya da son oynanan cam hapla, seçili oyun amber halka +
+            // kapak ışımasıyla.
+            DSCoverShelf(title: "Suggestions") {
                 ForEach(suggestions, id: \.self) { name in
                     Button { choice.choose(name) } label: {
-                        HStack(spacing: DS.space("m")) {
-                            RoundedRectangle(cornerRadius: DS.radius("small"), style: .continuous)
-                                .fill(Self.cover(name))
-                                .frame(width: 40, height: 40)
-                            Text(verbatim: name).font(.dsBodyStrong).lineLimit(1)
-                            Spacer(minLength: DS.space("s"))
-                            if hasPack(name) {
-                                DSBadge(text: "Pack Available", tone: .amber)
-                            } else if name == choice.lastPlayed {
-                                DSBadge(text: "Last Played", tone: .unknown)
-                            }
-                        }
+                        DSGameCover(title: name, status: hasPack(name) ? "Pack Available" : name == choice.lastPlayed ? "Last Played" : nil,
+                                    selected: GameName.key(name) == GameName.key(choice.game?.name ?? ""), width: 112)
                     }
-                    .buttonStyle(DSOptionStyle(selected: GameName.key(name) == GameName.key(choice.game?.name ?? ""), radio: false))
+                    .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("cover")))
+                    .accessibilityLabel(Text(verbatim: name))
                 }
             }
             Text("Lines not in a pack go to the shared pool with the game's name, so a ready translation for that game arrives sooner.").dsMuted()
@@ -71,7 +64,7 @@ private struct GamePickerCard: View {
             }
         }
         .frame(width: 560)
-        .shadow(color: .black.opacity(0.18), radius: 30, y: 24)
+        .dsElevation(.raised, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
         .onAppear { focused = true }
         .onExitCommand { choice.dismiss() }
     }

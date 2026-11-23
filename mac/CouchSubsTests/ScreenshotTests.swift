@@ -100,40 +100,108 @@ final class ScreenshotTests: XCTestCase {
         windows.forEach { $0.close() }
     }
 
-    /// Perde tasarım dili: bileşen kataloğu ve ana ekranlar, koyu ve açık temada. `COUCHSUBS_PERDE` (klasör) verilince
-    /// çalışır; dosyalar `mac-<ekran>-<koyu|acik>.png`.
+    /// Perde tasarım dili: bileşen kataloğu, ana ekranlar (Ana Ekran, Geçmiş, Ayarlar'ın bütün bölümleri, oyun sorusu),
+    /// kurulum adımları, TV kurulum durumları ve ek pencereler (Hakkında, menü çubuğu), koyu ve açık temada.
+    /// `COUCHSUBS_PERDE` (klasör) verilince çalışır; dosyalar `mac-<ekran>-<koyu|acik>.png`. `COUCHSUBS_PERDE_ONLY`
+    /// verilirse yalnız adı onunla başlayan ekranlar.
     func testCapturePerde() async throws {
         guard let path = ProcessInfo.processInfo.environment["COUCHSUBS_PERDE"] else { throw XCTSkip("COUCHSUBS_PERDE verilmedi") }
+        let only = ProcessInfo.processInfo.environment["COUCHSUBS_PERDE_ONLY"].flatMap { $0.isEmpty ? nil : $0 }
+        func wanted(_ name: String) -> Bool { only.map { name.hasPrefix($0) } ?? true }
         let folder = URL(fileURLWithPath: path, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let main = try await mainModel()
         let size = CGSize(width: DS.size("windowWidth"), height: DS.size("windowHeight"))
-        let screens: [(String, () -> Void)] = [
+        var screens: [(String, () -> Void)] = [
             ("ana", { main.showSettings = false; main.showHistory = false }),
             ("gecmis", { main.showHistory = true }),
-            ("ayarlar-temel", { main.showHistory = false; main.settingsSection = .basics; main.showSettings = true }),
-            ("ayarlar-altyazi", { main.showHistory = false; main.settingsSection = .appearance; main.showSettings = true }),
         ]
+        for section in SettingsSection.allCases {
+            screens.append(("ayarlar-\(section)", { main.showHistory = false; main.settingsSection = section; main.showSettings = true }))
+        }
+        let steps: [(String, AppModel.Step)] = [("kurulum-1-konsol", .welcome), ("kurulum-2-hesap", .secondAccount),
+                                                ("kurulum-2b-giris", .psnLogin), ("kurulum-3-ps5", .console), ("kurulum-5-tv", .tv),
+                                                ("kurulum-6-hdmi", .hdmi), ("kurulum-7-ceviri", .betterTranslation), ("kurulum-8-dene", .test)]
+        let lg = LGTV(name: "LG OLED55C3", host: "192.168.1.153"), samsung = LGTV(name: "Samsung QE55Q80", host: "192.168.1.160", brand: .samsung)
+        let tvStates: [(String, TVSetupStep.Preview, LGTV?, TVAppState)] = [
+            ("tv-1-tariyor", .init(searching: true), nil, .unknown),
+            ("tv-2-bulundu", .init(tvs: [lg, samsung]), nil, .unknown),
+            ("tv-3-onay", .init(tvs: [lg, samsung], pairingHost: lg.host), nil, .unknown),
+            ("tv-4-kuruluyor", .init(tvs: [lg, samsung]), lg, .working),
+            ("tv-5-hazir", .init(tvs: [lg, samsung]), lg, .upToDate("0.9.81")),
+            ("tv-6-hata", .init(tvs: [lg, samsung]), samsung, .failed(.certificateRejected)),
+        ]
+        let introPlayed = UserDefaults.standard.bool(forKey: "introPlayed")
+        UserDefaults.standard.set(true, forKey: "introPlayed")
+        defer { UserDefaults.standard.set(introPlayed, forKey: "introPlayed") }
         for (theme, dark) in [("koyu", true), ("acik", false)] {
-            let catalog = AnyView(ScrollView { PerdeCatalog(columns: 3) }.frame(width: 1280, height: 2560))
-            let window = show(catalog, size: CGSize(width: 1280, height: 2560), offset: 0, dark: dark, unconstrained: true)
-            try await Task.sleep(for: .seconds(2))
-            try capture(window).write(to: folder.appendingPathComponent("mac-katalog-\(theme).png"))
-            window.close()
-            for (name, prepare) in screens {
+            if wanted("katalog") {
+                let catalog = AnyView(ScrollView { PerdeCatalog(columns: 3) }.frame(width: 1280, height: 2560))
+                let window = show(catalog, size: CGSize(width: 1280, height: 2560), offset: 0, dark: dark, unconstrained: true)
+                try await Task.sleep(for: .seconds(2))
+                try capture(window).write(to: folder.appendingPathComponent("mac-katalog-\(theme).png"))
+                window.close()
+            }
+            for (name, prepare) in screens where wanted(name) {
                 prepare()
                 let window = show(AnyView(RootView().environmentObject(main)), size: size, offset: 0, dark: dark)
                 try await Task.sleep(for: .seconds(1.5))
                 try capture(window).write(to: folder.appendingPathComponent("mac-\(name)-\(theme).png"))
                 window.close()
             }
-            let setup = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
-            setup.accountId = Data(repeating: 1, count: 8)
-            setup.step = .console
-            let wizard = show(AnyView(WizardView().environmentObject(setup)), size: size, offset: 40, dark: dark)
-            try await Task.sleep(for: .seconds(2))
-            try capture(wizard).write(to: folder.appendingPathComponent("mac-kurulum-ps5-\(theme).png"))
-            wizard.close()
+            // Tam ekran (1920 × 1080): orantı korunur, içerik reklam bandının üstünde biter.
+            if wanted("genis-ana") {
+                main.showSettings = false
+                main.showHistory = false
+                let window = show(AnyView(RootView().environmentObject(main)), size: CGSize(width: 1920, height: 1080), offset: 0, dark: dark)
+                try await Task.sleep(for: .seconds(1.5))
+                try capture(window).write(to: folder.appendingPathComponent("mac-genis-ana-\(theme).png"))
+                window.close()
+            }
+            if wanted("oyun-sor") {
+                main.showSettings = false
+                main.showHistory = false
+                main.gameChoice.ask()
+                let window = show(AnyView(RootView().environmentObject(main)), size: size, offset: 0, dark: dark)
+                try await Task.sleep(for: .seconds(1.5))
+                try capture(window).write(to: folder.appendingPathComponent("mac-oyun-sor-\(theme).png"))
+                window.close()
+                main.gameChoice.dismiss()
+            }
+            for (name, step) in steps where wanted(name) {
+                let setup = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+                setup.accountId = Data(repeating: 1, count: 8)
+                setup.step = step
+                let window = show(AnyView(WizardView().environmentObject(setup)), size: size, offset: 40, dark: dark)
+                try await Task.sleep(for: .seconds(2))
+                try capture(window).write(to: folder.appendingPathComponent("mac-\(name)-\(theme).png"))
+                window.close()
+            }
+            for (name, preview, tv, state) in tvStates where wanted("kurulum-\(name)") {
+                TVSetupStep.preview = preview
+                let tvModel = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+                tvModel.accountId = Data(repeating: 1, count: 8)
+                tvModel.step = .tv
+                tvModel.tv = tv
+                tvModel.tvApp = state
+                let window = show(AnyView(WizardView().environmentObject(tvModel)), size: size, offset: 40, dark: dark)
+                try await Task.sleep(for: .seconds(2))
+                try capture(window).write(to: folder.appendingPathComponent("mac-kurulum-\(name)-\(theme).png"))
+                window.close()
+            }
+            TVSetupStep.preview = nil
+            if wanted("hakkinda") {
+                let window = show(AnyView(NewAboutView()), size: CGSize(width: 460, height: 560), offset: 40, dark: dark)
+                try await Task.sleep(for: .seconds(1))
+                try capture(window).write(to: folder.appendingPathComponent("mac-hakkinda-\(theme).png"))
+                window.close()
+            }
+            if wanted("menu") {
+                let window = show(AnyView(MenuBarPanel().environmentObject(main)), size: CGSize(width: 340, height: 330), offset: 40, dark: dark)
+                try await Task.sleep(for: .seconds(1))
+                try capture(window).write(to: folder.appendingPathComponent("mac-menu-cubugu-\(theme).png"))
+                window.close()
+            }
         }
         windows.forEach { $0.close() }
     }
@@ -176,6 +244,56 @@ final class ScreenshotTests: XCTestCase {
               "cost=\(String(format: "%.2f", ambientMoving - ambientStill)) | catalog still=\(String(format: "%.2f", catalogStill)) " +
               "moving=\(String(format: "%.2f", catalogMoving)) cost=\(String(format: "%.2f", catalogMoving - catalogStill))")
         XCTAssertLessThan(ambientMoving - ambientStill, 2)
+    }
+
+    /// Gerçek ana pencerenin boşta (çeviri kapalı) işlemci kullanımı: Ana Ekran ve Ayarlar, hareket kapısı açık ve kapalı,
+    /// 15'er sn. `COUCHSUBS_CPU` verilince çalışır; `CPU_HOME` satırı. Hedef ≤ %2.
+    func testHomeIdleCPU() async throws {
+        guard ProcessInfo.processInfo.environment["COUCHSUBS_CPU"] != nil else { throw XCTSkip("COUCHSUBS_CPU verilmedi") }
+        defer { DSMotionGate.forced = nil }
+        func cpu() -> Double {
+            var usage = rusage()
+            getrusage(RUSAGE_SELF, &usage)
+            return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+        }
+        func measure(_ view: AnyView, animate: Bool?) async throws -> Double {
+            DSMotionGate.forced = animate
+            let window = show(view, size: CGSize(width: 1200, height: 760), offset: 0, dark: true)
+            try await Task.sleep(for: .seconds(3))
+            let (start, began) = (cpu(), Date())
+            try await Task.sleep(for: .seconds(15))
+            let percent = (cpu() - start) / Date().timeIntervalSince(began) * 100
+            // Kapanan pencerenin görünümleri (ve görevleri) sonraki ölçüme yük bindirmesin.
+            window.contentView = nil
+            window.close()
+            windows.removeAll { $0 === window }
+            try await Task.sleep(for: .seconds(1))
+            return percent
+        }
+        let main = try await mainModel()
+        main.isRunning = false
+        main.showSettings = false
+        main.showHistory = false
+        try await Task.sleep(for: .seconds(10))
+        let home = AnyView(RootView().environmentObject(main))
+        let homeStill = try await measure(home, animate: false)
+        let homeMoving = try await measure(home, animate: true)
+        // Geçmiş ve Ayarlar'da ortam ışığı durağan (yalnız Ana Ekran'da süzülür): kapı zorlanmadan, uygulamadaki gibi ölçülür.
+        var pages: [(String, Double)] = []
+        main.showHistory = true
+        pages.append(("gecmis", try await measure(home, animate: nil)))
+        main.showHistory = false
+        for section in [SettingsSection.basics, .appearance, .packs, .outputs] {
+            main.settingsSection = section
+            main.showSettings = true
+            pages.append(("ayarlar-\(section)", try await measure(home, animate: nil)))
+        }
+        print("CPU_HOME home still=\(String(format: "%.2f", homeStill)) moving=\(String(format: "%.2f", homeMoving)) " +
+              "cost=\(String(format: "%.2f", homeMoving - homeStill)) | " +
+              pages.map { "\($0.0)=\(String(format: "%.2f", $0.1))" }.joined(separator: " "))
+        // Hedef %2; test sürecinde XCTest ve Main Thread Checker yükü de sayıldığı için sınır biraz geniş (gürültü ±0,5).
+        XCTAssertLessThan(homeMoving, 2.5)
+        for (name, value) in pages { XCTAssertLessThan(value, 2.5, name) }
     }
 
     /// Ayarlar menüsünün renk geçişinin işlemci maliyeti: aynı pencere önce durağan, sonra oynarken 15'er sn ölçülür;

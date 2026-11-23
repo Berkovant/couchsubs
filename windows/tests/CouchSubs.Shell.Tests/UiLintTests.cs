@@ -112,6 +112,30 @@ public class UiLintTests
         Assert.True(missing.Count == 0, "Tanımsız kaynak anahtarı:\n" + string.Join("\n", missing.Distinct()));
     }
 
+    /// <summary>
+    /// Aynı XAML dosyasında tanımlanan bir anahtar, tanımından ÖNCE StaticResource ile kullanılmaz: WPF sözlüğü sırayla
+    /// yükler, ileriye başvuru açılışta XamlParseException verir ve bütün sözlük (dolayısıyla bütün ekranlar) düşer. Derleme
+    /// bunu yakalamaz (Perde'de SliderValueText ekran görüntüsü aracında böyle düştü).
+    /// </summary>
+    [Fact]
+    public void StaticResourcesAreDefinedBeforeUse()
+    {
+        var problems = new List<string>();
+        var use = new Regex(@"\{StaticResource\s+([A-Za-z0-9_.]+)\}");
+        var definition = new Regex(@"x:Key=""([^""]+)""");
+        foreach (var file in Directory.EnumerateFiles(App, "*.xaml", SearchOption.AllDirectories).Where(IsSource))
+        {
+            var text = File.ReadAllText(file);
+            var first = new Dictionary<string, int>();
+            foreach (Match match in definition.Matches(text))
+                first.TryAdd(match.Groups[1].Value, match.Index);
+            foreach (Match match in use.Matches(text))
+                if (first.TryGetValue(match.Groups[1].Value, out var at) && at > match.Index)
+                    problems.Add($"{Path.GetFileName(file)}: {match.Groups[1].Value} (satır {text[..match.Index].Count(c => c == '\n') + 1})");
+        }
+        Assert.True(problems.Count == 0, "Tanımından önce kullanılan StaticResource (açılışta XamlParseException):\n" + string.Join("\n", problems.Distinct()));
+    }
+
     private static (HashSet<string> Keys, HashSet<string> Colors, HashSet<string> Fonts) KnownKeys()
     {
         var keys = new HashSet<string>();

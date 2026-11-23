@@ -2,6 +2,7 @@
 
 import AppKit
 import CouchSubsCore
+import SwiftUI
 import XCTest
 @testable import CouchSubs
 
@@ -41,6 +42,92 @@ final class NewDesignTests: XCTestCase {
             XCTAssertNotNil(DSTokens.rgba(pair.light), name)
             XCTAssertNotNil(DSTokens.rgba(pair.dark), name)
         }
+    }
+
+    /// Geçmiş satırları (kullanıcı şikâyeti: koyu temada soluk): çeviri ≥ 7:1, İngilizce ve saat ≥ 4.5:1; iki temada, kart
+    /// yüzeyinde ve seçili satırın amber zemininde. Durdur düğmesi: beyaz yazı dolu zeminde ≥ 3:1 (kalın 15 pt+).
+    func testHistoryRowAndStopContrast() {
+        let tokens = DS.tokens
+        var failures: [String] = []
+        for mode in ["light", "dark"] {
+            func hex(_ name: String) -> String { mode == "light" ? tokens.color[name]!.light : tokens.color[name]!.dark }
+            for back in ["surface", "amberSoft"] {
+                for (token, minimum) in [(HistoryRowStyle.translationToken, 7.0), (HistoryRowStyle.sourceToken, 4.5),
+                                         (HistoryRowStyle.timeToken, 4.5)] {
+                    let ratio = DSTokens.contrast(hex(token), hex(back), over: hex("surface"))
+                    if ratio < minimum { failures.append("\(mode) \(token) / \(back): \(String(format: "%.2f", ratio))") }
+                }
+            }
+            let stop = DSTokens.contrast(hex("onStop"), hex("stopFill"), over: hex("background"))
+            if stop < 3 { failures.append("\(mode) onStop / stopFill: \(String(format: "%.2f", stop))") }
+        }
+        XCTAssertEqual(failures, [])
+    }
+
+    /// Kaydırıcı hizası: iz tam genişlik, uç etiketleri kenarlarda. Sol kenar = başlığın sol kenarı = "16"nın sol kenarı;
+    /// sağ kenar = değer yazısının ve "50"nin sağ kenarı (fark ≤ 1 pt). Hem hesap hem gerçek çizim (piksel) ölçülür.
+    func testSliderAlignsWithLabels() throws {
+        XCTAssertEqual(DSSlider.trackSpan(width: 300), 0...300)
+        XCTAssertEqual(DSSlider.knobCenter(fraction: 0, width: 300), 0)
+        XCTAssertEqual(DSSlider.knobCenter(fraction: 1, width: 300), 300)
+        func render(_ value: Double) throws -> (CGImage, CGFloat) {
+            let view = VStack(alignment: .leading, spacing: 4) {
+                DSSlider(value: .constant(value), range: 16...50, step: 1)
+                DSSliderRange(low: "16", high: "50")
+            }
+            .frame(width: 300)
+            .padding(40)
+            .background(Color(red: 1, green: 0, blue: 1))
+            .environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            return (try XCTUnwrap(renderer.cgImage), 2)
+        }
+        func pixels(_ image: CGImage) -> (Int, Int, (Int, Int) -> (Int, Int, Int)) {
+            let data = CFDataGetBytePtr(image.dataProvider!.data!)!
+            let bpr = image.bytesPerRow, bpp = image.bitsPerPixel / 8
+            return (image.width, image.height, { x, y in
+                let i = y * bpr + x * bpp
+                return (Int(data[i]), Int(data[i + 1]), Int(data[i + 2]))
+            })
+        }
+        func isMagenta(_ p: (Int, Int, Int)) -> Bool { p.0 > 200 && p.1 < 60 && p.2 > 200 }
+        // Değer en büyükken amber iz soldan başlar; en küçükken iz (alan rengi) sağ kenara kadar uzanır.
+        let (full, scale) = try render(50)
+        let (fw, _, fp) = pixels(full)
+        let row = Int((40 + 12) * scale)
+        let firstLeft = (0..<fw).first { !isMagenta(fp($0, row)) }.map { CGFloat($0) / scale }
+        XCTAssertEqual(try XCTUnwrap(firstLeft), 40, accuracy: 1, "izin sol ucu")
+        let (empty, _) = try render(16)
+        let (ew, eh, ep) = pixels(empty)
+        let lastRight = (0..<ew).last { !isMagenta(ep($0, row)) }.map { CGFloat($0 + 1) / scale }
+        XCTAssertEqual(try XCTUnwrap(lastRight), 340, accuracy: 1, "izin sağ ucu")
+        // Uç etiketleri: "16"nın mürekkebi sol kenarda, "50"ninki sağ kenarda başlar/biter (yazı iç boşluğu ≤ 1 pt).
+        let labelRows = Int((40 + 24 + 4) * scale)..<min(eh, Int((40 + 24 + 4 + 16) * scale))
+        var inkLeft = CGFloat.infinity, inkRight: CGFloat = 0
+        for y in labelRows {
+            for x in 0..<ew where !isMagenta(ep(x, y)) {
+                inkLeft = min(inkLeft, CGFloat(x) / scale)
+                inkRight = max(inkRight, CGFloat(x + 1) / scale)
+            }
+        }
+        XCTAssertEqual(inkLeft, 40, accuracy: 1.5, "16 etiketinin sol kenarı")
+        XCTAssertEqual(inkRight, 340, accuracy: 1.5, "50 etiketinin sağ kenarı")
+    }
+
+    /// Tipografik kapak kısaltmaları (gerçek kapak/logo yok): oyunun adından kararlı ve kısa.
+    func testCoverMonogram() {
+        XCTAssertEqual(DSCoverArt.monogram("GTA V"), "GTA")
+        XCTAssertEqual(DSCoverArt.numeral("GTA V"), "V")
+        XCTAssertEqual(DSCoverArt.monogram("Grand Theft Auto VI"), "GTA")
+        XCTAssertEqual(DSCoverArt.numeral("Grand Theft Auto VI"), "VI")
+        XCTAssertEqual(DSCoverArt.monogram("Red Dead Redemption 2"), "RDR")
+        XCTAssertEqual(DSCoverArt.numeral("Red Dead Redemption 2"), "2")
+        XCTAssertEqual(DSCoverArt.monogram("Mafia"), "Ma")
+        XCTAssertNil(DSCoverArt.numeral("Mafia"))
+        XCTAssertEqual(DSCoverArt.monogram("Assassin's Creed Shadows"), "ACS")
+        XCTAssertEqual(DSCoverArt.monogram("Cyberpunk 2077"), "Cy")
+        XCTAssertEqual(DSCoverArt.paletteIndex("GTA V"), DSCoverArt.paletteIndex("GTA V"))
     }
 
     /// Perde kontrastı: her yazı rengi her yüzeyde, her iki temada en az 4.5:1 (WCAG AA). Saydam zeminler altlarındaki

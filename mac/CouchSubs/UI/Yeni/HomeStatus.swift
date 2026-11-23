@@ -41,7 +41,8 @@ enum HomeProblem: Equatable {
     }
 }
 
-/// Sessizlik nedeni kartı: solda 4 pt kırmızı şerit, "%lld SN SESSİZ", neden başlığı, açıklama, çözüm düğmeleri.
+/// Sessizlik nedeni kartı (vurgulu, kırmızı kenar): nabızlı "%lld sn sessiz" hapı, neden başlığı, açıklama, çözüm
+/// düğmeleri.
 struct ProblemCard: View {
     @EnvironmentObject private var model: AppModel
     let problem: HomeProblem
@@ -50,10 +51,7 @@ struct ProblemCard: View {
 
     var body: some View {
         DSCard(spacing: DS.space("s"), accent: .dsLive) {
-            HStack(spacing: DS.space("xs")) {
-                Circle().fill(Color.dsLive).frame(width: 8, height: 8)
-                DSMonoLabel(silenceLabel, color: .dsLive)
-            }
+            DSStatusChip(silenceLabel, tone: .live)
             Text(title).font(.dsH3).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             Text(verbatim: message).dsMuted(.system(size: 14))
             VStack(spacing: DS.space("xs")) { fixes }
@@ -147,7 +145,8 @@ struct ProblemCard: View {
     }
 }
 
-/// Çözüm satırı: 48 yükseklik, 16 köşe; ilki amber, öbürleri alan zemini; sağda mono durum ("Kapalı", "Yapıldı").
+/// Çözüm satırı: 48 yükseklik, tam yuvarlak; ilki ana eylem (amber degrade + ışıma), öbürleri ikincil (yükseltilmiş
+/// yüzey, kıl çizgi); sağda mono durum ("Kapalı", "Yapıldı"). Yapılınca yeşil başarı zemini.
 private struct FixRow: View {
     let id: String
     let title: LocalizedStringKey
@@ -155,30 +154,47 @@ private struct FixRow: View {
     var primary = false
     @Binding var done: Set<String>
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         let finished = done.contains(id)
+        let shape = Capsule(style: .circular)
+        let amber = primary && !finished
         Button {
             action()
             done.insert(id)
         } label: {
             HStack {
+                if finished && state == nil {
+                    Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).accessibilityHidden(true)
+                }
                 Text(title).font(.dsButtonSecondary).lineLimit(1)
                 Spacer(minLength: DS.space("s"))
                 if finished && state == nil {
-                    Text("Completed").font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Color.dsSuccessText)
+                    Text("Completed").font(.system(size: 12, weight: .medium))
                 } else if let state {
-                    Text(state).font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Color.dsMuted)
+                    Text(state).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsMuted)
                 }
             }
-            .foregroundStyle(primary && !finished ? Color.dsOnAmber : Color.dsText)
-            .padding(.horizontal, DS.space("m"))
+            .foregroundStyle(finished && state == nil ? Color.dsSuccessText : amber ? Color.dsOnAmber : Color.dsText)
+            .padding(.horizontal, DS.space("l"))
             .frame(height: DS.size("button"))
-            .background(finished && state == nil ? Color.dsSuccessSoft : primary ? Color.dsAmber : Color.dsField,
-                        in: RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous))
+            .background {
+                if finished && state == nil {
+                    shape.fill(Color.dsSuccessSoft)
+                } else if amber {
+                    shape.fill(LinearGradient(colors: [.dsAmberHover, .dsAmber], startPoint: .top, endPoint: .bottom))
+                } else {
+                    shape.fill(hovering ? Color.dsSurfaceHigh : Color.dsSurfaceRaised)
+                }
+            }
+            .overlay(shape.inset(by: 0.5).stroke(finished && state == nil ? Color.dsSuccessRing : amber ? Color.dsAmberLine.opacity(0.6)
+                                                 : hovering ? Color.dsBorderStrong : Color.dsBorder))
+            .shadow(color: amber ? Color.dsAmberGlow.opacity(0.85) : .clear, radius: 14, y: 8)
+            .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.size("button") / 2))
+        .onHover { hovering = $0 }
     }
 }
 
@@ -299,14 +315,15 @@ private struct NoticeCard<Buttons: View>: View {
 }
 
 private extension View {
+    /// Bilgi notu (Perde bilgi kutusu): mavi yumuşak zemin, köşe yarıçapıyla komple saran ince kenarlık.
     func noticeCard() -> some View {
         let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
         return self
             .environment(\.csInsideCard, true)
             .padding(DS.space("m"))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .dsAccentBorder(.dsAmber, cornerRadius: DS.radius("tile"))
-            .background(Color.dsSurface, in: shape)
+            .background(Color.dsInfoSoft, in: shape)
+            .overlay(shape.strokeBorder(Color.dsInfo.opacity(0.45)))
             .clipShape(shape)
     }
 }

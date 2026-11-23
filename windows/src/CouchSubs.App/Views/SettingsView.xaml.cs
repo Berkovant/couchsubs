@@ -124,9 +124,11 @@ public partial class SettingsView : UserControl
         StartupSound.IsChecked = settings.StartupSound;
         TransitionAnimations.IsChecked = settings.TransitionAnimations;
         ShowPace();
+        MiniPreview.Content = new AspectBox { Child = AppearanceEditor.PerdeStage(MiniSubtitle, null) };
         ShowMiniSubtitle();
         ShowTvStatus();
         Sections.SelectedIndex = 0;
+        ShowHeading();
         // Yazı boyutu, koyuluk ve yazı rengi artık düzenleyicide; eski satırlar gizlenir (ayarın kendisi aynı).
         AppearanceHost.Content = new AppearanceEditor(controller);
         foreach (var old in new FrameworkElement[] { TextSizeUnit, BackgroundUnit, TextColorUnit })
@@ -143,6 +145,7 @@ public partial class SettingsView : UserControl
         // Akış penceresi kendi düğmesiyle kapanmış olabilir; Ayarlar açılınca düğme güncellenir.
         Loaded += (_, _) => ShowStreamWindowToggle();
         Glow.Paused = controller.IsRunning;
+        Loaded += (_, _) => DarkenAmberGlyph();
         Loaded += (_, _) => MoveSelection(false);
         NavHost.SizeChanged += (_, _) => MoveSelection(false);
         Unloaded += (_, _) => StopRecording();
@@ -224,15 +227,15 @@ public partial class SettingsView : UserControl
         {
             ConsolePs5Row.Title = string.IsNullOrEmpty(ps5.Name) ? "PS5" : ps5.Name;
             ConsolePs5Row.Text = ps5.Host;
-            ConsolePs5Badge.Content = text["Connected"];
-            ConsolePs5Badge.Tone = Controls.PillTone.Success;
+            ConsolePs5Badge.Text = text["Connected"];
+            ConsolePs5Badge.Tone = Controls.ChipTone.Ok;
         }
         else
         {
             ConsolePs5Row.Title = "PS5";
             ConsolePs5Row.Text = text["With Remote Play and a second PSN account."];
-            ConsolePs5Badge.Content = text["Not Set Up"];
-            ConsolePs5Badge.Tone = Controls.PillTone.Idle;
+            ConsolePs5Badge.Text = text["Not Set Up"];
+            ConsolePs5Badge.Tone = Controls.ChipTone.Muted;
         }
         ConsoleXboxPanel.Visibility = xbox ? Visibility.Visible : Visibility.Collapsed;
         ConsoleXboxName.Text = controller.SelectedXboxConsole is { } console ? "  ·  " + (string.IsNullOrEmpty(console.Name) ? "Xbox" : console.Name) : "";
@@ -584,7 +587,7 @@ public partial class SettingsView : UserControl
         // Oyunun "(ek satırlar)" paketi asıl paketin karosunda (#353).
         var packs = GameCatalog.PackShelf(controller.InstalledPacks);
         PacksPill.Visibility = packs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        PacksPillText.Text = text.Format("Free · %lld games", packs.Count);
+        PacksPill.Text = text.Format("Free · %lld games", packs.Count);
         if (UpdatePacksProgress.Visibility != Visibility.Visible) UpdatePacks.IsEnabled = controller.CanUpdatePacks;
         if (packs.Count == 0)
         {
@@ -598,11 +601,20 @@ public partial class SettingsView : UserControl
         foreach (var pack in packs) PackList.Items.Add(PackTile(pack, text.Format("%@ lines", pack.Entries.ToString("N0"))));
     }
 
-    /// <summary>Square, user-selected cover art when available; otherwise the existing three-letter badge.</summary>
+    /// <summary>
+    /// Paket karosu (Perde, Mac PackTile): 120 genişlikte 3:4 kapak (kullanıcının seçtiği görsel ya da adından türeyen
+    /// degrade, alttan scrim üstünde kalın beyaz ad); oynanan oyunun paketi "Oynanıyor" cam hapı + amber halka + kapak
+    /// ışıması; altında yeşil nokta ve mono satır sayısı. Kapağa tıklayınca görsel seçilir, sağ tıkta seç/kaldır.
+    /// </summary>
     private FrameworkElement PackTile(PackShelfItem pack, string lines)
     {
         var text = Localizer.Current;
-        var badge = new Border { Style = (Style)FindResource("GameMonogram") };
+        const double width = 120;
+        var playing = controller.PlayedGame is { } game && pack.Titles.Append(pack.Title).Any(title => GameName.Key(title) == GameName.Key(game));
+        var cover = new Controls.GameCover(pack.Title, playing ? text["Playing"] : null, playing, width)
+        {
+            ToolTip = CoverText("Choose game cover…", "Oyun kapağı seç…"),
+        };
         var coverPath = GameCoverStore.PathFor(pack.Id);
         if (coverPath is not null && File.Exists(coverPath))
         {
@@ -610,46 +622,27 @@ public partial class SettingsView : UserControl
             {
                 // OnLoad releases the file before the image is displayed, so replacing a cover works immediately.
                 using var stream = File.OpenRead(coverPath);
-                var cover = new BitmapImage();
-                cover.BeginInit();
-                cover.CacheOption = BitmapCacheOption.OnLoad;
-                cover.DecodePixelWidth = 128;
-                cover.StreamSource = stream;
-                cover.EndInit();
-                cover.Freeze();
-                badge.Child = new Image
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.DecodePixelWidth = 256;
+                image.StreamSource = stream;
+                image.EndInit();
+                image.Freeze();
+                // Seçilen görsel kapağın degradesinin yerine (scrim ve ad üstünde kalır).
+                if (FindCoverArt(cover) is { } art && art.Parent is Grid stage)
                 {
-                    Source = cover, Width = 52, Height = 52, Stretch = Stretch.UniformToFill,
-                    Clip = new RectangleGeometry(new Rect(0, 0, 52, 52), 8, 8),
-                };
+                    var index = stage.Children.IndexOf(art);
+                    stage.Children.Insert(index + 1, new Image { Source = image, Stretch = Stretch.UniformToFill });
+                }
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or FormatException or NotSupportedException)
             {
                 // A corrupted optional cover must never hide the pack or prevent opening Settings.
             }
         }
-        if (badge.Child is null)
-        {
-            var initials = new TextBlock
-            {
-                Text = Initials(pack.Title), FontWeight = FontWeights.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.NoWrap,
-            };
-            initials.SetResourceReference(TextBlock.FontSizeProperty, "captionFontSize");
-            badge.Child = initials;
-        }
-
-        // Local artwork is chosen by the user, never downloaded automatically or bundled in the public repository.
-        var coverButton = new Button
-        {
-            Style = (Style)FindResource("IconButton"), Width = 52, Height = 52, Padding = new Thickness(0),
-            BorderThickness = new Thickness(0), Background = Brushes.Transparent,
-            Content = badge, Margin = Sp.T("0", "0", "m", "0"), ToolTip = CoverText("Choose game cover…", "Oyun kapağı seç…"),
-        };
-        System.Windows.Automation.AutomationProperties.SetName(coverButton,
-            CoverText("Choose game cover…", "Oyun kapağı seç…") + " " + pack.Title);
-        coverButton.Click += (_, _) => ChoosePackCover(pack.Id);
+        System.Windows.Automation.AutomationProperties.SetName(cover, CoverText("Choose game cover…", "Oyun kapağı seç…") + " " + pack.Title);
+        cover.Click += (_, _) => ChoosePackCover(pack.Id);
         var choose = new MenuItem { Header = CoverText("Choose game cover…", "Oyun kapağı seç…") };
         choose.Click += (_, _) => ChoosePackCover(pack.Id);
         var remove = new MenuItem
@@ -665,16 +658,32 @@ public partial class SettingsView : UserControl
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         };
-        coverButton.ContextMenu = new ContextMenu { Items = { choose, remove } };
+        cover.ContextMenu = new ContextMenu { Items = { choose, remove } };
 
-        var name = new TextBlock { Text = pack.Title, Style = (Style)FindResource("HeadlineText") };
-        var count = new TextBlock { Text = lines, Style = (Style)FindResource("CaptionText"),
-            Margin = Sp.T("0", "xxs", "0", "0") };
-        var row = new DockPanel();
-        DockPanel.SetDock(coverButton, Dock.Left);
-        row.Children.Add(coverButton);
-        row.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { name, count } });
-        return new Controls.Card { Content = row, Margin = Sp.T("xs") };
+        var dot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("0", "0", "xxs", "0") };
+        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "successBrush");
+        var count = new TextBlock { Text = lines, FontSize = 11, FontWeight = FontWeights.Medium, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
+        System.Windows.Documents.Typography.SetNumeralAlignment(count, FontNumeralAlignment.Tabular);
+        count.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
+        var meta = new StackPanel { Orientation = Orientation.Horizontal, Margin = Sp.T("0", "xs", "0", "0") };
+        meta.Children.Add(dot);
+        meta.Children.Add(count);
+        var tile = new StackPanel { Width = width, Margin = Sp.T("0", "s", "m", "s") };
+        tile.Children.Add(cover);
+        tile.Children.Add(meta);
+        return tile;
+    }
+
+    /// <summary>Kapak kartının içindeki degrade katmanı (seçilen görsel onun hemen üstüne konur).</summary>
+    private static Controls.CoverArt? FindCoverArt(DependencyObject root)
+    {
+        // Görsel ağaç henüz kurulmadığından mantıksal ağaçta aranır; bulanık ışıma kopyası (Border içinde) atlanır.
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is Controls.CoverArt art && art.Parent is Grid) return art;
+            if (FindCoverArt(child) is { } found) return found;
+        }
+        return null;
     }
 
     /// <summary>Import and center-crop one cover to a 128px PNG; no network or image dependency is needed.</summary>
@@ -1243,6 +1252,7 @@ public partial class SettingsView : UserControl
         foreach (var item in Nav.Children.OfType<Controls.NavItem>())
             item.IsChecked = item.Tag is string tag && tag == Sections.SelectedIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
         MoveSelection(true);
+        ShowHeading();
         if (Sections.SelectedContent is FrameworkElement page) Theme.Motion.EnterFrom(page, 8, Theme.Motion.Medium);
     }
 
@@ -1331,9 +1341,116 @@ public partial class SettingsView : UserControl
     }
 
     /// <summary>TV durumu noktası: bağlı yeşil, yeniden bağlanıyor amber, bekliyor gri.</summary>
-    private void ShowTvStatus() =>
+    private void ShowTvStatus()
+    {
         TvStatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,
             controller.TvClients > 0 ? "successBrush" : controller.TvReconnecting ? "accentBrush" : "textTertiaryBrush");
+        TvCardHost.Content = TvCard(controller.Tv, controller.HasTv, controller.TvClients > 0);
+    }
+
+    /// <summary>
+    /// TV kartı (Mac DSTVCard, eylemsiz): 36'lık simge karesi, ad + mono "Marka · adres", sağda durum hapı. Her zaman kıl çizgi;
+    /// TV uygulaması bağlıyken 2 px amber kenar + amber yumuşak dolgu + ışıma ve amber simge.
+    /// </summary>
+    private static FrameworkElement TvCard(CouchSubs.Core.LgTv.LgTv? tv, bool linked, bool connected)
+    {
+        var text = Localizer.Current;
+        var brand = tv?.Brand switch { CouchSubs.Core.LgTv.TvBrand.Samsung => "Samsung", CouchSubs.Core.LgTv.TvBrand.AndroidTv => "Android TV", _ => "LG" };
+        var name = new TextBlock { Text = tv is null ? "TV" : tv.Name.Length == 0 ? brand : tv.Name, FontWeight = FontWeights.Medium, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
+        name.SetResourceReference(TextBlock.FontSizeProperty, "bodyStrongFontSize");
+        name.SetResourceReference(TextBlock.ForegroundProperty, "textBrush");
+        var detail = new TextBlock { Text = tv is null ? "" : $"{brand} · {tv.Host}", FontSize = 11, FontWeight = FontWeights.Medium, Margin = Sp.T("0", "line", "0", "0"),
+            TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
+        System.Windows.Documents.Typography.SetNumeralAlignment(detail, FontNumeralAlignment.Tabular);
+        detail.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
+        var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("s", "0", "s", "0") };
+        names.Children.Add(name);
+        if (tv is not null) names.Children.Add(detail);
+        var row = new DockPanel();
+        var square = new Controls.IconSquare { Glyph = "", Tone = connected ? Controls.IconTone.Amber : Controls.IconTone.Gray, Size = 36 };
+        DockPanel.SetDock(square, Dock.Left);
+        row.Children.Add(square);
+        if (linked)
+        {
+            var chip = new Controls.Chip { Text = text["Linked"], Tone = connected ? Controls.ChipTone.Ok : Controls.ChipTone.Muted };
+            DockPanel.SetDock(chip, Dock.Right);
+            row.Children.Add(chip);
+        }
+        row.Children.Add(names);
+        var card = new Border { CornerRadius = new CornerRadius(18), Padding = Sp.T("s"), MinHeight = 64, BorderThickness = new Thickness(connected ? 2 : 1), Child = row };
+        card.SetResourceReference(Border.BackgroundProperty, connected ? "amberSoftBrush" : "surfaceBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, connected ? "amberBrush" : "cardEdgeBrush");
+        if (!connected) return card;
+        // Seçili (bağlı) kartın arkasında hafif amber ışıma.
+        var glow = new Border { CornerRadius = new CornerRadius(18), Effect = Controls.PerdeEffects.AmberGlow(22, 0, 0.35) };
+        glow.SetResourceReference(Border.BackgroundProperty, "surfaceBrush");
+        var surface = new Border { CornerRadius = new CornerRadius(18) };
+        surface.SetResourceReference(Border.BackgroundProperty, "surfaceBrush");
+        var stack = new Grid();
+        stack.Children.Add(glow);
+        stack.Children.Add(surface);
+        stack.Children.Add(card);
+        return stack;
+    }
+
+    /// <summary>Temel sayfasındaki küçük altyazı plakası (Perde sahnesinin altında).</summary>
+    private readonly Border MiniSubtitle = new()
+    {
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = Sp.T("m"), Padding = Sp.T("s", "xs", "s", "xs"),
+        CornerRadius = new CornerRadius(10), Child = new TextBlock { FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center },
+    };
+
+    private TextBlock MiniSubtitleText => (TextBlock)MiniSubtitle.Child;
+
+    /// <summary>Bölümlerin başlığı (Mac SectionHeading): simge, ton, ad ve iki kelimelik alt yazı; menü sırasıyla.</summary>
+    private static readonly (string Glyph, Controls.IconTone Tone, string Title, string Hint)[] Headings =
+    [
+        ("\uE9E9", Controls.IconTone.Amber, "Basics", "Translation, Sound"),
+        ("\uE8D2", Controls.IconTone.Peach, "Subtitle Appearance", "Size, Colors"),
+        ("\uE713", Controls.IconTone.Gray, "Advanced", "Engine, Experimental"),
+        ("\uE8B3", Controls.IconTone.Olive, "Subtitle Area", "Frame, Extra Areas"),
+        ("\uE7B8", Controls.IconTone.Olive, "Game Packs", "Ready Translations"),
+        ("\uE8D6", Controls.IconTone.Plum, "Turkish Dubbing", "Voices, Characters"),
+        ("\uE7F4", Controls.IconTone.Teal, "Output Screens", "TV, OBS"),
+        ("\uE765", Controls.IconTone.Sky, "Keyboard Shortcuts", "Translation Keys"),
+        ("\uE7FC", Controls.IconTone.Gray, "Console and Source", "PS5, Xbox"),
+    ];
+
+    /// <summary>
+    /// Sağ sütunun başındaki bölüm başlığı (Mac SectionHeading): 40'lık renkli simge karesi + başlık (24) + iki kelimelik alt
+    /// yazı. Kayan içeriğin içinde durur (cam üst çubuğun arkasından geçer).
+    /// </summary>
+    private void ShowHeading()
+    {
+        var index = Math.Clamp(Sections.SelectedIndex, 0, Headings.Length - 1);
+        var (glyph, tone, title, hint) = Headings[index];
+        var text = Localizer.Current;
+        var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("s", "0", "0", "0") };
+        var heading = new TextBlock { Text = text[title], FontWeight = FontWeights.Medium };
+        heading.SetResourceReference(TextBlock.FontSizeProperty, "h2FontSize");
+        heading.SetResourceReference(TextBlock.ForegroundProperty, "textBrush");
+        System.Windows.Automation.AutomationProperties.SetHeadingLevel(heading, System.Windows.Automation.AutomationHeadingLevel.Level1);
+        names.Children.Add(heading);
+        var sub = new TextBlock { Text = text[hint], Margin = Sp.T("0", "line", "0", "0") };
+        sub.SetResourceReference(StyleProperty, "HintText");
+        names.Children.Add(sub);
+        var row = new DockPanel { Margin = Sp.T("0", "0", "0", "m") };
+        var square = new Controls.IconSquare { Glyph = glyph, Tone = tone, Size = 40 };
+        DockPanel.SetDock(square, Dock.Left);
+        row.Children.Add(square);
+        row.Children.Add(names);
+        Sections.Tag = row;
+    }
+
+    /// <summary>Menüde amber simge karesinin simgesi koyu (Perde: amberde koyu, diğer tonlarda beyaz).</summary>
+    private void DarkenAmberGlyph()
+    {
+        foreach (var item in Nav.Children.OfType<Controls.NavItem>().Where(item => item.Tag is "0"))
+        {
+            item.ApplyTemplate();
+            if (item.Template?.FindName("Glyph", item) is TextBlock glyph) glyph.Foreground = new SolidColorBrush(Color.FromRgb(0x1D, 0x1E, 0x22));
+        }
+    }
 
     /// <summary>Temel sayfasındaki küçük altyazı önizlemesi: yazı boyu, zemin koyuluğu ve yazı rengi.</summary>
     private void ShowMiniSubtitle()

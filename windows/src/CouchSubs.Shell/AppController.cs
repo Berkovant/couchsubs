@@ -1676,7 +1676,13 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// <summary>TV ağda yeni bir adreste bulundu.</summary>
     public void TvMoved(LgTv moved)
     {
-        if (moved.Brand == TvBrand.Samsung) SamsungAppKnowledge.Carry(tv?.Host, moved.Host);
+        if (moved.Brand == TvBrand.Samsung)
+        {
+            SamsungAppKnowledge.Carry(tv?.Host, moved.Host);
+            // Bilgi bu denetleyicinin kaydına doğrudan yazılır: SamsungAppKnowledge.Changed ortak bir kanca, aynı anda başka bir
+            // denetleyici kurulursa (testlerde paralel) başka kayda gidebiliyordu.
+            if (SamsungAppKnowledge.IsKnown(moved.Host)) store.Save(StoreKeys.TvAppSeen, moved.Host);
+        }
         tv = moved;
         store.Save(StoreKeys.Tv, moved);
         Changed(nameof(Tv));

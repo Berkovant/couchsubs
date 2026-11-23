@@ -81,6 +81,7 @@
     "android_iphone": {}
   },
   "mac_settings_on_iphone": {
+    "Live Preview": "Ayar değil, Altyazı Görünümü önizlemesinin üstündeki etiket (Perde, Mac adım 4). iPhone Perde ekranları (adım 5) aynı etiketi alacak; o zaman bu satır silinir.",
     "%@ pauses or resumes the live subtitle translation, which helps when you translate areas.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat).",
     "Press %@ while playing: every text on the screen is translated once and shown on the TV in its own place. Press again to remove the translations.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat).",
     "Press %@ while playing: the picture freezes on the PC, drag over any part of it to translate that part once. Esc closes.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat). Serbest alan fareyle donmuş PC görüntüsünde seçilir.",

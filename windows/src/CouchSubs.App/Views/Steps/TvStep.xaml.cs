@@ -107,8 +107,8 @@ public partial class TvStep : UserControl
 
     private void ShowList()
     {
-        Scanning.Visibility = searching ? Visibility.Visible : Visibility.Collapsed;
         Search.IsEnabled = !searching;
+        PerdeProps.SetBusy(Search, searching);
         Search.Content = Localizer.Current[searching ? "Searching…" : "Search Again"];
         Searching.Visibility = searching && found.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         NotFound.Visibility = !searching && found.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -142,69 +142,52 @@ public partial class TvStep : UserControl
         };
     }
 
-    private static (string Key, PillTone Tone) BadgeOf(RowStatus status) => status switch
+    private static (string Key, ChipTone Tone) BadgeOf(RowStatus status) => status switch
     {
-        RowStatus.Connecting => ("Connecting…", PillTone.Attention),
-        RowStatus.ApproveOnTv => ("Waiting for Approval on the TV", PillTone.Attention),
-        RowStatus.Paired => ("Paired", PillTone.Attention),
-        RowStatus.Installing => ("Installing…", PillTone.Attention),
-        RowStatus.Installed => ("Installed ✓", PillTone.Success),
-        RowStatus.NeedsUpdate => ("Update Needed", PillTone.Live),
-        RowStatus.Failed => ("Error", PillTone.Live),
-        _ => ("Found", PillTone.Idle),
+        RowStatus.Connecting => ("Connecting…", ChipTone.Amber),
+        RowStatus.ApproveOnTv => ("Waiting for Approval on the TV", ChipTone.Amber),
+        RowStatus.Paired => ("Paired", ChipTone.Amber),
+        RowStatus.Installing => ("Installing…", ChipTone.Amber),
+        RowStatus.Installed => ("Installed ✓", ChipTone.Ok),
+        RowStatus.NeedsUpdate => ("Update Needed", ChipTone.Live),
+        RowStatus.Failed => ("Error", ChipTone.Live),
+        _ => ("Found", ChipTone.Muted),
     };
 
-    /// <summary>Tıklanabilir TV kartı: marka işareti, ad ve IP (mono), sağda durum rozeti ve gerekiyorsa "Bağlan".</summary>
+    /// <summary>
+    /// TV kartı (Perde DSTVCard): simge karesi, ad + mono "marka · adres", durum hapı ve gerekiyorsa küçük "Bağlan"; seçiliyken
+    /// amber kenar + ışıma. Kartlar bulundukça aşağıdan kayarak belirir.
+    /// </summary>
     private Button Row(LgTv tv)
     {
         var text = Localizer.Current;
         var status = StatusOf(tv);
         var selected = Controller.Tv?.Host == tv.Host || pairingHost == tv.Host;
-        var mark = new Border { Margin = Sp.T("0", "0", "s", "0") };
-        mark.SetResourceReference(StyleProperty, "BrandMark");
-        var markText = new TextBlock
-        {
-            Text = BrandShort(tv.Brand), FontSize = tv.Brand == TvBrand.Lg ? 14 : 9, FontWeight = FontWeights.Black, TextWrapping = TextWrapping.NoWrap,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
-        // Uzun marka adı (SAMSUNG) kareye tek satırda sığsın diye küçülür (Mac TVBrandMark).
-        mark.Child = tv.Brand == TvBrand.Lg ? markText : new Viewbox { Child = markText, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = Sp.T("xxs") };
-        var name = new TextBlock { Text = tv.Name.Length == 0 ? BrandName(tv.Brand) : tv.Name, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
-        name.SetResourceReference(StyleProperty, "UnitTitleText");
-        var host = new TextBlock { Text = tv.Host, FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, Margin = Sp.T("0", "line", "0", "0") };
-        host.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-        host.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
-        var title = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        title.Children.Add(name);
-        if (tv.Host.Length > 0) title.Children.Add(host);
         var (key, tone) = BadgeOf(status);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("xs", "0", "0", "0") };
-        right.Children.Add(new Badge { Tone = tone, Content = text[key] });
+        var card = new TvCard
+        {
+            TvName = tv.Name.Length == 0 ? BrandName(tv.Brand) : tv.Name,
+            Detail = tv.Host.Length > 0 ? $"{BrandName(tv.Brand)} · {tv.Host}" : BrandName(tv.Brand),
+            Status = text[key], StatusTone = tone, Selected = selected, ToolTip = $"{tv.Name} {tv.Host}",
+        };
         if (status is RowStatus.Found or RowStatus.Failed)
         {
             var connect = new Border { Margin = Sp.T("xs", "0", "0", "0"), Child = new TextBlock { Text = text["Connect"], VerticalAlignment = VerticalAlignment.Center } };
             connect.SetResourceReference(StyleProperty, "ChipLabel");
-            right.Children.Add(connect);
+            card.Trailing = connect;
         }
-        var content = new DockPanel();
-        DockPanel.SetDock(mark, Dock.Left);
-        DockPanel.SetDock(right, Dock.Right);
-        content.Children.Add(mark);
-        content.Children.Add(right);
-        content.Children.Add(title);
-        var row = new Button { Content = content, Tag = selected ? "selected" : null, ToolTip = $"{tv.Name} {tv.Host}" };
-        row.SetResourceReference(StyleProperty, "OptionRowButton");
-        System.Windows.Automation.AutomationProperties.SetName(row, $"{tv.Name} {tv.Host}");
-        row.Click += async (_, _) => await PairAsync(tv);
-        return row;
+        System.Windows.Automation.AutomationProperties.SetName(card, $"{tv.Name} {tv.Host}");
+        card.Click += async (_, _) => await PairAsync(tv);
+        if (!shownHosts.Contains(tv.Host))
+        {
+            shownHosts.Add(tv.Host);
+            card.Loaded += (_, _) => Motion.EnterFrom(card, 14, Motion.Medium);
+        }
+        return card;
     }
 
-    private static string BrandShort(TvBrand brand) => brand switch
-    {
-        TvBrand.Samsung => "SAMSUNG",
-        TvBrand.AndroidTv => "Android",
-        _ => "LG",
-    };
+    /// <summary>Giriş hareketi bir kez oynasın diye gösterilmiş TV adresleri.</summary>
+    private readonly HashSet<string> shownHosts = [];
 
     private static string BrandName(TvBrand brand) => brand switch
     {
@@ -266,71 +249,15 @@ public partial class TvStep : UserControl
             activeStep = active;
             activeSince = DateTime.Now;
         }
+        // Adım çizelgesi (Perde DSStepTimeline): hata olunca da şimdiki adım (neden hata kutusunda); bir adım 15 sn'den uzun
+        // sürerse altında ipucu.
         var text = Localizer.Current;
-        Timeline.Children.Clear();
-        for (var i = 0; i < steps.Length; i++)
-        {
-            var (title, phase, tip) = steps[i];
-            var rail = new StackPanel { Margin = Sp.T("0", "0", "s", "0") };
-            rail.Children.Add(Marker(phase));
-            if (i < steps.Length - 1)
-            {
-                var line = new Border { Width = 2, Height = 22, HorizontalAlignment = HorizontalAlignment.Center };
-                line.SetResourceReference(Border.BackgroundProperty, phase == Phase.Done ? "successBrush" : "borderBrush");
-                rail.Children.Add(line);
-            }
-            var label = new TextBlock { Text = text[title] };
-            label.SetResourceReference(StyleProperty, "UnitTitleText");
-            label.SetResourceReference(TextBlock.ForegroundProperty, phase switch
-            {
-                Phase.Pending => "faintBrush",
-                Phase.Failed => "liveTextBrush",
-                _ => "textBrush",
-            });
-            var column = new StackPanel { Margin = Sp.T("0", "xxs", "0", "0") };
-            column.Children.Add(label);
-            if (phase == Phase.Active && tip is not null && DateTime.Now - activeSince > TimeSpan.FromSeconds(15))
-            {
-                var hint = new TextBlock { Text = text[tip], Margin = Sp.T("0", "unitHint", "0", "0") };
-                hint.SetResourceReference(StyleProperty, "HintText");
-                column.Children.Add(hint);
-            }
-            var row = new DockPanel();
-            DockPanel.SetDock(rail, Dock.Left);
-            row.Children.Add(rail);
-            row.Children.Add(column);
-            Timeline.Children.Add(row);
-        }
-    }
-
-    private static FrameworkElement Marker(Phase phase)
-    {
-        var dot = new Grid { Width = 24, Height = 24 };
-        var disc = new System.Windows.Shapes.Ellipse();
-        disc.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, phase switch
-        {
-            Phase.Done => "successBrush",
-            Phase.Failed => "liveBrush",
-            Phase.Active => "amberSoftBrush",
-            _ => "fieldBrush",
-        });
-        dot.Children.Add(disc);
-        if (phase is Phase.Done or Phase.Failed)
-        {
-            var glyph = new TextBlock
-            {
-                Text = phase == Phase.Done ? "" : "!", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            };
-            if (phase == Phase.Done) glyph.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
-            dot.Children.Add(glyph);
-        }
-        else if (phase == Phase.Active)
-        {
-            var spinner = new ProgressBar { IsIndeterminate = true, Width = 12, Height = 3, VerticalAlignment = VerticalAlignment.Center };
-            dot.Children.Add(spinner);
-        }
-        return dot;
+        Timeline.Steps = [.. steps.Select(step => new TimelineStep(text[step.Title],
+            step.Phase == Phase.Active && step.Tip is not null && DateTime.Now - activeSince > TimeSpan.FromSeconds(15) ? text[step.Tip] : null,
+            step.Phase switch { Phase.Done => StepPhase.Done, Phase.Active or Phase.Failed => StepPhase.Current, _ => StepPhase.Todo }))];
+        // TV uygulaması kuruldu: başarı anı (≤ 1 sn) bir kez kurulur; her yenilemede yeniden oynamaz.
+        if (installed && ReadyMoment.Content is null) ReadyMoment.Content = new SuccessMoment(text["Ready"]);
+        ReadyMoment.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ───────────── İşler ─────────────

@@ -24,7 +24,8 @@ public static class DesignDialog
             WindowStyle = WindowStyle.None, AllowsTransparency = true, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
             Background = new SolidColorBrush(Color.FromArgb(0x73, 0x17, 0x18, 0x1B)), Title = title,
         };
-        if (owner is { IsLoaded: true })
+        // Sahip YALNIZ gösterilmiş pencereye atanır (beta.87 dersi: gösterilmemiş pencereye Owner atamak WPF'te hata verir).
+        if (owner is { IsLoaded: true, IsVisible: true } && PresentationSource.FromVisual(owner) is not null)
         {
             window.Owner = owner;
             window.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -60,8 +61,8 @@ public static class DesignDialog
         stack.Children.Add(body);
         stack.Children.Add(buttons);
         var card = new Border { Child = stack, Width = 480, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        card.SetResourceReference(FrameworkElement.StyleProperty, "CardBorder");
-        card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 48, ShadowDepth = 12, Direction = 270, Opacity = 0.28, Color = Colors.Black };
+        // Perde e2: yükseltilmiş yüzey, güçlü kıl çizgi, derin gölge.
+        card.SetResourceReference(FrameworkElement.StyleProperty, "RaisedBorder");
         window.Content = card;
         window.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "textPrimaryBrush");
         window.MouseDown += (_, e) => { if (e.OriginalSource == window) window.Close(); };

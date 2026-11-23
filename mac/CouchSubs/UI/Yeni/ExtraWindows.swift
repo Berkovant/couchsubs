@@ -32,7 +32,9 @@ struct NewAboutView: View {
                 DSMonoLabel("About")
                 Spacer()
             }
-            DSLogoMark(height: 64).padding(.top, DS.space("xs"))
+            DSLogoMark(height: 64, breathing: false)
+                .shadow(color: Color.dsAmberGlow, radius: 24)
+                .padding(.top, DS.space("xs"))
             Text(verbatim: "CouchSubs").font(.dsH2)
             Text(verbatim: AppIdentity.version).font(.system(size: 13, design: .monospaced)).foregroundStyle(Color.dsMuted)
             Group {
@@ -65,6 +67,8 @@ struct NewAboutView: View {
         }
         .padding(DS.space("l"))
         .frame(width: 460)
+        // Perde: üstten düşen durağan projeksiyon ışığı, logonun arkasında amber ışıma.
+        .background { DSProjectorLight() }
         .background(Color.dsSurface)
         .newLook()
     }
@@ -150,13 +154,13 @@ struct MenuBarPanel: View {
             HStack(spacing: DS.space("s")) {
                 DSLogoMark(height: 18, breathing: false)
                     .frame(width: 40, height: 40)
-                    .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.radius("control")))
+                    .dsElevation(.raised, in: RoundedRectangle(cornerRadius: DS.radius("control"), style: .continuous))
                 VStack(alignment: .leading, spacing: DS.space("xxs")) {
                     Text(verbatim: "CouchSubs").font(.dsBodyStrong)
                     Text(verbatim: subtitle).font(.dsCaption).foregroundStyle(Color.dsMuted).lineLimit(1)
                 }
                 Spacer(minLength: DS.space("xs"))
-                DSBadge(text: model.isRunning ? "Translation On" : "Ready", tone: model.isRunning ? .ok : .unknown)
+                DSStatusChip(model.isRunning ? "Translation On" : "Ready", tone: model.isRunning ? .live : .muted)
             }
             Group {
                 if model.isRunning {
@@ -185,7 +189,11 @@ struct MenuBarPanel: View {
         }
         .padding(DS.space("m"))
         .frame(width: 340)
+        .background { DSProjectorLight() }
         .background(Color.dsSurface)
+        // Menü çubuğu penceresi ana pencereden ayrı: hareket kapısı (çeviri sürüyor mu) buradan kurulur.
+        .dsMotionGate()
+        .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .newLook()
     }
 
@@ -299,8 +307,10 @@ struct PopupAdView: View {
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
             Button(action: close) {
-                Text(verbatim: "×").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 32, height: 32).background(Color.black.opacity(0.45), in: Circle())
+                Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background { Circle().fill(.ultraThinMaterial); Circle().fill(Color.black.opacity(0.45)) }
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)

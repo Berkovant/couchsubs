@@ -39,6 +39,15 @@ public partial class ShellWindow : Window
         InitializeComponent();
         ApplyMinimumSize();
         SourceInitialized += (_, _) => PaintCaption();
+        // Hareket kapısı: pencere önde değilken (arka planda, simge durumunda) ve çeviri sürerken sürekli animasyonlar durur.
+        Activated += (_, _) => MotionGate.WindowActive = WindowState != WindowState.Minimized;
+        Deactivated += (_, _) => MotionGate.WindowActive = false;
+        StateChanged += (_, _) => MotionGate.WindowActive = WindowState != WindowState.Minimized && IsActive;
+        MotionGate.Translating = controller.IsRunning;
+        // Reklam listesi sonradan gelirse alt cam şerit ve sayfaların alt boşluğu güncellenir.
+        void OnAds() => Dispatcher.BeginInvoke(ApplyInsets);
+        AdCatalog.Changed += OnAds;
+        Closed += (_, _) => AdCatalog.Changed -= OnAds;
         ThemeManager.Changed += PaintCaption;
         controller.PropertyChanged += OnChanged;
         controller.TvPairingRequested += OnTvPairing;
@@ -124,6 +133,7 @@ public partial class ShellWindow : Window
             or nameof(AppController.Settings))
             ShowStatus();
         if (e.PropertyName is nameof(AppController.Settings)) Motion.AnimationsEnabled = controller.Settings.TransitionAnimations;
+        if (e.PropertyName is nameof(AppController.IsRunning)) MotionGate.Translating = controller.IsRunning;
         if (e.PropertyName is nameof(AppController.IsRunning) && !controller.IsRunning && showingMain)
             PopupAdWindow.Offer(this, controller, PopupAdMoment.TranslationStopped);
         if (e.PropertyName is nameof(AppController.IsRunning) or nameof(AppController.HotkeysPaused) or nameof(AppController.Settings))
@@ -161,8 +171,8 @@ public partial class ShellWindow : Window
         if (!force && main == showingMain) return;
         showingMain = main;
         // Kurulumda üst çubuk ve reklam bandı yok (sihirbazın kendi çubuğu var).
-        TopBar.Visibility = main ? Visibility.Visible : Visibility.Collapsed;
-        Ads.Visibility = main && AdCatalog.Banners.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TopBar.Visibility = TopGlass.Visibility = main ? Visibility.Visible : Visibility.Collapsed;
+        ApplyInsets();
         home?.Detach();
         if (!main)
         {
@@ -187,6 +197,14 @@ public partial class ShellWindow : Window
         if (current is not { } window) return;
         window.setupDeferred = true;
         window.ShowScreen();
+    }
+
+    /// <summary>Yalnız ekran görüntüsü aracı (--render-screens): pencere gösterilmeden sekme ve Ayarlar sayfası seçilir.</summary>
+    internal void ShowForRender(ShellTab chosen, int? settingsPage = null)
+    {
+        if (!showingMain) return;
+        SelectTab(chosen, null);
+        if (settingsPage is { } page && Host.Content is SettingsView settings) settings.ShowPage(page);
     }
 
     /// <summary>Başka bir yerden sekme açar (ana ekrandaki "Ayarlar › Çeviri" satırı, menüler, kısayollar).</summary>
@@ -220,6 +238,8 @@ public partial class ShellWindow : Window
             return;
         }
         tab = chosen;
+        // Ortam ışığı yalnız Ana Ekran'da (ve kurulumda) süzülür; Geçmiş ve Ayarlar'da durağan (boşta ≤ %2 işlemci).
+        Ambient.Animated = chosen == ShellTab.Home;
         switch (chosen)
         {
             case ShellTab.History:
@@ -234,6 +254,20 @@ public partial class ShellWindow : Window
                 Show(home ??= new MainView(controller));
                 break;
         }
+    }
+
+    /// <summary>
+    /// Sayfaların cam çubuklar kadar içeriden başlayıp bitmesi (shell.inset): üstte çubuk yüksekliği, altta reklam şeridi.
+    /// Sayfalar bu boşluğu kaydırılan içeriğin içine koyar; böylece içerik çubukların arkasından kayar. Kurulumda sıfır.
+    /// </summary>
+    private void ApplyInsets()
+    {
+        var ads = showingMain && AdCatalog.Banners.Count > 0;
+        Ads.Visibility = BottomGlass.Visibility = ads ? Visibility.Visible : Visibility.Collapsed;
+        var top = showingMain ? Palette.Size["header"] : 0;
+        var bottom = ads ? Palette.Size["adBand"] + Sp.V("xs") + Sp.V("m") : 0;
+        Root.Resources["shell.inset"] = new Thickness(0, top, 0, bottom);
+        Ambient.Animated = !showingMain || tab == ShellTab.Home;
     }
 
     /// <summary>Sayfa geçişi: yeni sayfa 8 px aşağıdan kayarak ve solarak gelir (hareket azaltılmışsa yalnız solma).</summary>
@@ -257,7 +291,7 @@ public partial class ShellWindow : Window
             ShellStatusKind.SetupIncomplete => (PillTone.Idle, "Setup Incomplete"),
             ShellStatusKind.NeedsAttention => (PillTone.Live, "Needs Attention"),
             ShellStatusKind.Connecting => (PillTone.Attention, "Connecting…"),
-            ShellStatusKind.TranslationOn => (PillTone.Success, "Translation On"),
+            ShellStatusKind.TranslationOn => (PillTone.On, "Translation On"),
             _ => (PillTone.Idle, "Ready"),
         };
         Status.Tone = tone;

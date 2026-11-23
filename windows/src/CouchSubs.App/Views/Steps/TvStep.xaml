@@ -21,15 +21,17 @@
             <c:SpacedStack Gap="l">
                 <c:Card Title="{t:T 'TVs on This Network'}">
                     <c:Card.Trailing>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="Scanning" Text="{t:T 'Scanning the network…'}" FontSize="{DynamicResource smallFontSize}"
-                                       Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" Margin="{t:Sp '0,0,xs,0'}" Visibility="Collapsed" />
-                            <Button x:Name="Search" Content="{t:T 'Search Again'}" Style="{StaticResource CompactButton}" Click="OnSearch" />
-                        </StackPanel>
+                        <!-- Sürerken "Aranıyor…" + çubuk yükleyici, basılamaz (Perde). -->
+                        <Button x:Name="Search" Content="{t:T 'Search Again'}" Style="{StaticResource CompactButton}" Click="OnSearch" />
                     </c:Card.Trailing>
                     <StackPanel>
-                        <TextBlock x:Name="Searching" Style="{StaticResource HintText}" Visibility="Collapsed"
-                                   Text="{t:T 'Looking for LG, Samsung and Android TVs on the same network.'}" />
+                        <!-- Tarama sürerken liste boşsa arama halkası (Perde): TV'ler bulundukça kart kart belirir. -->
+                        <StackPanel x:Name="Searching" Visibility="Collapsed" HorizontalAlignment="Center" Margin="{t:Sp '0,m'}">
+                            <c:SearchRings Size="72" />
+                            <TextBlock Text="{t:T 'Scanning the network…'}" Style="{StaticResource UnitTitleText}" HorizontalAlignment="Center" Margin="{t:Sp '0,m,0,0'}" />
+                            <TextBlock Text="{t:T 'Looking for LG, Samsung and Android TVs on the same network.'}" Style="{StaticResource HintText}"
+                                       TextAlignment="Center" HorizontalAlignment="Center" Margin="{t:Sp '0,titleBody,0,0'}" />
+                        </StackPanel>
                         <!-- Boş durum: olası nedenler (numaralı), altında elle IP ipucu. -->
                         <c:Unit x:Name="NotFound" Title="{t:T 'No TV Found'}" Visibility="Collapsed">
                             <c:SpacedStack Gap="xs">
@@ -98,7 +100,11 @@
 
             <c:SpacedStack Grid.Column="2" Gap="l">
                 <c:Card x:Name="Progress" Title="{t:T 'Connection and Install'}" Visibility="Collapsed">
-                    <StackPanel x:Name="Timeline" />
+                    <!-- Adım çizelgesi (Perde): biten amber + tik, şimdiki amber halka, sıradaki soluk; kurulunca başarı anı. -->
+                    <StackPanel>
+                        <c:StepTimeline x:Name="Timeline" />
+                        <ContentControl x:Name="ReadyMoment" Focusable="False" Margin="{t:Sp '0,l,0,0'}" Visibility="Collapsed" />
+                    </StackPanel>
                 </c:Card>
                 <TextBlock x:Name="Waiting" Style="{StaticResource HintText}" Visibility="Collapsed" Text="{t:T 'Accept the request on the TV…'}" />
                 <c:ErrorBox x:Name="PairError" Title="{t:T 'Couldn\'t Connect to the TV'}">

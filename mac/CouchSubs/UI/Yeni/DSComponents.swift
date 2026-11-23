@@ -194,9 +194,9 @@ private struct DSButtonBody: View {
             if busy {
                 DSBarsLoader(color: kind == .primary ? .dsOnAmber : .dsAmber)
             } else if kind == .stop {
-                RoundedRectangle(cornerRadius: 2).fill(Color.dsLiveText).frame(width: 10, height: 10).accessibilityHidden(true)
+                RoundedRectangle(cornerRadius: 2).fill(Color.dsOnStop).frame(width: 10, height: 10).accessibilityHidden(true)
             } else if kind == .live {
-                DSPulseDot(color: .dsLiveDot, size: 8)
+                DSPulseDot(color: .dsOnStop, size: 8)
             }
             configuration.label
                 .lineLimit(1)
@@ -259,7 +259,9 @@ private struct DSButtonBody: View {
             case .dark, .small: shape.fill(Color.dsCharcoal)
             case .secondary, .compact: shape.fill(hovered || pressed ? Color.dsSurfaceHigh : Color.dsSurfaceRaised)
             case .ghost: shape.fill(hovered || pressed ? Color.dsField : .clear)
-            case .stop, .live, .danger: shape.fill(hovered || pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
+            // Durdur (çeviri sürerken birincil eylem): dolu canlı zemin, beyaz yazı. Sil/Kaldır (danger) soluk kalır.
+            case .stop, .live: shape.fill(Color.dsStopFill).overlay(shape.fill(Color.black.opacity(pressed ? 0.16 : hovered ? 0.08 : 0)))
+            case .danger: shape.fill(hovered || pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
             }
         }
     }
@@ -270,7 +272,7 @@ private struct DSButtonBody: View {
         switch kind {
         case .primary: shape.stroke(isEnabled ? Color.dsAmberLine.opacity(0.6) : .clear, lineWidth: 1)
         case .secondary, .compact: shape.stroke(hovered ? Color.dsBorderStrong : Color.dsBorder, lineWidth: 1)
-        case .stop, .live, .danger: shape.stroke(Color.dsLiveRing, lineWidth: 1)
+        case .danger: shape.stroke(Color.dsLiveRing, lineWidth: 1)
         default: EmptyView()
         }
     }
@@ -281,7 +283,8 @@ private struct DSButtonBody: View {
         case .dark, .small: .dsOnCharcoal
         case .secondary, .compact: .dsText
         case .ghost: .dsAmberText
-        case .stop, .live, .danger: .dsLiveText
+        case .stop, .live: .dsOnStop
+        case .danger: .dsLiveText
         }
     }
 }
@@ -560,37 +563,16 @@ struct DSAccountCard<Others: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: DS.radius("tile"), style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: DS.space("s")) {
-                Text(verbatim: badge)
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
-                    .frame(width: 40, height: 40)
-                    .background {
-                        if signedIn {
-                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
-                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                        } else {
-                            Circle().fill(Color.dsCharcoal)
-                        }
-                    }
-                    // Bağlıyken 3 pt aralıklı amber halka.
-                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
-                    .padding(signedIn ? 4.5 : 0)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.space("line")) {
-                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
-                    HStack(spacing: DS.space("xxs")) {
-                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
-                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
-                        if let detail { Text(verbatim: "· \(detail)").font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
-                    }
+            // Dar sütunda (ör. 380 pt kurulum sütunu) düğme başlığın altına iner; durum yazısı kırpılmaz.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.space("s")) {
+                    identity.fixedSize()
+                    Spacer(minLength: DS.space("s"))
+                    action
                 }
-                Spacer(minLength: DS.space("s"))
-                if busy { ProgressView().controlSize(.small) }
-                if signedIn {
-                    Button("Sign In Again", action: signIn).buttonStyle(DSButtonStyle(kind: .compact)).disabled(busy)
-                } else {
-                    Button("Sign In", action: signIn).buttonStyle(DSButtonStyle(kind: .primary)).disabled(busy)
+                VStack(alignment: .leading, spacing: DS.space("s")) {
+                    identity
+                    action
                 }
             }
             .padding(DS.space("m"))
@@ -619,6 +601,46 @@ struct DSAccountCard<Others: View>: View {
             }
         }
         .dsElevation(signedIn ? .raised : .card, in: shape)
+    }
+
+    @ViewBuilder private var action: some View {
+        if signedIn {
+            Button(busy ? "Signing In…" : "Sign In Again", action: signIn)
+                .buttonStyle(DSButtonStyle(kind: .compact, busy: busy)).disabled(busy)
+        } else {
+            Button(busy ? "Signing In…" : "Sign In", action: signIn)
+                .buttonStyle(DSButtonStyle(kind: .primary, busy: busy)).disabled(busy)
+        }
+    }
+
+    private var identity: some View {
+            HStack(spacing: DS.space("s")) {
+                Text(verbatim: badge)
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(signedIn ? Color.dsOnAmber : Color.dsOnCharcoal)
+                    .frame(width: 40, height: 40)
+                    .background {
+                        if signedIn {
+                            Circle().fill(LinearGradient(colors: [Color(red: 1, green: 0.796, blue: 0.388), .dsPeach],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } else {
+                            Circle().fill(Color.dsCharcoal)
+                        }
+                    }
+                    // Bağlıyken 3 pt aralıklı amber halka.
+                    .overlay { if signedIn { Circle().inset(by: -4.5).strokeBorder(Color.dsAmber, lineWidth: 1.5) } }
+                    .padding(signedIn ? 4.5 : 0)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.space("line")) {
+                    Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
+                    HStack(spacing: DS.space("xxs")) {
+                        Circle().fill(signedIn ? Color.dsSuccess : Color.dsFaint).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(signedIn ? "Signed in" : "Not signed in").font(.dsSmall).foregroundStyle(Color.dsMuted)
+                        if let detail { Text(verbatim: "· \(detail)").font(.dsSmall).foregroundStyle(Color.dsFaint).lineLimit(1) }
+                    }
+                    .fixedSize()
+                }
+            }
     }
 }
 
@@ -1014,7 +1036,8 @@ struct DSLogoMark: View {
 struct DSBrand: View {
     var body: some View {
         HStack(spacing: DS.space("s")) {
-            DSLogoMark(height: 26)
+            // Üst çubukta durağan: SwiftUI'nin sonsuz animasyonu boştayken her kare çizim ister (boşta ≤ %2 işlemci).
+            DSLogoMark(height: 26, breathing: false)
             Text(verbatim: "CouchSubs").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.dsText)
         }
         .accessibilityElement(children: .ignore)
@@ -1034,7 +1057,7 @@ extension View {
 // MARK: Kaydırıcı
 
 /// Kaydırıcı: 4 pt ince iz (kapalı anahtar rengi), dolu kısmı amber, 20 pt beyaz gölgeli düğmecik; nokta (tick) yok.
-/// Tam genişlik; `step` verilirse değer o adıma oturur. Windows: Styles.xaml › Slider (aynı ölçüler).
+/// İz tam genişlik (uçları içeriğin kenarlarıyla aynı hizada); `step` verilirse değer o adıma oturur. Windows: Styles.xaml › Slider (aynı ölçüler).
 struct DSSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -1047,26 +1070,30 @@ struct DSSlider: View {
     static let knob: CGFloat = 20
     private static let track: CGFloat = 4
 
+    /// İz kartın iç genişliğini tam kaplar: sol ucu 0, sağ ucu genişlik (başlık, değer ve uç etiketleriyle aynı iki dikey
+    /// çizgi). Düğmeciğin merkezi iz üzerinde gezer; uçlarda yarıçapı kadar dışarı taşar.
+    static func trackSpan(width: CGFloat) -> ClosedRange<CGFloat> { 0...max(width, 0) }
+
+    static func knobCenter(fraction: CGFloat, width: CGFloat) -> CGFloat { max(width, 0) * min(max(fraction, 0), 1) }
+
     var body: some View {
         GeometryReader { geometry in
             let knob = Self.knob
-            let travel = max(geometry.size.width - knob, 1)
-            let offset = travel * fraction
+            let width = max(geometry.size.width, 1)
+            let center = Self.knobCenter(fraction: fraction, width: width)
             ZStack(alignment: .leading) {
                 Capsule(style: .circular).fill(Color.dsField)
                     .overlay(Capsule(style: .circular).strokeBorder(Color.dsBorder, lineWidth: 0.5))
-                    .frame(width: travel, height: Self.track)
-                    .offset(x: knob / 2)
+                    .frame(width: width, height: Self.track)
                 Capsule(style: .circular).fill(Color.dsAmber)
-                    .frame(width: offset, height: Self.track)
+                    .frame(width: center, height: Self.track)
                     .shadow(color: isEnabled ? Color.dsAmberGlow : .clear, radius: 5)
-                    .offset(x: knob / 2)
                 Circle().fill(Color.white)
                     .frame(width: knob, height: knob)
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.06)))
                     .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                     .scaleEffect(dragging && !reduceMotion ? 1.08 : 1)
-                    .offset(x: offset)
+                    .offset(x: center - knob / 2)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
@@ -1077,7 +1104,7 @@ struct DSSlider: View {
                             dragging = true
                             onEditingChanged(true)
                         }
-                        set(fraction: (gesture.location.x - knob / 2) / travel)
+                        set(fraction: gesture.location.x / width)
                     }
                     .onEnded { _ in
                         dragging = false
@@ -1116,8 +1143,8 @@ struct DSSlider: View {
     private func clamp(_ x: Double) -> Double { min(max(x, range.lowerBound), range.upperBound) }
 }
 
-/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri: çubuğun gerçek uçlarıyla hizalı (çubuk düğme yarıçapı
-/// kadar içeriden başlar; etiketler de aynı iç boşlukla).
+/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri: çubuğun uçlarıyla hizalı (çubuk tam genişlik; sol
+/// etiket sol kenarda, sağ etiket sağ kenarda).
 struct DSSliderRange: View {
     let low: String
     let high: String
@@ -1128,9 +1155,8 @@ struct DSSliderRange: View {
             Spacer()
             Text(verbatim: high)
         }
-        .font(.system(size: 12, weight: .medium, design: .monospaced).monospacedDigit())
+        .font(.system(size: 12, weight: .medium).monospacedDigit())
         .foregroundStyle(Color.dsMuted)
-        .padding(.horizontal, DSSlider.knob / 2)
         .accessibilityHidden(true)
     }
 }
@@ -1154,7 +1180,7 @@ struct DSSliderRow: View {
                 Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText)
                 Spacer(minLength: DS.space("s"))
                 Text(verbatim: valueText)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced).monospacedDigit())
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Color.dsAmberText)
             }
             DSSlider(value: $value, range: range, step: step, onEditingChanged: onEditingChanged)
