@@ -63,8 +63,10 @@ public sealed class HdmiStep : UserControl
             GroupName = "hdmiAuto", Margin = Sp.T("0", "m", "0", "0") };
         auto.Checked += (_, _) => { inputs[0].IsChecked = true; Try(1); auto.IsChecked = false; };
         left.Children.Add(auto);
-        var how = new Border { Padding = Sp.T("m"), CornerRadius = new CornerRadius(16), Margin = Sp.T("0", "m", "0", "0") };
-        how.SetResourceReference(Border.BackgroundProperty, "surface2Brush");
+        // "Nasıl Anlarım?" bilgi kutusu (Perde bilgi tonu: mavi yumuşak zemin, tam saran ince kenar).
+        var how = new Border { Padding = Sp.T("m"), CornerRadius = new CornerRadius(16), Margin = Sp.T("0", "m", "0", "0"), BorderThickness = new Thickness(1) };
+        how.SetResourceReference(Border.BackgroundProperty, "infoSoftBrush");
+        how.SetResourceReference(Border.BorderBrushProperty, "infoSoftBrush");
         var howStack = new StackPanel();
         var howTitle = new TextBlock { Text = l["How Do I Tell?"] };
         howTitle.SetResourceReference(StyleProperty, "RowTitle");
@@ -78,23 +80,40 @@ public sealed class HdmiStep : UserControl
 
         // Sağ: TV önizlemesi ve onay
         var right = new StackPanel();
-        var chip = new Border { Child = badge, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = Sp.T("s") };
-        chip.SetResourceReference(StyleProperty, "SceneChip");
-        var line = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
-        var name = new System.Windows.Documents.Run("Jason: ");
-        name.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "accentBrush");
+        // Perde (Mac DSPerdePreview): sıcak sahne, projeksiyon ışığı, sol üstte cam "HDMI n" hapı, altta altyazı plakası.
+        var chip = new Border
+        {
+            Child = badge, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = Sp.T("s"), Height = 28,
+            Padding = Sp.T("s", "0", "s", "0"), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Color.FromArgb(0x8C, 0x0B, 0x0B, 0x0D)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+        };
+        badge.Foreground = new SolidColorBrush(Color.FromRgb(0xF3, 0xEE, 0xE4));
+        var line = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        line.SetResourceReference(TextBlock.ForegroundProperty, "subtitleTextBrush");
+        var name = new System.Windows.Documents.Run("Jason: ") { FontWeight = FontWeights.Bold };
+        name.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "amberBrush");
         line.Inlines.Add(name);
         line.Inlines.Add(new System.Windows.Documents.Run(l.Language == "tr" ? "Tamam. Gidelim." : "Okay. Let's go."));
         sample.Child = line;
-        sample.Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x10, 0x10, 0x14));
-        sample.CornerRadius = new CornerRadius(12);
-        sample.Padding = Sp.T("s", "xs", "s", "xs");
+        sample.SetResourceReference(Border.BackgroundProperty, "subtitlePlateBrush");
+        sample.CornerRadius = new CornerRadius(10);
+        sample.Padding = Sp.T("s", "unitHint", "s", "unitHint");
         sample.HorizontalAlignment = HorizontalAlignment.Center;
         sample.VerticalAlignment = VerticalAlignment.Bottom;
         sample.Margin = Sp.T("m");
-        var screen = new Grid { Children = { sample, chip } };
-        var frame = new Border { Child = screen };
-        frame.SetResourceReference(StyleProperty, "DeviceFrame");
+        sample.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 6, Direction = 270, Opacity = 0.35, Color = Colors.Black };
+        var screen = new Grid { Background = PerdeBrushes.Scene() };
+        screen.Children.Add(new Border { Background = PerdePreview.Bottom(0.35), IsHitTestVisible = false });
+        screen.Children.Add(new ProjectorLight());
+        screen.Children.Add(sample);
+        screen.Children.Add(chip);
+        var frame = new Grid();
+        frame.Children.Add(new RoundClip { Radius = 20, Child = screen });
+        frame.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
+        });
         right.Children.Add(new Views.AspectBox { Child = frame });
         var question = new TextBlock { Text = l["Do You See the Game Picture on the TV?"], Margin = Sp.T("0", "m", "0", "0") };
         question.SetResourceReference(StyleProperty, "HeadlineText");

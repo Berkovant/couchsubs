@@ -24,6 +24,7 @@ public partial class OnboardingView : UserControl
         InitializeComponent();
         controller.PropertyChanged += OnChanged;
         Unloaded += (_, _) => controller.PropertyChanged -= OnChanged;
+        Loaded += (_, _) => Ambient.Visibility = Window.GetWindow(this) is ShellWindow ? Visibility.Collapsed : Visibility.Visible;
         ShowStep();
         ShowIntro();
     }
