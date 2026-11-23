@@ -153,7 +153,7 @@ public static class ScreenRenderer
         return content;
     }
 
-    private static AppController Demo(OnboardingStep step, LgTv? pairedTv = null)
+    internal static AppController Demo(OnboardingStep step, LgTv? pairedTv = null)
     {
         var controller = new AppController(new DemoServices(), new DemoStore(step == OnboardingStep.Done, pairedTv),new DemoSettings(), new DemoSleep(),
             Localizer.Current, action => action());
