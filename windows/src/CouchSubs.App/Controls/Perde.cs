@@ -1230,7 +1230,7 @@ public sealed class AmbientGlow : Canvas
         void Refresh() => Paint();
         Loaded += (_, _) => { ThemeManager.Changed -= Refresh; ThemeManager.Changed += Refresh; Paint(); };
         Unloaded += (_, _) => ThemeManager.Changed -= Refresh;
-        Motion.Gated(this, () => MotionGate.Ambient && Animated, Start, Stop);
+        Motion.Gated(this, () => MotionGate.Ambient && Animated && Hardware, Start, Stop);
     }
 
     /// <summary>Süzülme açık mı (Geçmiş ve Ayarlar'da durağan; Mac ile aynı: yalnız Ana Ekran'da süzülür).</summary>
@@ -1238,10 +1238,16 @@ public sealed class AmbientGlow : Canvas
 
     public double Intensity { get; set; } = 0.8;
 
+    /// <summary>
+    /// Süzülme yalnız ekran kartıyla çizimde (WPF çizim katmanı 2). Yazılımla çizimde (ekran kartı sürücüsü yok, uzak masaüstü,
+    /// sanal makine) bütün pencere her karede işlemcide yeniden çizilir; ölçümde boşta %90'ı geçti. Orada lekeler durağan.
+    /// </summary>
+    public static bool Hardware => (RenderCapability.Tier >> 16) >= 2;
+
     private void OnGateChanged()
     {
         // Kapı yeniden değerlendirilsin diye görünürlük olayı yerine doğrudan.
-        if (MotionGate.Ambient && Animated && IsLoaded && IsVisible) { if (!running) Start(); }
+        if (MotionGate.Ambient && Animated && Hardware && IsLoaded && IsVisible) { if (!running) Start(); }
         else if (running) Stop();
     }
 
@@ -1284,7 +1290,7 @@ public sealed class AmbientGlow : Canvas
             DoubleAnimation Drift(double to) => Motion.Fps(new DoubleAnimation(0, to, half)
             {
                 AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = Motion.InOut, BeginTime = TimeSpan.FromMilliseconds(-half.TotalMilliseconds * i * 0.66),
-            }, 15);
+            }, 10);
             drifts[i].BeginAnimation(TranslateTransform.XProperty, Drift(ActualWidth * Blobs[i].Dx));
             drifts[i].BeginAnimation(TranslateTransform.YProperty, Drift(ActualHeight * Blobs[i].Dy));
         }

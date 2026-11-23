@@ -175,7 +175,7 @@ public sealed class GamePreview : ContentControl
         stage.SizeChanged += (_, _) => Layout();
         // Perdenin altına düşen yumuşak amber yansıma (durağan gölge; canlıyken biraz güçlü).
         reflection.Background = PerdeColors.Frozen(PerdeColors.Rgb(11, 11, 13));
-        reflection.Effect = PerdeEffects.AmberGlow(52, 14, 0.25);
+        reflection.Effect = PerdeEffects.AmberGlow(52, 14, 0.16);
         var frame = new Grid();
         frame.Children.Add(reflection);
         frame.Children.Add(new RoundClip { Radius = radius, Child = stage });
@@ -196,7 +196,7 @@ public sealed class GamePreview : ContentControl
     {
         if (live == running && reflection.Effect is not null) return;
         live = running;
-        reflection.Effect = PerdeEffects.AmberGlow(52, 14, running ? 0.45 : 0.25);
+        reflection.Effect = PerdeEffects.AmberGlow(52, 14, running ? 0.28 : 0.16);
         ShowSample();
     }
 

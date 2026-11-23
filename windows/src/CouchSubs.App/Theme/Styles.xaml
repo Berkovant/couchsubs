@@ -1560,6 +1560,8 @@
     <!-- Ayar birimi: başlık üstte (bodyStrong) → unitTitle 8 → denetim tam genişlik → unitHint 6 → açıklama (gri). Başlığın sağında
          isteğe bağlı değer (kaydırıcı: mono). -->
     <Style TargetType="c:Unit">
+        <!-- Birimin içindeki düz metin temanın yazı rengini alır (Control varsayılanı siyahtı; koyu temada okunmuyordu). -->
+        <Setter Property="Foreground" Value="{DynamicResource textBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Template">

@@ -173,6 +173,20 @@ public static class ScreenRenderer
         }
     }
 
+    /// <summary>WM_GETMINMAXINFO: en büyük pencere boyu ekranla sınırlanmasın (yalnız ekran görüntüsü aracı).</summary>
+    private static IntPtr AllowLargeWindow(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int GetMinMaxInfo = 0x0024;
+        if (message != GetMinMaxInfo) return IntPtr.Zero;
+        // MINMAXINFO: ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize (her biri iki int).
+        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 8, 8000);
+        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 12, 8000);
+        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 32, 8000);
+        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 36, 8000);
+        handled = true;
+        return IntPtr.Zero;
+    }
+
     private static void Render(FrameworkElement view, int width, int height, string path)
     {
         // Görüntüye pencere zemini de girsin (içerik saydam zemin üzerinde çizilir).
@@ -185,7 +199,13 @@ public static class ScreenRenderer
             Left = -10000, Top = -10000, ShowActivated = false,
         };
         window.SetResourceReference(Window.BackgroundProperty, "backgroundBrush");
+        // Windows pencereyi ekrandan büyük açmaz (CI'daki sanal ekran 1024 × 768): en büyük boy sınırı kaldırılır, görüntü
+        // istenen boyda (1200 × 760, geniş 1680 × 945) çizilir.
+        window.SourceInitialized += (_, _) =>
+            System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(window).Handle)?.AddHook(AllowLargeWindow);
         window.Show();
+        window.Width = width;
+        window.Height = height;
         window.UpdateLayout();
         // Yükleme sırasında başlayan arama vb. işlerin ekrana yansıması için kısa bekleme.
         var frame = new System.Windows.Threading.DispatcherFrame();

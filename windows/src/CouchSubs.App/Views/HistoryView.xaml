@@ -140,7 +140,7 @@
                                         <ColumnDefinition Width="136" />
                                     </Grid.ColumnDefinitions>
                                     <!-- Koyu temada da yüksek kontrast: çeviri ana yazı renginde, İngilizcesi ve saat gri (soluk değil). -->
-                                    <TextBlock Text="{Binding Time}" Style="{StaticResource MonoText}" FontSize="12" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Time}" FontSize="13" FontWeight="Medium" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="2" Text="{Binding Translation}" FontSize="14" FontWeight="Medium" Foreground="{DynamicResource textBrush}" VerticalAlignment="Center"
                                                TextWrapping="Wrap" />
                                     <TextBlock Grid.Column="4" Text="{Binding Source}" FontSize="13" Foreground="{DynamicResource mutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
