@@ -990,7 +990,7 @@ struct PackTile: View {
             HStack(spacing: DS.space("xxs")) {
                 Circle().fill(Color.dsSuccess).frame(width: 6, height: 6).accessibilityHidden(true)
                 Text(verbatim: String(format: String(localized: "%@ lines"), pack.entries.formatted()))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundStyle(Color.dsMuted)
                     .lineLimit(1)
             }

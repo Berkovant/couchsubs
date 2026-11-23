@@ -118,11 +118,15 @@ final class NewDesignTests: XCTestCase {
     /// Tipografik kapak kısaltmaları (gerçek kapak/logo yok): oyunun adından kararlı ve kısa.
     func testCoverMonogram() {
         XCTAssertEqual(DSCoverArt.monogram("GTA V"), "GTA")
-        XCTAssertEqual(DSCoverArt.monogram("Red Dead Redemption 2"), "RD2")
+        XCTAssertEqual(DSCoverArt.numeral("GTA V"), "V")
+        XCTAssertEqual(DSCoverArt.monogram("Grand Theft Auto VI"), "GTA")
+        XCTAssertEqual(DSCoverArt.numeral("Grand Theft Auto VI"), "VI")
+        XCTAssertEqual(DSCoverArt.monogram("Red Dead Redemption 2"), "RDR")
+        XCTAssertEqual(DSCoverArt.numeral("Red Dead Redemption 2"), "2")
         XCTAssertEqual(DSCoverArt.monogram("Mafia"), "Ma")
-        XCTAssertEqual(DSCoverArt.monogram("The Last of Us Part II"), "LU")
+        XCTAssertNil(DSCoverArt.numeral("Mafia"))
+        XCTAssertEqual(DSCoverArt.monogram("Assassin's Creed Shadows"), "ACS")
         XCTAssertEqual(DSCoverArt.monogram("Cyberpunk 2077"), "Cy")
-        XCTAssertLessThanOrEqual(DSCoverArt.monogram("Assassin's Creed Valhalla").count, 4)
         XCTAssertEqual(DSCoverArt.paletteIndex("GTA V"), DSCoverArt.paletteIndex("GTA V"))
     }
 

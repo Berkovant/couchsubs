@@ -24,7 +24,7 @@ extension EnvironmentValues {
 struct DSGlassBar: View {
     let edge: VerticalEdge
 
-    static let tint = 0.84
+    static let tint = 0.93
 
     var body: some View {
         ZStack {
