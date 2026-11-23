@@ -24,7 +24,8 @@ public sealed class TvCodeCard : Border
     private readonly TextBlock waiting = new();
     private readonly StackPanel question = new() { Margin = Sp.T("0", "l", "0", "0") };
     private readonly Button confirm = new();
-    private readonly Button paired = new();
+    /// <summary>Onaylanınca başarı anı ("Eşleşti" + "TV'de kodu onaylayın, sonra deneyelim."; ≤ 1 sn).</summary>
+    private readonly ContentControl paired = new() { Focusable = false };
     private readonly DispatcherTimer poll = new() { Interval = TimeSpan.FromSeconds(1) };
     private string? shownId;
 
@@ -49,8 +50,6 @@ public sealed class TvCodeCard : Border
         confirm.Content = l["I See This Code on the TV"];
         confirm.SetResourceReference(StyleProperty, "PrimaryButton");
         confirm.Click += (_, _) => Approve();
-        paired.Content = l["Paired"];
-        paired.SetResourceReference(StyleProperty, "SuccessButton");
         paired.Visibility = Visibility.Collapsed;
         question.Children.Add(title);
         question.Children.Add(hint);
@@ -86,13 +85,16 @@ public sealed class TvCodeCard : Border
         digits.Children.Clear();
         foreach (var digit in ticket.Code.Where(char.IsLetterOrDigit))
         {
-            // Sağ sütuna (380) altı hane sığsın: 44 × 56, köşe 12.
+            // Sağ sütuna (380) altı hane sığsın: 44 × 56, köşe 12; Perde e2 yükseltilmiş kutu, amber hane.
             var box = new Border { Width = 44, Height = 56, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Margin = Sp.T("0", "0", "xs", "0") };
-            box.SetResourceReference(Border.BackgroundProperty, "fieldBrush");
-            box.SetResourceReference(Border.BorderBrushProperty, "borderBrush");
+            box.SetResourceReference(Border.BackgroundProperty, "surfaceRaisedBrush");
+            box.SetResourceReference(Border.BorderBrushProperty, "raisedEdgeBrush");
+            box.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 6, Direction = 270, Opacity = 0.3, Color = System.Windows.Media.Colors.Black };
             var text = new TextBlock { Text = digit.ToString(), FontSize = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             text.SetResourceReference(StyleProperty, "MonoValue");
             text.FontSize = 26;
+            text.FontWeight = FontWeights.Bold;
+            text.SetResourceReference(TextBlock.ForegroundProperty, "amberTextBrush");
             box.Child = text;
             digits.Children.Add(box);
             Motion.EnterFrom(box, 8, Motion.Short, TimeSpan.FromMilliseconds(60 * digits.Children.Count));
@@ -111,7 +113,7 @@ public sealed class TvCodeCard : Border
             return;
         }
         confirm.Visibility = Visibility.Collapsed;
+        paired.Content = new SuccessMoment(Localizer.Current["Paired"], Localizer.Current["Approve the code on the TV, then let's try it."]);
         paired.Visibility = Visibility.Visible;
-        Motion.Settle(paired);
     }
 }

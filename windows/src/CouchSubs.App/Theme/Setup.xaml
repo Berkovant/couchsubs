@@ -51,11 +51,11 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Tıklanabilir kart satırı (Mac DSOptionStyle, radyosuz): her zaman 1 px kenarlık, üzerine gelince alan zemini; Tag="selected"
-         iken 2 px amber kenarlık + %8 amber dolgu. TV satırları ve "Android TV" / "TV'm Yok" seçenekleri. -->
+    <!-- Tıklanabilir kart satırı (Perde DSOptionStyle, radyosuz): her zaman kıl çizgi, üzerine gelince açık yüzey + güçlü kenar;
+         Tag="selected" iken 2 px amber kenar + amber yumuşak dolgu + hafif ışıma. "Android TV" / "TV'm Yok" seçenekleri. -->
     <Style x:Key="OptionRowButton" TargetType="Button">
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRingTile}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Foreground" Value="{DynamicResource textBrush}" />
@@ -63,26 +63,29 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid>
+                        <Border x:Name="Glow" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource surfaceBrush}" Visibility="Collapsed">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.35" Color="#F5B83D" RenderingBias="Performance" />
+                            </Border.Effect>
+                        </Border>
                         <Border x:Name="Fill" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource surfaceBrush}" />
-                        <Border x:Name="Tint" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource amberBrush}" Opacity="0.08" Visibility="Collapsed" />
+                        <Border x:Name="Tint" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource amberSoftBrush}" Visibility="Collapsed" />
                         <Border x:Name="Frame" MinHeight="{DynamicResource size.option}" Padding="{m:Sp 'm,xs'}" CornerRadius="{DynamicResource radius.tile}"
-                                BorderBrush="{DynamicResource borderBrush}" BorderThickness="1">
+                                BorderBrush="{DynamicResource cardEdgeBrush}" BorderThickness="1">
                             <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
                         </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource fieldBrush}" />
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource scrollThumbBrush}" />
+                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceHighBrush}" />
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource borderStrongBrush}" />
                         </Trigger>
                         <Trigger Property="Tag" Value="selected">
                             <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceBrush}" />
                             <Setter TargetName="Tint" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
                             <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberBrush}" />
                             <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberLineBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.55" />
@@ -109,7 +112,7 @@
         <Setter Property="Height" Value="{DynamicResource size.chip}" />
         <Setter Property="Padding" Value="{m:Sp 's,0'}" />
         <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="Background" Value="{DynamicResource surfaceBrush}" />
+        <Setter Property="Background" Value="{DynamicResource surfaceRaisedBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource borderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -185,7 +188,7 @@
          seçenek görünümünde (1 px kenarlık, üzerine gelince alan zemini, seçiliyken 2 px amber + %8 amber dolgu). Numara Tag'de. -->
     <Style x:Key="StepToggle" TargetType="ToggleButton">
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRingTile}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="Foreground" Value="{DynamicResource textBrush}" />
         <Setter Property="Template">
@@ -193,9 +196,9 @@
                 <ControlTemplate TargetType="ToggleButton">
                     <Grid>
                         <Border x:Name="Fill" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource surfaceBrush}" />
-                        <Border x:Name="Tint" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource amberBrush}" Opacity="0.08" Visibility="Collapsed" />
+                        <Border x:Name="Tint" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource amberSoftBrush}" Visibility="Collapsed" />
                         <Border x:Name="Frame" MinHeight="52" Padding="{m:Sp 'm,xs'}" CornerRadius="{DynamicResource radius.tile}"
-                                BorderBrush="{DynamicResource borderBrush}" BorderThickness="1">
+                                BorderBrush="{DynamicResource cardEdgeBrush}" BorderThickness="1">
                             <DockPanel VerticalAlignment="Center">
                                 <Grid DockPanel.Dock="Left" Width="28" Height="28" Margin="{m:Sp '0,0,s,0'}">
                                     <Ellipse x:Name="Disc" Fill="{DynamicResource fieldBrush}" />
@@ -217,60 +220,131 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource fieldBrush}" />
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource scrollThumbBrush}" />
+                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceHighBrush}" />
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource borderStrongBrush}" />
                         </Trigger>
+                        <!-- Yapıldı (Perde adım çizelgesi gibi): amber daire + koyu tik. -->
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceBrush}" />
                             <Setter TargetName="Tint" Property="Visibility" Value="Visible" />
                             <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberBrush}" />
                             <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
-                            <Setter TargetName="Disc" Property="Fill" Value="{DynamicResource successBrush}" />
+                            <Setter TargetName="Disc" Property="Fill" Value="{DynamicResource amberBrush}" />
+                            <Setter TargetName="Tick" Property="Foreground" Value="{DynamicResource onAmberBrush}" />
                             <Setter TargetName="Number" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberLineBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
-    <!-- Konsol seçim kartı (Mac ConsoleChoiceStep): köşe 24, 16 iç boşluk; üstte 120 yükseklikte alan zemininde büyük rozet yazısı (Tag),
-         altında başlık (h3) + alt yazı ve sağda radyo; seçiliyken 2 px amber kenarlık. -->
+    <!-- Konsol seçim kartı (Perde ConsoleChoiceStep): e1 kart, köşe 24, 16 iç boşluk; üstte 120 yükseklikte alan zemini + durağan
+         projeksiyon ışığı ve ortada 64'lük renkli simge karesi (Tag; seçiliyken amber + amber ışıma, adımın kodunda), altında
+         başlık (h3) + alt yazı ve sağda radyo; seçiliyken 2 px amber kenar + amber yumuşak dolgu + ışıma. -->
     <Style x:Key="ConsoleCard" TargetType="RadioButton">
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRingCard}" />
         <Setter Property="Foreground" Value="{DynamicResource textBrush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="Frame" CornerRadius="{DynamicResource radius.card}" Background="{DynamicResource surfaceBrush}" BorderBrush="{DynamicResource borderBrush}"
-                            BorderThickness="1" Padding="{m:Sp 'm'}">
-                        <StackPanel>
-                            <Border MinHeight="120" CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource fieldBrush}">
-                                <TextBlock Text="{TemplateBinding Tag}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource charcoalBrush}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <DockPanel Margin="{m:Sp '0,m,0,0'}">
-                                <Ellipse x:Name="Ring" DockPanel.Dock="Right" Width="20" Height="20" VerticalAlignment="Center" Stroke="{DynamicResource switchOffBrush}" StrokeThickness="2" />
-                                <ContentPresenter VerticalAlignment="Center" />
-                            </DockPanel>
-                        </StackPanel>
-                    </Border>
+                    <Grid>
+                        <Border x:Name="Glow" CornerRadius="{DynamicResource radius.card}" Background="{DynamicResource surfaceBrush}" Visibility="Collapsed">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.35" Color="#F5B83D" RenderingBias="Performance" />
+                            </Border.Effect>
+                        </Border>
+                        <Border CornerRadius="{DynamicResource radius.card}" Background="{DynamicResource surfaceBrush}" />
+                        <Border x:Name="Tint" CornerRadius="{DynamicResource radius.card}" Background="{DynamicResource amberSoftBrush}" Visibility="Collapsed" />
+                        <Border x:Name="Frame" CornerRadius="{DynamicResource radius.card}" BorderBrush="{DynamicResource cardEdgeBrush}"
+                                BorderThickness="1" Padding="{m:Sp 'm'}">
+                            <StackPanel>
+                                <Grid MinHeight="120">
+                                    <Border CornerRadius="{DynamicResource radius.tile}" Background="{DynamicResource fieldBrush}" />
+                                    <c:RoundClip Radius="16">
+                                        <c:ProjectorLight />
+                                    </c:RoundClip>
+                                    <ContentPresenter Content="{TemplateBinding Tag}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Grid>
+                                <DockPanel Margin="{m:Sp '0,m,0,0'}">
+                                    <Ellipse x:Name="Ring" DockPanel.Dock="Right" Width="20" Height="20" VerticalAlignment="Center" Stroke="{DynamicResource switchOffBrush}" StrokeThickness="2" />
+                                    <ContentPresenter VerticalAlignment="Center" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource scrollThumbBrush}" />
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource borderStrongBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberBrush}" />
                             <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
+                            <Setter TargetName="Tint" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
                             <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource amberBrush}" />
                             <Setter TargetName="Ring" Property="StrokeThickness" Value="6" />
                         </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberLineBrush}" />
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- TV kartı (Perde DSTVCard): 18 köşe e1 kart, en az 64 yüksek, 12 iç boşluk; solda 36'lık TV simge karesi (seçiliyken amber),
+         ad (bodyStrong) + mono 11 gri "marka · adres", sağda durum hapı ve isteğe bağlı eylem (küçük "Bağlan"). Üzerine gelince
+         güçlü kenar; seçiliyken 2 px amber kenar + amber yumuşak dolgu + hafif ışıma. Klavye odağında amber odak halkası. -->
+    <Style TargetType="c:TvCard">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRingTile}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{DynamicResource textBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="c:TvCard">
+                    <Grid>
+                        <Border x:Name="Glow" CornerRadius="18" Background="{DynamicResource surfaceBrush}" Visibility="Collapsed">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.35" Color="#F5B83D" RenderingBias="Performance" />
+                            </Border.Effect>
+                        </Border>
+                        <Border x:Name="Fill" CornerRadius="18" Background="{DynamicResource surfaceBrush}" />
+                        <Border x:Name="Tint" CornerRadius="18" Background="{DynamicResource amberSoftBrush}" Visibility="Collapsed" />
+                        <Border x:Name="Frame" CornerRadius="18" MinHeight="{DynamicResource size.option}" Padding="{m:Sp 's'}"
+                                BorderBrush="{DynamicResource cardEdgeBrush}" BorderThickness="1">
+                            <DockPanel VerticalAlignment="Center">
+                                <c:IconSquare x:Name="Icon" DockPanel.Dock="Left" Glyph="&#xE7F4;" Size="36" Tone="Gray" Margin="{m:Sp '0,0,s,0'}" />
+                                <ContentPresenter DockPanel.Dock="Right" Content="{TemplateBinding Trailing}" VerticalAlignment="Center" />
+                                <c:Chip x:Name="StatusChip" DockPanel.Dock="Right" Text="{TemplateBinding Status}" Tone="{TemplateBinding StatusTone}"
+                                        Margin="{m:Sp 'xs,0,0,0'}" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{TemplateBinding TvName}" FontSize="{DynamicResource bodyStrongFontSize}" FontWeight="{DynamicResource bodyStrongFontWeight}"
+                                               Foreground="{DynamicResource textBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{TemplateBinding Detail}" FontFamily="Cascadia Mono, Consolas" FontSize="11" FontWeight="Medium"
+                                               Foreground="{DynamicResource mutedBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{m:Sp '0,line,0,0'}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Status" Value="{x:Null}">
+                            <Setter TargetName="StatusChip" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceHighBrush}" />
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource borderStrongBrush}" />
+                        </Trigger>
+                        <Trigger Property="Selected" Value="True">
+                            <Setter TargetName="Fill" Property="Background" Value="{DynamicResource surfaceBrush}" />
+                            <Setter TargetName="Tint" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource amberBrush}" />
+                            <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
+                            <Setter TargetName="Icon" Property="Tone" Value="Amber" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.55" />

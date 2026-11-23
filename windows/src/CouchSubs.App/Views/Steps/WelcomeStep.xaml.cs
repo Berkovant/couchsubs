@@ -2,6 +2,7 @@
 
 using System.Windows.Controls;
 using System.Windows;
+using CouchSubs.App.Controls;
 using CouchSubs.Core;
 using CouchSubs.Shell;
 
@@ -23,6 +24,18 @@ public partial class WelcomeStep : UserControl
             Ps5.IsEnabled = Xbox.IsEnabled = !Controller.ConsoleKindLocked;
             ShowRequirements();
         };
+    }
+
+    /// <summary>Seçili kartın simge karesi amber ve amber ışımalı; diğerleri kendi tonunda (Mac ConsoleChoiceStep).</summary>
+    private void ShowIcons()
+    {
+        foreach (var (card, tone) in new[] { (Ps5, IconTone.Sky), (Xbox, IconTone.Olive), (GameWindow, IconTone.Peach) })
+        {
+            if (card.Tag is not IconSquare square) continue;
+            var on = card.IsChecked == true;
+            square.Tone = on ? IconTone.Amber : tone;
+            square.Effect = on ? PerdeEffects.AmberGlow(32) : null;
+        }
     }
 
     private AppController Controller => (AppController)DataContext;
@@ -54,6 +67,7 @@ public partial class WelcomeStep : UserControl
 
     private void ShowRequirements()
     {
+        ShowIcons();
         var text = Localizer.Current;
         if (WindowChosen)
         {

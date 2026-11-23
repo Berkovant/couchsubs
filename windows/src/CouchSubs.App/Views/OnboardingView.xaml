@@ -8,6 +8,9 @@
              xmlns:c="clr-namespace:CouchSubs.App.Controls"
              xmlns:t="clr-namespace:CouchSubs.App.Theme"
              xmlns:local="clr-namespace:CouchSubs.App.Views">
+    <Grid>
+    <!-- Ortam ışığı (Perde; hareket kapısına bağlı, çok yavaş). Kabuğun içindeyken kabuğun kendi ortam ışığı görünür, bu gizlenir. -->
+    <c:AmbientGlow x:Name="Ambient" Intensity="0.7" />
     <DockPanel>
         <Grid DockPanel.Dock="Top" Height="{DynamicResource size.titleBarHeight}" Margin="{t:Sp 'l,0'}">
             <Grid.ColumnDefinitions>
@@ -49,4 +52,5 @@
             </DockPanel>
         </Grid>
     </DockPanel>
+    </Grid>
 </UserControl>
