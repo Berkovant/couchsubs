@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,8 +44,8 @@ fun DubbingTile() {
         cast = VoiceCast.fromJson(settings.dubbingCast)
     }
     Tile(Modifier.fillMaxWidth()) {
-        RowItem(stringResource(R.string.dubbing_title), stringResource(R.string.dubbing_enable)) {
-            Switch(enabled, { enabled = it; settings.dubbingEnabled = it; if (!it) Services.dubberIfCreated?.stop() })
+        SwitchRow(stringResource(R.string.dubbing_title), stringResource(R.string.dubbing_enable), enabled) {
+            enabled = it; settings.dubbingEnabled = it; if (!it) Services.dubberIfCreated?.stop()
         }
         Caption(stringResource(R.string.dubbing_setup))
         if (enabled) {

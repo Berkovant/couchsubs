@@ -106,7 +106,7 @@ public class SectionTitle : Control
 }
 
 /// <summary>Uyarı kutusunun tonu: amber (önemli bilgi), kırmızı (hata/uyarı), yeşil (başarı).</summary>
-public enum CalloutTone { Attention, Live, Success }
+public enum CalloutTone { Attention, Live, Success, Info }
 
 /// <summary>
 /// Önemli uyarı (Mac DSCallout): gri metin değil, ince renkli kenarlı açık renkli kutu + simge; vurgu büyük harf değil kalın.

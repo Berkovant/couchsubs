@@ -710,7 +710,10 @@ final class AppModel: ObservableObject {
     }
 
     // Çalışma durumu
-    @Published var isRunning = false
+    /// Çeviri sürüyor; hareket kapısı (Perde) bunu bütün pencerelere duyurur: sürerken sürekli animasyonlar durur.
+    @Published var isRunning = false {
+        didSet { if isRunning != oldValue { DSMotionState.shared.translating = isRunning } }
+    }
     /// Genel kısayollar (bkz. `applyHotkeys`).
     lazy var hotkeys = GlobalHotkeys { [weak self] action in self?.hotkeyPressed(action) }
     /// Ayarlar › Kısayollar yeni tuşu bekliyor: basılan tuş kısayol olarak çalışmasın, oraya gelsin.
@@ -798,13 +801,13 @@ final class AppModel: ObservableObject {
     /// Ayarlar açılınca gösterilen bölüm (ana ekrandaki "Çeviri" satırı Çeviri'yi açar); sayfa kapanınca başa döner.
     @Published var settingsSection: SettingsSection = .basics
 
-    /// Yeni arayüz ilk kez açıldı (bir kez): onaylı tasarım açık temalıdır, eski varsayılan koyu tema açığa çevrilir
-    /// (kullanıcı sonra Ayarlar › Temel › Görünüm'den değiştirebilir); konuşan rengi yeni dildeki gibi yalnız adı boyar.
+    /// Yeni arayüz ilk kez açıldı (bir kez): konuşan rengi yeni dildeki gibi yalnız adı boyar. Görünüm ayarına dokunulmaz:
+    /// Perde tasarım dili koyu temalıdır ve varsayılan da koyudur (tasarim.json › defaultTheme); kullanıcının seçtiği
+    /// Açık / Koyu / Sisteme Uy korunur.
     func adoptNewDesign() {
         let key = "newDesignAdopted"
         guard !defaults.bool(forKey: key) else { return }
         defaults.set(true, forKey: key)
-        if settings.appearance == .dark { settings.appearance = .light }
         settings.style.nameOnly = true
     }
 

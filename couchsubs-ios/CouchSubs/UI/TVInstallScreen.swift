@@ -34,14 +34,13 @@ struct TVInstallScreen: View {
                 case .lg: LGInstallSection(update: update?.brand == .lg ? update : nil, working: $working, onDone: finish)
                 }
             } else {
-                HStack(spacing: Mobile.Space.gap) {
-                    ProgressView().tint(Mobile.Palette.accent)
-                    Text(verbatim: TVText.searching).font(Mobile.TypeScale.body).foregroundStyle(Mobile.Palette.secondary)
-                }
+                InstallSearching()
             }
         } bottom: {
             EmptyView()
         }
+        // Kurulum adımı: ortam ışığı (boşta çok yavaş; kurulumda reklam yok).
+        .perdeAmbient()
         .task {
             guard brand == nil else { return }
             // Marka: güncellenen TV, bu telefonun kurduğu TV, eşlenen TV; yoksa ağda ilk görülen TV.

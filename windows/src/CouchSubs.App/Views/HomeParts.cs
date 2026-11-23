@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using CouchSubs.App.Controls;
@@ -13,80 +16,88 @@ using Frame = CouchSubs.Core.Frame;
 
 namespace CouchSubs.App.Views;
 
-// Ana ekranın parçaları (tuval 09): durum çipi, oyun görüntüsü önizlemesi ve durum karolarının küçük grafikleri.
+// Ana ekranın parçaları (Perde; Mac HomeView): durum karosu, perde (oyun görüntüsü önizlemesi), Canlı Akış satırı ve küçük
+// grafikler.
 
-/// <summary>Durum çipi: solda durum simgesi (yeşil tik, kırmızı ünlem ya da gri nokta), ad, değer ve mono ek bilgi.</summary>
-public sealed class StatusChip : Border
+/// <summary>
+/// Durum karosu (Mac HomeTile): e1 yüzey, 16 köşe, en az 64 yüksek; solda 36'lık renkli simge karesi (oyun karosunda kapak),
+/// üstte 12 anahtar + durum noktası, altında 15 yarı kalın değer ve mono ek bilgi. Üzerine gelince güçlü kenar; tıklanınca
+/// ilgili ayara gider.
+/// </summary>
+public sealed class HomeTile : Button
 {
-    private readonly Border badge = new() { Width = 24, Height = 24, CornerRadius = new CornerRadius(12), VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock label = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly TextBlock value = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly System.Windows.Documents.Run extra = new();
+    private readonly Border frame = new() { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), MinHeight = 64, Padding = Sp.T("s", "xs", "s", "xs") };
+    private readonly ContentControl icon = new() { Width = 36, Height = 36, Focusable = false, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock key = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Ellipse dot = new() { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("xxs", "0", "0", "0") };
+    private readonly TextBlock value = new() { FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 40 };
+    private readonly TextBlock detail = new() { FontSize = 11, FontWeight = FontWeights.Medium, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
 
-    public StatusChip()
+    public HomeTile()
     {
-        Height = 56;
-        Padding = Sp.T("m", "0", "m", "0");
-        CornerRadius = new CornerRadius(16);
-        label.SetResourceReference(TextBlock.ForegroundProperty, "textSecondaryBrush");
-        extra.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
-        extra.FontSize = 12;
-        extra.FontWeight = FontWeights.Medium;
-        extra.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "textSecondaryBrush");
+        Cursor = System.Windows.Input.Cursors.Hand;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        SetResourceReference(FocusVisualStyleProperty, "FocusRingTile");
+        Template = GameCover.Plain();
+        frame.SetResourceReference(Border.BackgroundProperty, "surfaceBrush");
+        frame.SetResourceReference(Border.BorderBrushProperty, "cardEdgeBrush");
+        key.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
+        value.SetResourceReference(TextBlock.ForegroundProperty, "textBrush");
+        detail.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
+        System.Windows.Documents.Typography.SetNumeralAlignment(detail, FontNumeralAlignment.Tabular);
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(key);
+        head.Children.Add(dot);
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("s", "0", "0", "0") };
-        texts.Children.Add(label);
+        texts.Children.Add(head);
+        value.Margin = Sp.T("0", "line", "0", "0");
         texts.Children.Add(value);
+        detail.Margin = Sp.T("0", "line", "0", "0");
+        texts.Children.Add(detail);
         var row = new DockPanel();
-        DockPanel.SetDock(badge, Dock.Left);
-        row.Children.Add(badge);
+        DockPanel.SetDock(icon, Dock.Left);
+        row.Children.Add(icon);
         row.Children.Add(texts);
-        Child = row;
-        Show("", "", null, StatusTone.Idle);
+        frame.Child = row;
+        Content = frame;
+        MouseEnter += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, "borderStrongBrush");
+        MouseLeave += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, "cardEdgeBrush");
     }
 
-    /// <summary>Çipi doldurur; <paramref name="more"/> mono ek bilgidir ("EN→TR", "Paket"), yoksa gösterilmez.</summary>
-    public void Show(string name, string text, string? more, StatusTone tone)
+    /// <summary>Karoyu doldurur. <paramref name="cover"/> verilirse simge karesi yerine oyunun kapağı (adından degrade).</summary>
+    public void Show(string name, string text, string? more, StatusTone tone, string glyph, IconTone iconTone, string? cover = null)
     {
-        label.Text = name;
-        value.Inlines.Clear();
-        value.Inlines.Add(new System.Windows.Documents.Run(text));
-        if (!string.IsNullOrEmpty(more))
+        key.Text = name;
+        value.Text = text;
+        value.ToolTip = text;
+        detail.Text = more ?? "";
+        detail.Visibility = string.IsNullOrEmpty(more) ? Visibility.Collapsed : Visibility.Visible;
+        dot.SetResourceReference(Shape.FillProperty, tone switch
         {
-            extra.Text = " " + more;
-            value.Inlines.Add(extra);
-        }
-        value.ToolTip = string.IsNullOrEmpty(more) ? text : $"{text} · {more}";
-        badge.SetResourceReference(Border.BackgroundProperty, tone switch
-        {
-            StatusTone.Good => "successSoftBrush",
-            StatusTone.Warning => "liveSoftBrush",
-            _ => "surface2Brush",
+            StatusTone.Good => "successBrush",
+            StatusTone.Warning => "liveBrush",
+            _ => "faintBrush",
         });
-        badge.Child = tone switch
+        if (cover is not null)
         {
-            StatusTone.Good => Mark("M6,12.5 L10,16.5 L18,8", "successBrush"),
-            StatusTone.Warning => Mark("M12,6 L12,13 M12,17.5 L12,18", "liveBrush"),
-            _ => Dot(),
-        };
-    }
-
-    private static Path Mark(string data, string brush)
-    {
-        var path = new Path
+            if (icon.Content is not RoundClip { Child: CoverArt art } clip || art.Seed != cover)
+                icon.Content = new RoundClip { Radius = 11, Child = new CoverArt { Seed = cover } };
+        }
+        else if (icon.Content is IconSquare square)
         {
-            Data = Geometry.Parse(data), StrokeThickness = 2.8, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round, Width = 14, Height = 14, Stretch = Stretch.Uniform,
-        };
-        path.SetResourceReference(Shape.StrokeProperty, brush);
-        return path;
+            square.Glyph = glyph;
+            square.Tone = iconTone;
+        }
+        else icon.Content = new IconSquare { Glyph = glyph, Tone = iconTone, Size = 36 };
+        AutomationProperties.SetName(this, string.IsNullOrEmpty(more) ? $"{name}: {text}" : $"{name}: {text} · {more}");
     }
+}
 
-    private static Ellipse Dot()
-    {
-        var dot = new Ellipse { Width = 8, Height = 8 };
-        dot.SetResourceReference(Shape.FillProperty, "textTertiaryBrush");
-        return dot;
-    }
+/// <summary>Canlı Akış satırı: konuşan (amber, küçük), çeviri (kalın), İngilizcesi (gri); yaşı 0 en yeni (eski satırlar solar).</summary>
+public sealed record FeedLine(string? Speaker, string Line, string Source, int Age)
+{
+    public bool HasSpeaker => !string.IsNullOrEmpty(Speaker);
 }
 
 /// <summary>İçeriği sığan en büyük 16:9 dikdörtgene yerleştirir (oyun görüntüsü hep 16:9).</summary>
@@ -122,134 +133,112 @@ public sealed class AspectBox : Decorator
 }
 
 /// <summary>
-/// Oyun görüntüsü önizlemesi: 6 px gri çerçeve, 16 köşe; solda üstte CANLI / DURDU hapı, sağ üstte kare hızı, okunan alan
-/// amber kesikli çerçeve ("Okunan Alan"), görüntünün üstünde son çeviri (konuşanın adı amber). Kare yoksa sahne renkleri.
-/// Kare saniyede en çok 4 kez çizilir (WriteableBitmap yeniden kullanılır).
+/// Perde (Mac HomePerde): oyunun son karesi (yoksa sıcak sahne), alttan hafif kararma, durağan projeksiyon ışığı, okunan alan
+/// (kesikli amber, "Okunan Alan" etiketi; durağan), son çeviri altyazı plakasında (konuşan adı amber; okunan alanın ortasında),
+/// sağ üstte cam haplar (CANLI nabız + kare hızı). Kart çerçevesi yok; 20 köşe, ince beyaz kıl çizgi, altına düşen yumuşak
+/// amber yansıma. Kare saniyede en çok 4 kez çizilir (WriteableBitmap yeniden kullanılır).
 /// </summary>
 public sealed class GamePreview : ContentControl
 {
-    private readonly Image image = new() { Stretch = Stretch.Fill };
-    private readonly Grid stage = new() { ClipToBounds = true };
-    private readonly TextBlock liveText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Ellipse liveDot = new() { Width = 7, Height = 7, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x5A, 0x5A)), Margin = Sp.T("0", "0", "xs", "0") };
-    private readonly Border rateChip;
-    private readonly TextBlock rateText = new() { FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Border area = new() { BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(10) };
-    private readonly Rectangle areaDash = new() { StrokeThickness = 2, StrokeDashArray = [4, 3], RadiusX = 10, RadiusY = 10 };
-    private readonly Border lineBox = new()
-    {
-        Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x10, 0x10, 0x14)), CornerRadius = new CornerRadius(12), Padding = Sp.T("m", "s", "m", "s"),
-        VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Collapsed,
-    };
-    private readonly TextBlock lineText = new() { FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextAlignment = TextAlignment.Center };
+    private readonly Image image = new() { Stretch = Stretch.UniformToFill };
+    private readonly Grid stage = new();
+    private readonly Grid area = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+    private readonly SubtitlePlate plate = new() { VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
+    private readonly StackPanel pills = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+    private readonly Chip rateChip = new() { Tone = ChipTone.Glass, ShowDot = false, Height = 28 };
+    private readonly Border reflection = new() { CornerRadius = new CornerRadius(20) };
     private WriteableBitmap? bitmap;
     private long lastDraw;
     private CropRegion region = new();
+    private bool live = true;
 
     public GamePreview()
     {
-        var frame = new Border();
-        frame.SetResourceReference(StyleProperty, "DeviceFrame");
-        frame.Background = Scene();
+        Focusable = false;
+        var radius = Palette.Radius.GetValueOrDefault("preview", 20);
+        stage.Background = PerdeColors.Frozen(PerdeColors.Rgb(11, 11, 13));
+        stage.Children.Add(new Border { Background = PerdeBrushes.Scene(), IsHitTestVisible = false });
         stage.Children.Add(image);
-        // Alt kısım hafif kararır (tasarım: degrade).
-        stage.Children.Add(new Border
-        {
-            Background = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, 0, 0, 0), 0.4), new(Color.FromArgb(0x59, 0, 0, 0), 1) }, 90),
-            IsHitTestVisible = false,
-        });
-        areaDash.SetResourceReference(Shape.StrokeProperty, "accentBrush");
-        var areaLabel = new Border { Height = 22, Padding = Sp.T("xs", "0", "xs", "0"), CornerRadius = new CornerRadius(11), HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top, Margin = Sp.T("s", "-s", "0", "0") };
-        areaLabel.SetResourceReference(Border.BackgroundProperty, "accentBrush");
-        var areaLabelText = new TextBlock { Text = Localizer.Current["Area Read"], FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        areaLabelText.SetResourceReference(TextBlock.ForegroundProperty, "onAccentBrush");
-        areaLabel.Child = areaLabelText;
-        var areaGrid = new Grid();
-        areaGrid.Children.Add(areaDash);
-        areaGrid.Children.Add(areaLabel);
-        area.Child = areaGrid;
-        area.HorizontalAlignment = HorizontalAlignment.Left;
-        area.VerticalAlignment = VerticalAlignment.Top;
-        area.Loaded += (_, _) => Motion.SetPulse(areaDash, true);
+        // Alt yarı hafif kararır (plaka okunur kalsın).
+        stage.Children.Add(new Border { Background = PerdePreview.Bottom(0.4), IsHitTestVisible = false });
+        stage.Children.Add(new ProjectorLight());
+        var dash = new Rectangle { StrokeThickness = 1.5, StrokeDashArray = [4, 2.67], RadiusX = 12, RadiusY = 12, Opacity = 0.75 };
+        dash.SetResourceReference(Shape.StrokeProperty, "amberBrush");
+        area.Children.Add(dash);
+        area.Children.Add(PerdePreview.AreaLabel());
+        area.IsHitTestVisible = false;
         stage.Children.Add(area);
-        lineBox.Child = lineText;
-        stage.Children.Add(lineBox);
-        // CANLI hapı ve kare hızı sağ üstte yan yana (Mac: örnek karenin sol üstündeki görev yazısıyla çakışmasın).
-        var live = Chip(new StackPanel { Orientation = Orientation.Horizontal, Children = { liveDot, liveText } });
-        rateText.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
-        rateChip = Chip(rateText);
-        rateChip.Margin = Sp.T("xs", "0", "0", "0");
-        stage.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = Sp.T("s"), Children = { live, rateChip },
-        });
+        stage.Children.Add(plate);
+        pills.Children.Add(rateChip);
+        pills.Margin = Sp.T("s");
+        stage.Children.Add(pills);
         stage.SizeChanged += (_, _) => Layout();
-        frame.Child = stage;
+        // Perdenin altına düşen yumuşak amber yansıma (durağan gölge; canlıyken biraz güçlü).
+        reflection.Background = PerdeColors.Frozen(PerdeColors.Rgb(11, 11, 13));
+        reflection.Effect = PerdeEffects.AmberGlow(52, 14, 0.16);
+        var frame = new Grid();
+        frame.Children.Add(reflection);
+        frame.Children.Add(new RoundClip { Radius = radius, Child = stage });
+        frame.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(radius), BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            BorderBrush = PerdeColors.Frozen(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
+        });
         Content = new AspectBox { Child = frame };
         SetLive(false);
     }
 
-    private static Border Chip(UIElement content)
+    /// <summary>
+    /// Çeviri durumu: perdede CANLI hapı yok (durum tek yerde, üst çubuktaki "Çeviri Açık"); canlıyken alttaki amber yansıma
+    /// güçlenir, boşta görüntü yoksa örnek altyazı plakası altyazının nerede ve nasıl görüneceğini gösterir.
+    /// </summary>
+    public void SetLive(bool running)
     {
-        var chip = new Border { Child = content, VerticalAlignment = VerticalAlignment.Top };
-        chip.SetResourceReference(StyleProperty, "SceneChip");
-        return chip;
+        if (live == running && reflection.Effect is not null) return;
+        live = running;
+        reflection.Effect = PerdeEffects.AmberGlow(52, 14, running ? 0.28 : 0.16);
+        ShowSample();
     }
 
-    /// <summary>Kare yokken tasarımdaki sahne renkleri.</summary>
-    private static Brush Scene()
+    /// <summary>Boşta (çeviri durmuş, görüntü yok, gösterilen satır yok) örnek plaka.</summary>
+    private void ShowSample()
     {
-        var group = new DrawingBrush { Stretch = Stretch.Fill };
-        var drawing = new DrawingGroup();
-        drawing.Children.Add(new GeometryDrawing(new SolidColorBrush(Color.FromRgb(0x6D, 0x6A, 0x5D)), null, new RectangleGeometry(new Rect(0, 0, 160, 90))));
-        drawing.Children.Add(new GeometryDrawing(Glow(Color.FromRgb(0x7A, 0x8A, 0x6A)), null, new EllipseGeometry(new Point(48, 32), 56, 32)));
-        drawing.Children.Add(new GeometryDrawing(Glow(Color.FromRgb(0xC7, 0x9A, 0x62)), null, new EllipseGeometry(new Point(120, 27), 48, 27)));
-        // Parıltılar 16:9 alanın dışına taşmasın (taşarsa fırça büyür, kenarlarda boşluk kalır).
-        drawing.ClipGeometry = new RectangleGeometry(new Rect(0, 0, 160, 90));
-        group.Drawing = drawing;
-        group.Freeze();
-        return group;
+        if (lastLine is not null) return;
+        if (!live && image.Source is null)
+        {
+            plate.Show(null, Localizer.Current["Subtitles will appear here while you play."], 17);
+            plate.Visibility = Visibility.Visible;
+            Layout();
+        }
+        else plate.Visibility = Visibility.Collapsed;
     }
 
-    private static RadialGradientBrush Glow(Color color) =>
-        new(new GradientStopCollection { new(color, 0), new(Color.FromArgb(0, color.R, color.G, color.B), 1) });
+    private string? lastLine;
 
-    /// <summary>Çeviri sürüyorsa CANLI (atan nokta), yoksa DURDU.</summary>
-    public void SetLive(bool live)
-    {
-        liveText.Text = Localizer.Current[live ? "LIVE" : "STOPPED"];
-        liveDot.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
-        if (live) Motion.SetPulse(liveDot, true);
-    }
-
-    /// <summary>Sağ üstteki mono bilgi ("PS5 · 10 Kare/sn"); boşsa gizli.</summary>
+    /// <summary>Sağ üstteki cam hap: kaynak + kare hızı ("PS5 · Saniyede 10 Kare"; sans, sabit genişlikte rakam); boşsa gizli.</summary>
     public void SetRate(string? text)
     {
-        rateText.Text = text ?? "";
+        if (rateChip.Text != (text ?? "")) rateChip.Text = text ?? "";
         rateChip.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        if (rateChip.Child is StackPanel row && row.Children.OfType<TextBlock>().LastOrDefault() is { } label)
+            System.Windows.Documents.Typography.SetNumeralAlignment(label, FontNumeralAlignment.Tabular);
     }
 
-    /// <summary>Son çeviri (konuşanın adı amber); boşsa kutu gizli.</summary>
+    /// <summary>Son çeviri (konuşanın adı amber); boşsa plaka gizli. Yeni satır kısaca aşağıdan gelir (hareket kapısına göre).</summary>
     public void SetLine(string? line)
     {
-        lineText.Inlines.Clear();
-        if (string.IsNullOrWhiteSpace(line))
+        lastLine = string.IsNullOrWhiteSpace(line) ? null : line;
+        if (lastLine is null)
         {
-            lineBox.Visibility = Visibility.Collapsed;
+            plate.Visibility = Visibility.Collapsed;
+            ShowSample();
             return;
         }
-        if (SpeakerPrefix.Parse(line) is { } prefix)
-        {
-            var name = new System.Windows.Documents.Run(prefix.Name + ":");
-            name.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "accentBrush");
-            lineText.Inlines.Add(name);
-            lineText.Inlines.Add(new System.Windows.Documents.Run(" " + prefix.Body));
-        }
-        else lineText.Inlines.Add(new System.Windows.Documents.Run(line));
-        lineBox.Visibility = Visibility.Visible;
-        Motion.EnterFrom(lineBox, -8);
+        var (speaker, body) = SubtitlePlate.Split(line!);
+        plate.Show(speaker, body, 17);
+        plate.Visibility = Visibility.Visible;
+        Layout();
+        Motion.EnterFrom(plate, 8);
     }
 
     public void SetRegion(CropRegion value)
@@ -258,13 +247,14 @@ public sealed class GamePreview : ContentControl
         Layout();
     }
 
-    /// <summary>Kareyi çizer (saniyede en çok 4 kez); null ise sahne renkleri görünür.</summary>
+    /// <summary>Kareyi çizer (saniyede en çok 4 kez); null ise sıcak sahne görünür.</summary>
     public void SetFrame(Frame? frame)
     {
         if (frame is null)
         {
             image.Source = null;
             bitmap = null;
+            ShowSample();
             return;
         }
         var now = Environment.TickCount64;
@@ -273,7 +263,11 @@ public sealed class GamePreview : ContentControl
         if (bitmap is null || bitmap.PixelWidth != frame.Width || bitmap.PixelHeight != frame.Height)
             bitmap = new WriteableBitmap(frame.Width, frame.Height, 96, 96, PixelFormats.Bgr32, null);
         bitmap.WritePixels(new Int32Rect(0, 0, frame.Width, frame.Height), frame.Pixels, frame.Stride, 0);
-        image.Source = bitmap;
+        if (image.Source != bitmap)
+        {
+            image.Source = bitmap;
+            ShowSample();
+        }
     }
 
     private void Layout()
@@ -281,10 +275,15 @@ public sealed class GamePreview : ContentControl
         var width = stage.ActualWidth;
         var height = stage.ActualHeight;
         if (width <= 0 || height <= 0) return;
-        area.Margin = new Thickness(width * region.Left, height * region.Top, 0, 0);
-        area.Width = Math.Max(0, width * (region.Right - region.Left));
-        area.Height = Math.Max(0, height * (region.Bottom - region.Top));
-        lineBox.Margin = new Thickness(width * 0.15, height * 0.34, width * 0.15, 0);
+        var rect = new Rect(width * region.Left, height * region.Top, Math.Max(0, width * (region.Right - region.Left)), Math.Max(0, height * (region.Bottom - region.Top)));
+        area.Margin = new Thickness(rect.Left, rect.Top, 0, 0);
+        area.Width = rect.Width;
+        area.Height = rect.Height;
+        // Plaka okunan alanın ortasında; alan çok inceyse perdenin alt beşte birinde (Mac plateY).
+        plate.MaxWidth = width * 0.78;
+        plate.Measure(new Size(plate.MaxWidth, double.PositiveInfinity));
+        var center = rect.Height > 24 ? Math.Min(Math.Max(rect.Top + rect.Height / 2, height * 0.12), height * 0.9) : height * 0.82;
+        plate.Margin = new Thickness(0, Math.Max(0, center - plate.DesiredSize.Height / 2), 0, 0);
     }
 }
 

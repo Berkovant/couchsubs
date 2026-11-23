@@ -46,7 +46,7 @@ public static class Program
                 StartupGuard.Log("Velopack başlatılamadı", error);
             }
             // Güncelleme denetimi ana pencereden yürür; önceki açılış pencereye ulaşmadıysa arayüzden önce burada denenir.
-            if (args is not ["--render-screens", _]) RescueUpdate.BeforeLaunch();
+            if (args is not ["--render-screens", _] and not ["--olc-bosta", _, _]) RescueUpdate.BeforeLaunch();
             return RunApp();
         }
         catch (Exception error)

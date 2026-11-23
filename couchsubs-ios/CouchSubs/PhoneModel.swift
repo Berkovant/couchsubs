@@ -80,7 +80,10 @@ final class PhoneModel: ObservableObject {
     }
 
     // Çalışma durumu
-    @Published private(set) var isRunning = false
+    /// Çeviri sürüyor; hareket kapısı (Perde) bunu bütün ekranlara duyurur: sürerken sürekli animasyonlar durur.
+    @Published private(set) var isRunning = false {
+        didSet { if isRunning != oldValue { DSMotionState.shared.translating = isRunning } }
+    }
     @Published private(set) var isStarting = false
     /// Deneme modu: konsol yerine uygulamadaki örnek kareler okunur (`DemoFrameSource`); kurulum gerekmez.
     @Published private(set) var demoMode = false

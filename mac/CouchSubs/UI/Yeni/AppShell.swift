@@ -10,8 +10,9 @@ enum ShellTab: Hashable {
     case home, history, settings
 }
 
-/// Yeni arayüzün kabuğu: 72 pt üst çubuk (logo, Ana Ekran/Geçmiş/Ayarlar sekmeleri, durum hapı), içerik ve altta
-/// reklam bandı. En küçük pencere 1200 × 760; büyüyünce içerik en fazla 1680 genişlikte ortalanır.
+/// Yeni arayüzün kabuğu: cam üst çubuk (başlık çubuğu + 72 pt logo, Ana Ekran/Geçmiş/Ayarlar sekmeleri, durum hapı),
+/// tam boy içerik ve cam alt çubukta reklam bandı. En küçük pencere 1200 × 760; büyüyünce içerik en fazla 1680
+/// genişlikte ortalanır, cam çubuklar pencere boyu.
 struct AppShell: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -26,30 +27,61 @@ struct AppShell: View {
                 })
     }
 
+    /// Üst cam çubuk: başlık çubuğu (trafik ışıkları) + 72 pt sekme satırı.
+    static var topBar: CGFloat { DSChrome.titlebar + DS.size("header") }
+    /// Alt cam çubuk: reklam bandı ve çevresindeki boşluk (reklam yoksa çubuk da yok).
+    static var bottomBar: CGFloat { AdCatalog.band.isEmpty ? 0 : DS.size("adBand") + DS.space("xs") + DS.space("m") }
+
     var body: some View {
-        VStack(spacing: 0) {
-            ShellHeader(tab: tab)
-            Group {
-                switch tab.wrappedValue {
-                case .home: HomeView()
-                case .history: HistoryPage()
-                case .settings: SettingsPage(section: Binding(get: { model.settingsSection }, set: { model.settingsSection = $0 }))
-                }
+        // Sayfa pencerenin tamamını kaplar; üst ve alt çubuk camdır, içerik ikisinin de arkasından kayar (iOS gibi).
+        Group {
+            switch tab.wrappedValue {
+            case .home: HomeView()
+            case .history: HistoryPage()
+            case .settings: SettingsPage(section: Binding(get: { model.settingsSection }, set: { model.settingsSection = $0 }))
             }
-            .transition(.opacity)
-            .id(tab.wrappedValue)
-            // İçerik pencereden uzun olsa da üst çubuk ve reklam bandı yerinde kalır (kartlar kendi içinde kayar).
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-            .clipped()
-            DSAdBand()
-                .padding(.horizontal, DS.space("l"))
-                .padding(.top, DS.space("xs"))
-                .padding(.bottom, DS.space("m"))
         }
+        .transition(.opacity)
+        .id(tab.wrappedValue)
+        .environment(\.dsChromeInsets, EdgeInsets(top: Self.topBar, leading: 0, bottom: Self.bottomBar, trailing: 0))
         .frame(maxWidth: DS.size("contentMax"))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: DSChrome.titlebar)
+                ShellHeader(tab: tab).frame(maxWidth: DS.size("contentMax"))
+            }
+            .frame(maxWidth: .infinity)
+            .background(DSGlassBar(edge: .top))
+        }
+        .overlay(alignment: .bottom) {
+            if Self.bottomBar > 0 {
+                DSAdBand()
+                    .padding(.horizontal, DS.space("l"))
+                    .padding(.top, DS.space("xs"))
+                    .padding(.bottom, DS.space("m"))
+                    .frame(maxWidth: DS.size("contentMax"))
+                    .frame(maxWidth: .infinity)
+                    .background(DSGlassBar(edge: .bottom))
+            }
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .background(DSFullSizeWindow())
+        // Ortam ışığı: amber, şeftali ve gök mavisi lekeler çok yavaş süzülür (Core Animation) — yalnız Ana Ekran'da;
+        // Geçmiş ve Ayarlar'da aynı lekeler durağan (boşta ≤ %2 işlemci). Çeviri sürerken, hareketi azaltta ve pencere
+        // arka plandayken her sayfada durağan.
+        .background {
+            if tab.wrappedValue == .home {
+                DSAmbientGlow(intensity: 0.8)
+            } else {
+                DSAmbientGlow(intensity: 0.8).environment(\.dsMotionGate, DSMotionGate(reduced: true))
+            }
+        }
         .background(Color.dsBackground)
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: tab.wrappedValue)
+        // Tek hareket kapısı: çeviri sürerken, hareketi azaltta, Geçiş Animasyonları kapalıyken ya da pencere önde
+        // değilken sürekli animasyonlar durur.
+        .dsMotionGate(translating: model.isRunning)
         .environment(\.dsMotionOff, !model.settings.transitionAnimations)
         .overlay {
             if let popupAd {
@@ -90,7 +122,7 @@ private struct ShellHeader: View {
             HStack(spacing: DS.space("xs")) {
                 let status = ShellStatus(model: model)
                 LogCopyButton()
-                DSStatusPill(text: status.text, dot: status.dot)
+                DSStatusPill(text: status.text, dot: status.dot, pulse: status.live)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -177,6 +209,8 @@ private struct LogCopyButton: View {
 struct ShellStatus {
     let text: LocalizedStringKey
     let dot: Color
+    /// Çeviri sorunsuz akıyor: nokta canlı nabız atar (ekrandaki tek sürekli animasyon).
+    var live = false
 
     @MainActor init(model: AppModel) {
         if model.demoMode {
@@ -184,7 +218,8 @@ struct ShellStatus {
         } else if model.isRunning {
             switch model.sessionState {
             case .streaming:
-                (text, dot) = HomeProblem.current(model) == nil ? ("Translation On", .dsSuccess) : ("Needs Attention", .dsLive)
+                (text, dot) = HomeProblem.current(model) == nil ? ("Translation On", .dsLiveDot) : ("Needs Attention", .dsLive)
+                live = HomeProblem.current(model) == nil
             case .connecting:
                 (text, dot) = ("Connecting…", .dsAmber)
             case .disconnected:

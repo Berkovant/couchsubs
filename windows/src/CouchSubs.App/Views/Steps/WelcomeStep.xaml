@@ -10,13 +10,23 @@
                   Message="{t:T 'CouchSubs gets the picture from the console over your local network. Nothing is installed on your console.'}">
         <c:SpacedStack Gap="l">
             <UniformGrid Rows="1">
-                <RadioButton x:Name="Ps5" Style="{StaticResource ConsoleCard}" Tag="PS5" GroupName="consoleKind" Margin="{t:Sp '0,0,s,0'}" Checked="OnSelected">
+                <!-- Kartın üstünde 64'lük renkli simge karesi (Perde): PS5 gök mavisi, Xbox zeytin, pencere şeftali; seçiliyken amber. -->
+                <RadioButton x:Name="Ps5" Style="{StaticResource ConsoleCard}" GroupName="consoleKind" Margin="{t:Sp '0,0,s,0'}" Checked="OnSelected">
+                    <RadioButton.Tag>
+                        <c:IconSquare Glyph="&#xE7FC;" Tone="Sky" Size="64" />
+                    </RadioButton.Tag>
                     <c:SectionTitle Title="PlayStation 5" Text="{t:T 'With Remote Play'}" />
                 </RadioButton>
-                <RadioButton x:Name="Xbox" Style="{StaticResource ConsoleCard}" Tag="Xbox" GroupName="consoleKind" Margin="{t:Sp 'xs,0,xs,0'}" Checked="OnSelected">
+                <RadioButton x:Name="Xbox" Style="{StaticResource ConsoleCard}" GroupName="consoleKind" Margin="{t:Sp 'xs,0,xs,0'}" Checked="OnSelected">
+                    <RadioButton.Tag>
+                        <c:IconSquare Glyph="&#xE7FC;" Tone="Olive" Size="64" />
+                    </RadioButton.Tag>
                     <c:SectionTitle Title="{t:T 'Xbox Series'}" Text="{t:T 'With Remote Features'}" />
                 </RadioButton>
-                <RadioButton x:Name="GameWindow" Style="{StaticResource ConsoleCard}" Tag="{t:T 'Window'}" GroupName="consoleKind" Margin="{t:Sp 's,0,0,0'}" Checked="OnWindow">
+                <RadioButton x:Name="GameWindow" Style="{StaticResource ConsoleCard}" GroupName="consoleKind" Margin="{t:Sp 's,0,0,0'}" Checked="OnWindow">
+                    <RadioButton.Tag>
+                        <c:IconSquare Glyph="&#xE8A7;" Tone="Peach" Size="64" />
+                    </RadioButton.Tag>
                     <c:SectionTitle Title="{t:T 'Game Window'}" Text="{t:T 'Remote Play, OBS, Capture Card'}" />
                 </RadioButton>
             </UniformGrid>

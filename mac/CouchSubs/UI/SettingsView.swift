@@ -700,6 +700,9 @@ struct GamePacksPage: View {
     @State private var updating = false
     @State private var updateResult: PackUpdateAlert?
     @State private var showUpdateResult = false
+    /// Kurulduğu az önce görülen paketin adı ("Paket kuruldu" başarı anı).
+    @State private var celebrated: String?
+    @State private var knownPacks: Set<String> = []
     private let columns = [GridItem(.flexible(), spacing: Theme.space("gap"), alignment: .top),
                            GridItem(.flexible(), spacing: Theme.space("gap"), alignment: .top)]
     private let importTypes: [UTType] = [.json, .plainText] + [UTType(filenameExtension: "srt")].compactMap { $0 }
@@ -754,29 +757,55 @@ struct GamePacksPage: View {
                         subtitle: "If no pack recognises the game, asked once two minutes after translation starts.",
                         isOn: $model.settings.askGame, divider: false)
         }
-        DSCard(spacing: DS.space("xxs"), scrolls: false) {
+        DSCard(spacing: DS.space("m"), scrolls: false) {
             DSCardHeader(LocalizedStringKey(model.installedPacks.isEmpty ? "Installed packs"
                                             : String(format: String(localized: "Installed packs · %lld"), GameCatalog.packShelf(model.installedPacks).count))) {
                 // Telefonlardaki "Paketleri şimdi güncelle" (Packs.swift): beklerken "Güncelleniyor…", sonuç uyarıda.
                 Button(updating ? "Updating Packs…" : "Update Packs Now", action: updateNow)
-                    .buttonStyle(.dsSecondary)
+                    .buttonStyle(DSButtonStyle(kind: .compact, busy: updating))
                     .disabled(updating || !model.canUpdatePacks)
                 Button("Import Pack…") {
                     importError = nil
                     choosingImport = true
                 }
-                .buttonStyle(.dsSecondary)
+                .buttonStyle(DSButtonStyle(kind: .compact, busy: readingImport))
                 .disabled(readingImport)
             }
             if let importError {
-                Text(verbatim: importError).font(.dsSmall).foregroundStyle(Color.dsLive)
+                DSNoticeBox(tone: .error, text: LocalizedStringKey(importError))
+            }
+            if let celebrated {
+                // "Paket kuruldu" başarı anı (≤ 1 sn ışın + yaylı tik); birkaç saniye sonra raf geri gelir.
+                DSSuccessMoment(title: "Pack Installed", message: LocalizedStringKey(celebrated))
+                    .padding(.vertical, DS.space("m"))
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
             if model.installedPacks.isEmpty {
                 Text("No game pack is installed.").dsMuted()
             } else {
-                // Oyunun "(ek satırlar)" paketi asıl paketin satırında (#353).
-                ForEach(GameCatalog.packShelf(model.installedPacks)) { pack in PackTile(pack: pack) }
+                // Kapak rafı (Perde): 3:4 kapaklar; şu an oynanan oyunun kapağı amber halka + kapak ışımasıyla seçili.
+                // Oyunun "(ek satırlar)" paketi asıl paketin kapağında (#353).
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: DS.space("m"), alignment: .top)],
+                          alignment: .leading, spacing: DS.space("l")) {
+                    ForEach(GameCatalog.packShelf(model.installedPacks)) { pack in
+                        PackTile(pack: pack, playing: pack.titles.contains { GameName.key($0) == GameName.key(model.gameChoice.game?.name ?? "") })
+                    }
+                }
+                .padding(.vertical, DS.space("xs"))
             }
+        }
+        .animation(DS.animation(.page, reduced: !model.settings.transitionAnimations), value: celebrated)
+        .onChange(of: GameCatalog.packShelf(model.installedPacks).map(\.id)) { ids in
+            // Yeni paket geldiyse (içe aktarma, güncelleme) başarı anı; ilk yükleme ve silme sayılmaz.
+            defer { knownPacks = Set(ids) }
+            guard !knownPacks.isEmpty, let added = GameCatalog.packShelf(model.installedPacks).first(where: { !knownPacks.contains($0.id) }) else { return }
+            celebrated = added.title
+        }
+        .onAppear { knownPacks = Set(GameCatalog.packShelf(model.installedPacks).map(\.id)) }
+        .task(id: celebrated) {
+            guard celebrated != nil else { return }
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            celebrated = nil
         }
     }
 
@@ -920,6 +949,8 @@ struct GamePackImportSheet: View {
 /// Paket karosu: oyunun kısaltması, adı ve satır sayısı.
 struct PackTile: View {
     let pack: PackShelfItem
+    /// Şu an oynanan oyunun paketi: kapak seçili (amber halka + kapak ışıması).
+    var playing = false
     /// Kapak değişince karo yeniden çizilir (dosya aynı adla değişir).
     @State private var coverVersion = 0
     @State private var coverFailed = false
@@ -938,25 +969,16 @@ struct PackTile: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.space("m")) {
-            // Kapak ya da baş harfler; tıklayınca kapak seçilir, sağ tıkta seç/kaldır (Windows ile aynı).
+        VStack(alignment: .leading, spacing: DS.space("xs")) {
+            // Kapak (Perde oyun kapağı; görsel yoksa adından türeyen degrade); tıklayınca kapak seçilir, sağ tıkta seç/kaldır
+            // (Windows ile aynı).
             Button(action: chooseCover) {
-                Group {
-                    if let cover {
-                        Image(nsImage: cover).resizable().scaledToFill()
-                    } else {
-                        Text(verbatim: initials)
-                            .font(.csCaption.weight(.semibold))
-                            .foregroundStyle(Color.csText)
-                    }
-                }
-                .frame(width: 40, height: 40)
-                .background(Color.dsField)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radius("inner"), style: .continuous))
+                DSGameCover(title: pack.title, image: cover.map { Image(nsImage: $0) }, status: playing ? "Playing" : nil,
+                            selected: playing, width: 120)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("cover")))
             .help(Text("Choose game cover…"))
-            .accessibilityLabel(Text("Choose game cover…"))
+            .accessibilityLabel(Text(verbatim: pack.title))
             .contextMenu {
                 Button("Choose game cover…", action: chooseCover)
                 Button("Remove game cover") {
@@ -965,20 +987,19 @@ struct PackTile: View {
                 }
                 .disabled(cover == nil)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: pack.title).font(.dsBody.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: DS.space("xxs")) {
+                Circle().fill(Color.dsSuccess).frame(width: 6, height: 6).accessibilityHidden(true)
                 Text(verbatim: String(format: String(localized: "%@ lines"), pack.entries.formatted()))
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundStyle(Color.dsMuted)
-                if coverFailed {
-                    Text("The game cover could not be saved.").font(.dsCaption).foregroundStyle(Color.dsLive)
-                }
+                    .lineLimit(1)
             }
-            Spacer(minLength: 0)
-            DSBadge(text: "Installed", tone: .ok)
+            if coverFailed {
+                Text("The game cover could not be saved.").font(.dsCaption).foregroundStyle(Color.dsLive)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: DS.size("row"), alignment: .leading)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsTileBorder).frame(height: 1) }
+        .frame(width: 120, alignment: .leading)
     }
 
     /// Resim seçilir, ortasından kare kesilip 128 piksellik PNG olarak kaydedilir (Windows ChoosePackCover ile aynı).

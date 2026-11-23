@@ -41,7 +41,7 @@ public sealed class AppearanceEditor : Grid
 
     private readonly AppController controller;
     private readonly StackPanel previewLines = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Margin = Sp.T("m") };
-    private readonly TextBlock lowContrast = new();
+    private readonly Callout lowContrast = new() { Tone = CalloutTone.Attention, Visibility = Visibility.Collapsed };
     private readonly TextBlock sizeValue = new();
     private readonly Slider size = new() { Minimum = 16, Maximum = 50, SmallChange = 1, LargeChange = 4, IsSnapToTickEnabled = true, TickFrequency = 1 };
     private readonly TextBlock backgroundName = new();
@@ -69,12 +69,11 @@ public sealed class AppearanceEditor : Grid
         var l = Localizer.Current;
 
         // Sol: önizleme (Mac: "TV'deki altyazılar" kartı).
-        var frame = new Border { Child = previewLines };
-        frame.SetResourceReference(StyleProperty, "DeviceFrame");
+        // Perde önizlemesi: sıcak sahne + projeksiyon ışığı, 20 köşe; sol üstte cam "Canlı Önizleme" hapı; altyazı ayarların
+        // renk, zemin ve boyuyla (TV'de nasılsa öyle).
         var preview = new SpacedStack();
-        preview.Children.Add(new AspectBox { Child = frame });
+        preview.Children.Add(new AspectBox { Child = PerdeStage(previewLines, l["Live Preview"]) });
         lowContrast.Text = l["The text color is too close to the background; it may be hard to read on the TV."];
-        lowContrast.SetResourceReference(StyleProperty, "ErrorText");
         preview.Children.Add(lowContrast);
         preview.Children.Add(Hint("The settings apply the same on the TV, phone and computer screen.", new Thickness(0)));
         // Mac SubtitleLookSettings: önizlemenin altında "Deneme Altyazısı Gönder".
@@ -89,7 +88,7 @@ public sealed class AppearanceEditor : Grid
         // Yazı boyutu (DSSliderRow): başlık solda, değer sağda (mono), çubuk altta, uçlarda 16 / 50.
         var sizeUnit = new StackPanel();
         var sizeHead = new DockPanel { Margin = Sp.T("0", "0", "0", "unitTitle") };
-        sizeValue.SetResourceReference(StyleProperty, "MonoText");
+        sizeValue.SetResourceReference(StyleProperty, "SliderValueText");
         sizeValue.VerticalAlignment = VerticalAlignment.Bottom;
         DockPanel.SetDock(sizeValue, Dock.Right);
         sizeHead.Children.Add(sizeValue);
@@ -302,9 +301,11 @@ public sealed class AppearanceEditor : Grid
             var line = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = Math.Round(size.Value * 0.5), Foreground = new SolidColorBrush(fg), TextAlignment = TextAlignment.Center };
             line.Inlines.Add(new System.Windows.Documents.Run(Sample[i].Name + ":") { Foreground = new SolidColorBrush(nameColor) });
             line.Inlines.Add(new System.Windows.Documents.Run(" " + Sample[i].Line));
+            // Zeminsizken okunurluk gölgesi; zeminliyken plakanın yumuşak gölgesi (Mac SubtitlePreviewBox).
             if (bg is null) line.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 3, ShadowDepth = 1, Opacity = 0.85, Color = Colors.Black };
             previewLines.Children.Add(new Border
             {
+                Effect = bg is null ? null : new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 5, Direction = 270, Opacity = 0.3, Color = Colors.Black },
                 Child = line, Padding = Sp.T("s", "titleBody", "s", "titleBody"), CornerRadius = new CornerRadius(10), Margin = Sp.T("0", "titleBody", "0", "0"), HorizontalAlignment = HorizontalAlignment.Center,
                 Background = bg is { } color ? new SolidColorBrush(Color.FromArgb((byte)(darkness * 255), color.R, color.G, color.B)) : Brushes.Transparent,
             });
@@ -313,6 +314,32 @@ public sealed class AppearanceEditor : Grid
         var scene = Rgb(109, 106, 93);
         var mixed = bg is { } b2 ? Mix(b2, scene, darkness) : scene;
         lowContrast.Visibility = Contrast(fg, mixed) < 4.5 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Perde sahnesi (Mac SubtitlePreviewBox): sıcak sahne degradesi + durağan projeksiyon ışığı, 20 köşe ve ince beyaz kıl
+    /// çizgi; içerik altta; isteğe bağlı sol üstte cam hap (ör. "Canlı Önizleme").
+    /// </summary>
+    internal static FrameworkElement PerdeStage(UIElement content, string? pill)
+    {
+        var stage = new Grid { Background = PerdeBrushes.Scene() };
+        stage.Children.Add(new ProjectorLight());
+        stage.Children.Add(content);
+        if (pill is not null)
+            stage.Children.Add(new Chip
+            {
+                Text = pill, Tone = ChipTone.Glass, ShowDot = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Margin = Sp.T("s"),
+            });
+        var radius = Palette.Radius.GetValueOrDefault("preview", 20);
+        var frame = new Grid();
+        frame.Children.Add(new RoundClip { Radius = radius, Child = stage });
+        frame.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(radius), BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
+        });
+        return frame;
     }
 
     private static Color Mix(Color top, Color under, double alpha) =>

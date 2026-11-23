@@ -39,7 +39,6 @@
       "PS5 connection": "Yerleşim farkı: bkz. 'Notifications'.",
       "Fast and cheap (recommended)": "Android aynı seçeneği kısa adla gösterir: 'Fast (recommended)' (settings_model_fast, ProfileScreens dışından seçilir).",
       "Better quality, a little slower": "Android aynı seçeneği kısa adla gösterir: 'Better quality, slower'.",
-      "Free, no account needed": "Yerleşim farkı: iPhone motor kutusundaki açıklama; Android motor açıklamasını motor seçicisinde verir.",
       "Enter the 4-digit passcode.": "Android şifre alanı yalnız rakam ve en çok 4 hane alır, her tuşta kaydeder; eksik şifre uyarısı yerine 'Kaydedildi' etiketi 4 hanede görünür.",
       "Passcode saved.": "bkz. 'Enter the 4-digit passcode.' (Android'de 'Kaydedildi' etiketi).",
       "Remove passcode": "Android'de alan boşaltılınca şifre silinir (her tuşta kaydedilir).",
@@ -72,7 +71,7 @@
       "Copy": "Yeni arayüz: iPhone'da kopyala simgesi adres kutusunun içinde (DSCopyField, couchsubs-ios/CouchSubs/UI/Yeni); Profile.swift'te düğme metni olarak geçmez.",
       "Copied": "bkz. 'Copy'.",
       "Close": "Android Hakkında penceresinin kapatma düğmesi; iPhone Hakkında ekranı geri düğmesiyle kapanır.",
-      "CouchSubs · © 2026 Sinan Yorulmaz · AGPL-3.0 · Enmera": "Android Ayarlar'ın alt satırı; iPhone aynı bilgiyi Profil'in altında Text(verbatim:) ile verir.",
+      "© 2026 Enmera · AGPL-3.0": "Ayarlar'ın künye satırı; iPhone aynı bilgiyi Text(verbatim:) ile verir (sürüm numarası çalışırken eklenir).",
       "HDMI %1$d": "Aynı metin: iPhone sekme ve rozette ara değerle yazar (\"HDMI \\(n)\"), katalog anahtarı yok; Android'de biçim metni.",
       "Game packs": "Aynı satır: Android'de Oyun Paketleri sayfasından paket listesine giden satır; iPhone'da Oyun Paketleri bölümü doğrudan paketler sayfasını açar, başlığı Packs.swift'te 'Game packs'."
     }
@@ -82,6 +81,7 @@
     "android_iphone": {}
   },
   "mac_settings_on_iphone": {
+    "Live Preview": "Ayar değil, Altyazı Görünümü önizlemesinin üstündeki etiket (Perde, Mac adım 4). iPhone Perde ekranları (adım 5) aynı etiketi alacak; o zaman bu satır silinir.",
     "%@ pauses or resumes the live subtitle translation, which helps when you translate areas.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat).",
     "Press %@ while playing: every text on the screen is translated once and shown on the TV in its own place. Press again to remove the translations.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat).",
     "Press %@ while playing: the picture freezes on the PC, drag over any part of it to translate that part once. Esc closes.": "Klavye kısayolu (fiziksel: telefonda klavye yok). Telefondaki karşılığı çeviri ekranındaki düğmelerdir (Ekranı çevir, duraklat). Serbest alan fareyle donmuş PC görüntüsünde seçilir.",

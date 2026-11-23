@@ -7,46 +7,8 @@ import SwiftUI
 // aynı dosyayı okur. Ekranlar sabit renk ya da ölçü yazmaz, buradaki adları kullanır. Metinler: design/yeni-arayuz/METINLER.md.
 // Eski ekranların Theme/Components'i iPhone'la ortaktır ve değişmez.
 
-struct DSTokens: Decodable {
-    struct ColorPair: Decodable {
-        let light: String
-        let dark: String
-    }
-
-    struct FontToken: Decodable {
-        let size: Double
-        let weight: String
-        let tracking: Double?
-        let design: String?
-    }
-
-    struct Motion: Decodable {
-        let short: Double
-        let medium: Double
-        let page: Double
-        let reduced: Double
-        let enter: [Double]
-        let exit: [Double]
-        let adRotate: Double
-    }
-
-    let color: [String: ColorPair]
-    let font: [String: FontToken]
-    let mutedTracking: Double
-    let space: [String: Double]
-    let radius: [String: Double]
-    let size: [String: Double]
-    let motion: Motion
-
-    /// "#RRGGBB" ya da "#RRGGBBAA" → 0–1 aralığında kırmızı, yeşil, mavi, saydamlık.
-    static func rgba(_ hex: String) -> (Double, Double, Double, Double)? {
-        guard hex.first == "#", hex.count == 7 || hex.count == 9, let value = UInt64(hex.dropFirst(), radix: 16) else { return nil }
-        if hex.count == 7 {
-            return (Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255, 1)
-        }
-        return (Double(value >> 24 & 0xFF) / 255, Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255)
-    }
-}
+// DSTokens (dosyanın okunuşu) iPhone'la ortak: DSTokens.swift. Perde belirteçleri, hareket kapısı ve yeni bileşenler:
+// Perde.swift (o da ortak).
 
 enum DS {
     static let tokens: DSTokens = {
@@ -144,6 +106,9 @@ extension Color {
     static let dsLiveSoft = DS.color("liveSoft")
     static let dsLiveRing = DS.color("liveRing")
     static let dsLiveDot = DS.color("liveDot")
+    /// Çeviriyi durduran dolu düğme (Durdur): canlı turuncu-kırmızı zemin, beyaz yazı (iki temada ≥ 3:1, kalın yazı).
+    static let dsStopFill = DS.color("stopFill")
+    static let dsOnStop = DS.color("onStop")
     static let dsScreenFrame = DS.color("screenFrame")
     static let dsScrim = DS.color("scrim")
     static let dsPeach = DS.color("peach")

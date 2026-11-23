@@ -2,6 +2,7 @@
 
 import AppKit
 import CouchSubsCore
+import SwiftUI
 import XCTest
 @testable import CouchSubs
 
@@ -14,6 +15,186 @@ final class NewDesignTests: XCTestCase {
         XCTAssertEqual(DS.size("windowHeight"), 760)
         XCTAssertNotNil(DS.tokens.color["amber"])
         XCTAssertEqual(DSTokens.rgba("#F5B83D33")?.3 ?? 0, 0.2, accuracy: 0.01)
+    }
+
+    /// tasarim.json v2 (Perde): koyu tema varsayılan, yeni renk/efekt/hareket belirteçleri okunuyor, eski anahtarlar duruyor.
+    func testPerdeTokensLoad() {
+        let tokens = DS.tokens
+        XCTAssertEqual(tokens.version, 2)
+        XCTAssertEqual(tokens.defaultTheme, "dark")
+        for name in ["surfaceRaised", "surfaceHigh", "segPill", "borderStrong", "topHighlight", "amberGlow", "amberRing", "info",
+                     "infoSoft", "infoText", "glass", "glassBorder", "charTeal", "charPeach", "subtitlePlate", "subtitleText", "coverScrim"] {
+            XCTAssertNotNil(tokens.color[name], name)
+        }
+        // v1 anahtarları korunur (Windows ve eski ekranlar okur).
+        for name in ["background", "surface", "field", "border", "text", "muted", "amber", "amberText", "live", "liveDot", "peach", "sky"] {
+            XCTAssertNotNil(tokens.color[name], name)
+        }
+        XCTAssertEqual(tokens.motion.celebrate, 600)
+        XCTAssertEqual(tokens.motion.livePulse, 1600)
+        XCTAssertEqual(tokens.motion.spring, [0.34, 1.56, 0.64, 1])
+        XCTAssertEqual(DS.effect("ambientBlobs", "maxFps", 0), 15)
+        XCTAssertEqual(DS.effect("sheen", "period", 0), 1800)
+        XCTAssertEqual(DS.size("coverAspect"), 0.75, accuracy: 0.001)
+        XCTAssertNil(tokens.font["ios"], "iPhone metin stilleri fontIOS'ta; font bölümünde yalnız düz yazı biçimleri")
+        // Bütün renkler okunabilir onaltılık değer.
+        for (name, pair) in tokens.color {
+            XCTAssertNotNil(DSTokens.rgba(pair.light), name)
+            XCTAssertNotNil(DSTokens.rgba(pair.dark), name)
+        }
+    }
+
+    /// Geçmiş satırları (kullanıcı şikâyeti: koyu temada soluk): çeviri ≥ 7:1, İngilizce ve saat ≥ 4.5:1; iki temada, kart
+    /// yüzeyinde ve seçili satırın amber zemininde. Durdur düğmesi: beyaz yazı dolu zeminde ≥ 3:1 (kalın 15 pt+).
+    func testHistoryRowAndStopContrast() {
+        let tokens = DS.tokens
+        var failures: [String] = []
+        for mode in ["light", "dark"] {
+            func hex(_ name: String) -> String { mode == "light" ? tokens.color[name]!.light : tokens.color[name]!.dark }
+            for back in ["surface", "amberSoft"] {
+                for (token, minimum) in [(HistoryRowStyle.translationToken, 7.0), (HistoryRowStyle.sourceToken, 4.5),
+                                         (HistoryRowStyle.timeToken, 4.5)] {
+                    let ratio = DSTokens.contrast(hex(token), hex(back), over: hex("surface"))
+                    if ratio < minimum { failures.append("\(mode) \(token) / \(back): \(String(format: "%.2f", ratio))") }
+                }
+            }
+            let stop = DSTokens.contrast(hex("onStop"), hex("stopFill"), over: hex("background"))
+            if stop < 3 { failures.append("\(mode) onStop / stopFill: \(String(format: "%.2f", stop))") }
+        }
+        XCTAssertEqual(failures, [])
+    }
+
+    /// Kaydırıcı hizası: iz tam genişlik, uç etiketleri kenarlarda. Sol kenar = başlığın sol kenarı = "16"nın sol kenarı;
+    /// sağ kenar = değer yazısının ve "50"nin sağ kenarı (fark ≤ 1 pt). Hem hesap hem gerçek çizim (piksel) ölçülür.
+    func testSliderAlignsWithLabels() throws {
+        XCTAssertEqual(DSSlider.trackSpan(width: 300), 0...300)
+        XCTAssertEqual(DSSlider.knobCenter(fraction: 0, width: 300), 0)
+        XCTAssertEqual(DSSlider.knobCenter(fraction: 1, width: 300), 300)
+        func render(_ value: Double) throws -> (CGImage, CGFloat) {
+            let view = VStack(alignment: .leading, spacing: 4) {
+                DSSlider(value: .constant(value), range: 16...50, step: 1)
+                DSSliderRange(low: "16", high: "50")
+            }
+            .frame(width: 300)
+            .padding(40)
+            .background(Color(red: 1, green: 0, blue: 1))
+            .environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            return (try XCTUnwrap(renderer.cgImage), 2)
+        }
+        func pixels(_ image: CGImage) -> (Int, Int, (Int, Int) -> (Int, Int, Int)) {
+            let data = CFDataGetBytePtr(image.dataProvider!.data!)!
+            let bpr = image.bytesPerRow, bpp = image.bitsPerPixel / 8
+            return (image.width, image.height, { x, y in
+                let i = y * bpr + x * bpp
+                return (Int(data[i]), Int(data[i + 1]), Int(data[i + 2]))
+            })
+        }
+        func isMagenta(_ p: (Int, Int, Int)) -> Bool { p.0 > 200 && p.1 < 60 && p.2 > 200 }
+        // Değer en büyükken amber iz soldan başlar; en küçükken iz (alan rengi) sağ kenara kadar uzanır.
+        let (full, scale) = try render(50)
+        let (fw, _, fp) = pixels(full)
+        let row = Int((40 + 12) * scale)
+        let firstLeft = (0..<fw).first { !isMagenta(fp($0, row)) }.map { CGFloat($0) / scale }
+        XCTAssertEqual(try XCTUnwrap(firstLeft), 40, accuracy: 1, "izin sol ucu")
+        let (empty, _) = try render(16)
+        let (ew, eh, ep) = pixels(empty)
+        let lastRight = (0..<ew).last { !isMagenta(ep($0, row)) }.map { CGFloat($0 + 1) / scale }
+        XCTAssertEqual(try XCTUnwrap(lastRight), 340, accuracy: 1, "izin sağ ucu")
+        // Uç etiketleri: "16"nın mürekkebi sol kenarda, "50"ninki sağ kenarda başlar/biter (yazı iç boşluğu ≤ 1 pt).
+        let labelRows = Int((40 + 24 + 4) * scale)..<min(eh, Int((40 + 24 + 4 + 16) * scale))
+        var inkLeft = CGFloat.infinity, inkRight: CGFloat = 0
+        for y in labelRows {
+            for x in 0..<ew where !isMagenta(ep(x, y)) {
+                inkLeft = min(inkLeft, CGFloat(x) / scale)
+                inkRight = max(inkRight, CGFloat(x + 1) / scale)
+            }
+        }
+        XCTAssertEqual(inkLeft, 40, accuracy: 1.5, "16 etiketinin sol kenarı")
+        XCTAssertEqual(inkRight, 340, accuracy: 1.5, "50 etiketinin sağ kenarı")
+    }
+
+    /// Tipografik kapak kısaltmaları (gerçek kapak/logo yok): oyunun adından kararlı ve kısa.
+    func testCoverMonogram() {
+        XCTAssertEqual(DSCoverArt.monogram("GTA V"), "GTA")
+        XCTAssertEqual(DSCoverArt.numeral("GTA V"), "V")
+        XCTAssertEqual(DSCoverArt.monogram("Grand Theft Auto VI"), "GTA")
+        XCTAssertEqual(DSCoverArt.numeral("Grand Theft Auto VI"), "VI")
+        XCTAssertEqual(DSCoverArt.monogram("Red Dead Redemption 2"), "RDR")
+        XCTAssertEqual(DSCoverArt.numeral("Red Dead Redemption 2"), "2")
+        XCTAssertEqual(DSCoverArt.monogram("Mafia"), "Ma")
+        XCTAssertNil(DSCoverArt.numeral("Mafia"))
+        XCTAssertEqual(DSCoverArt.monogram("Assassin's Creed Shadows"), "ACS")
+        XCTAssertEqual(DSCoverArt.monogram("Cyberpunk 2077"), "Cy")
+        XCTAssertEqual(DSCoverArt.paletteIndex("GTA V"), DSCoverArt.paletteIndex("GTA V"))
+    }
+
+    /// Perde kontrastı: her yazı rengi her yüzeyde, her iki temada en az 4.5:1 (WCAG AA). Saydam zeminler altlarındaki
+    /// yüzeye karıştırılarak ölçülür. Soluk (faint) yalnız süs/ikincil etiket olduğundan dışarıda.
+    func testPerdeTextContrast() {
+        let tokens = DS.tokens
+        var failures: [String] = []
+        func check(_ text: String, on back: String, over base: String = "background", minimum: Double = 4.5) {
+            for mode in ["light", "dark"] {
+                func hex(_ name: String) -> String { mode == "light" ? tokens.color[name]!.light : tokens.color[name]!.dark }
+                let ratio = DSTokens.contrast(hex(text), hex(back), over: hex(base))
+                if ratio < minimum { failures.append("\(mode) \(text) / \(back): \(String(format: "%.2f", ratio))") }
+            }
+        }
+        for text in ["text", "muted", "amberText", "successText", "liveText", "infoText"] {
+            for back in ["background", "surface", "surfaceRaised", "surfaceHigh", "field"] { check(text, on: back) }
+        }
+        check("amberText", on: "amberSoft", over: "surface")
+        check("successText", on: "successSoft", over: "surface")
+        check("liveText", on: "liveSoft", over: "surface")
+        check("infoText", on: "infoSoft", over: "surface")
+        check("text", on: "segPill")
+        check("onAmber", on: "amber")
+        check("onCharcoal", on: "charcoal")
+        // Altyazı plakası her temada aynı; en kötü durum açık sahne (beyaz) üstü.
+        for mode in [DS.tokens.color["subtitlePlate"]!.light, DS.tokens.color["subtitlePlate"]!.dark] {
+            let ratio = DSTokens.contrast(tokens.color["subtitleText"]!.dark, mode, over: "#FFFFFF")
+            if ratio < 7 { failures.append("subtitleText / subtitlePlate: \(ratio)") }
+        }
+        // Karakter adı renkleri kendi temalarının zemininde.
+        for name in ["charTeal", "charPeach"] {
+            check(name, on: "background")
+            check(name, on: "surface")
+        }
+        XCTAssertEqual(failures, [])
+    }
+
+    /// Tek hareket kapısı: çeviri, hareketi azalt / Geçiş Animasyonları ya da arka plan sürekli efektleri durdurur; canlı
+    /// nabız çeviri sürerken atar ama hareket azaltılmışken ya da arka planda durur.
+    func testMotionGate() {
+        XCTAssertTrue(DSMotionGate().ambient)
+        XCTAssertTrue(DSMotionGate().live)
+        XCTAssertFalse(DSMotionGate(translating: true).ambient)
+        XCTAssertTrue(DSMotionGate(translating: true).live)
+        XCTAssertFalse(DSMotionGate(reduced: true).ambient)
+        XCTAssertFalse(DSMotionGate(reduced: true).live)
+        XCTAssertFalse(DSMotionGate(active: false).ambient)
+        XCTAssertFalse(DSMotionGate(active: false).live)
+        // Uygulamanın çeviri durumu bütün pencerelerin kapısına gider.
+        let model = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+        model.isRunning = true
+        XCTAssertTrue(DSMotionState.shared.translating)
+        model.isRunning = false
+        XCTAssertFalse(DSMotionState.shared.translating)
+    }
+
+    /// Perde koyu temalıdır: yeni arayüze geçiş kullanıcının Görünüm ayarını değiştirmez (eskiden koyu → açık çevrilirdi).
+    func testAdoptingNewDesignKeepsAppearance() {
+        defer { AppAppearance.dark.apply() }
+        let model = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+        XCTAssertEqual(model.settings.appearance, .dark)
+        model.adoptNewDesign()
+        XCTAssertEqual(model.settings.appearance, .dark)
+        let light = AppModel(services: FakeServices(), store: MemoryStore(), defaults: .isolated())
+        light.settings.appearance = .light
+        light.adoptNewDesign()
+        XCTAssertEqual(light.settings.appearance, .light)
     }
 
     func testReleaseNotesParseCurrentAndPrevious() {
