@@ -663,7 +663,7 @@ public partial class SettingsView : UserControl
         var dot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("0", "0", "xxs", "0") };
         dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "successBrush");
         var count = new TextBlock { Text = lines, FontSize = 11, FontWeight = FontWeights.Medium, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
-        count.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        System.Windows.Documents.Typography.SetNumeralAlignment(count, FontNumeralAlignment.Tabular);
         count.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
         var meta = new StackPanel { Orientation = Orientation.Horizontal, Margin = Sp.T("0", "xs", "0", "0") };
         meta.Children.Add(dot);
@@ -1361,7 +1361,7 @@ public partial class SettingsView : UserControl
         name.SetResourceReference(TextBlock.ForegroundProperty, "textBrush");
         var detail = new TextBlock { Text = tv is null ? "" : $"{brand} · {tv.Host}", FontSize = 11, FontWeight = FontWeights.Medium, Margin = Sp.T("0", "line", "0", "0"),
             TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
-        detail.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        System.Windows.Documents.Typography.SetNumeralAlignment(detail, FontNumeralAlignment.Tabular);
         detail.SetResourceReference(TextBlock.ForegroundProperty, "mutedBrush");
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = Sp.T("s", "0", "s", "0") };
         names.Children.Add(name);

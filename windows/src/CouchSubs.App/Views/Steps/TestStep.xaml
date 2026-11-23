@@ -17,7 +17,7 @@
             <c:Card VerticalAlignment="Top">
                 <StackPanel>
                     <c:StepTimeline x:Name="Timeline" />
-                    <Button x:Name="Send" Content="{t:T 'Send test subtitle'}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Stretch"
+                    <Button x:Name="Send" Content="{t:T 'Send Test Subtitle'}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Stretch"
                             Margin="{t:Sp '0,l,0,0'}" Click="OnSend" />
                     <!-- TV seçilmediyse ("TV'm yok") pencerenin yeri burada ayarlanabilir. -->
                     <Button x:Name="Adjust" Content="{t:T 'Position the subtitles'}" HorizontalAlignment="Stretch" Margin="{t:Sp '0,s,0,0'}" Click="OnAdjust"
