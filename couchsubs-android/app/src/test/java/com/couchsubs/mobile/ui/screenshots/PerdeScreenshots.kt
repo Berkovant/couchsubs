@@ -155,10 +155,9 @@ class PerdeScreenshots {
     @Test fun paketRafi() = shoot("paket-rafi", PhoneTab.SETTINGS) {
         com.couchsubs.mobile.ui.ScreenScaffold(top = { com.couchsubs.mobile.ui.TopBar("Oyun paketleri", onBack = {}) }) {
             com.couchsubs.mobile.ui.CoverShelf("Kurulu paketler") {
-                listOf("Grand Theft Auto V" to "GTA", "Red Dead Redemption 2" to "RDR", "Mafia: The Old Country" to "MAF",
-                    "Death Stranding 2" to "DS2").forEachIndexed { index, (title, code) ->
+                listOf("Grand Theft Auto V", "Red Dead Redemption 2", "Mafia: The Old Country", "Death Stranding 2").forEachIndexed { index, title ->
                     androidx.compose.foundation.layout.Column {
-                        com.couchsubs.mobile.ui.GameCover(title, code, if (index == 0) "Oynanıyor" else "Kurulu", selected = index == 0)
+                        com.couchsubs.mobile.ui.GameCover(title, if (index == 0) "Oynanıyor" else "Kurulu", selected = index == 0)
                         androidx.compose.material3.Text("12 bin satır", color = Tokens.Color.secondary, style = Tokens.Type.captionNumeric)
                     }
                 }

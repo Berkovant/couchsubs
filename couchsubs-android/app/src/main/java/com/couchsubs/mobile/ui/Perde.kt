@@ -61,6 +61,9 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
@@ -547,67 +550,166 @@ fun PerdePreview(
     }
 }
 
-/** Görüntü gelmeden önceki sıcak sahne (yeşil-kum degrade, sağ üstte güneş). */
+/**
+ * Görüntü gelmeden önceki sahne (iPhone DSPerdeScene): özgün, soyut sinematik manzara (telifli görsel yok, tamamıyla
+ * çizim). Alacakaranlık göğü, ufukta batan güneş ve göğe vuran ışık hüzmeleri, katman katman tepeler, ufka koşan yol ve
+ * ince amber ufuk çizgisi. Durağan (hareket kapısına yük getirmez).
+ */
 @Composable
 fun PerdeScene() {
-    Canvas(Modifier.fillMaxSize()) {
-        val span = max(size.width, size.height)
-        drawRect(Brush.linearGradient(listOf(Color(0xFF5E7462), Color(0xFF8E7B57), Color(0xFF38342E)), start = Offset.Zero,
-            end = Offset(size.width, size.height)))
-        drawRect(Brush.radialGradient(listOf(Color(0xFFDEA860).copy(alpha = 0.65f), Color.Transparent),
-            center = Offset(size.width * 0.72f, size.height * 0.3f), radius = span * 0.4f))
-        drawRect(Brush.radialGradient(listOf(Color(0xFF466054).copy(alpha = 0.8f), Color.Transparent),
-            center = Offset(size.width * 0.2f, size.height * 0.7f), radius = span * 0.4f))
+    val amber = Tokens.Color.accent
+    Canvas(Modifier.fillMaxSize().clipToBounds()) {
+        val w = size.width
+        val h = size.height
+        val horizon = h * 0.6f
+        val sunX = w * 0.66f
+        // Gök: üstte gece mavisi, ufka doğru kızıl-amber.
+        drawRect(Brush.verticalGradient(0f to Color(0xFF11141F), 0.36f to Color(0xFF302630), 0.52f to Color(0xFF9E543B),
+            0.62f to Color(0xFFEF9C4A), 1f to Color(0xFFEF9C4A)))
+        // Işık hüzmeleri: güneşten göğe yelpaze.
+        val beams = Path()
+        for ((from, to) in listOf(-0.8f to -0.66f, -0.44f to -0.33f, -0.1f to 0f, 0.2f to 0.28f, 0.52f to 0.66f)) {
+            beams.moveTo(sunX, horizon)
+            beams.lineTo(sunX + w * from, 0f)
+            beams.lineTo(sunX + w * to, 0f)
+            beams.close()
+        }
+        drawPath(beams, Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFFFD999).copy(alpha = 0.2f)), startY = 0f, endY = horizon))
+        // Güneş ve hâlesi.
+        drawRect(Brush.radialGradient(0f to Color(0xFFFFC778).copy(alpha = 0.8f), 0.5f to Color(0xFFF28040).copy(alpha = 0.22f),
+            1f to Color.Transparent, center = Offset(sunX, horizon), radius = max(w, h) * 0.42f))
+        drawCircle(Color(0xFFFFE6B8), radius = h * 0.08f, center = Offset(sunX, horizon))
+        // Uzak ve yakın tepeler (güneşin altını örter).
+        fun ridge(base: Float, amplitude: Float, phase: Float, waves: Float): Path = Path().apply {
+            moveTo(0f, h)
+            for (index in 0..48) {
+                val t = index / 48f
+                val wave = 0.6f * sin(t * PI.toFloat() * waves + phase) + 0.4f * sin(t * PI.toFloat() * waves * 2.7f + phase * 1.7f)
+                lineTo(w * t, base - amplitude * wave - amplitude * 0.3f)
+            }
+            lineTo(w, h)
+            close()
+        }
+        drawPath(ridge(horizon, h * 0.07f, 0.2f, 2.3f), Color(0xFF3B2730).copy(alpha = 0.92f))
+        drawPath(ridge(horizon + h * 0.035f, h * 0.05f, 1.4f, 3.1f), Color(0xFF1F171E))
+        val ground = horizon + h * 0.05f
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF1F171E), Color(0xFF09090B)), startY = ground, endY = h), Offset(0f, ground),
+            Size(w, h - ground))
+        // Ufka koşan yol (perspektif) ve ince amber ufuk çizgisi.
+        val road = Path().apply {
+            moveTo(sunX - 1.5f, ground)
+            lineTo(sunX + 1.5f, ground)
+            lineTo(sunX + w * 0.2f, h)
+            lineTo(sunX - w * 0.34f, h)
+            close()
+        }
+        drawPath(road, Brush.verticalGradient(listOf(amber.copy(alpha = 0.3f), amber.copy(alpha = 0.04f)), startY = ground, endY = h))
+        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, amber.copy(alpha = 0.75f), Color.Transparent)), Offset(0f, ground),
+            Size(w, 1.dp.toPx()))
     }
 }
 
 // MARK: Oyun kapağı (tipografik)
 
-/** Kapak paletleri (iPhone DSCoverArt.palettes ile aynı sıra): üst, orta, alt, ışık. Son palet gri. */
+/** Kapak paletleri (iPhone DSCoverArt.palettes ile aynı sıra): üst, alt, ışık, yazı. Son palet (gri) kapak yığınında kullanılmaz. */
 private val coverPalettes = listOf(
-    listOf(0xFFF2A65A, 0xFFC8456A, 0xFF2A1636, 0xFFFFD08A),
-    listOf(0xFFC9783E, 0xFF8A3B2F, 0xFF24140F, 0xFFF7D9A0),
-    listOf(0xFF3E5E86, 0xFF1F2B44, 0xFF0D1018, 0xFF9FD8FF),
-    listOf(0xFF7E9A5A, 0xFF3F5235, 0xFF121A10, 0xFFE7F0B0),
-    listOf(0xFFF2E14A, 0xFFE0336E, 0xFF1A0B22, 0xFFFF9BD0),
-    listOf(0xFF7D8794, 0xFF3A3F49, 0xFF121418, 0xFFE9DCC6),
+    listOf(0xFFF49944, 0xFF992828, 0xFFFFD999, 0xFFFFF4E2),
+    listOf(0xFFE03E65, 0xFF3F123F, 0xFFFF9DB0, 0xFFFFECEF),
+    listOf(0xFF346ED9, 0xFF0F1948, 0xFF97CAFF, 0xFFE6F2FF),
+    listOf(0xFF23AEA6, 0xFF092F3B, 0xFF96F7E4, 0xFFE3FFF9),
+    listOf(0xFF8955E8, 0xFF1F134A, 0xFFCAB0FF, 0xFFF4EFFF),
+    listOf(0xFFF5BF3D, 0xFFB54F13, 0xFFFFF0B0, 0xFF2A1609),
+    listOf(0xFFEF664A, 0xFF511868, 0xFFFFBF96, 0xFFFFEFE8),
+    listOf(0xFF6B7482, 0xFF1C1F26, 0xFFCCD1DB, 0xFFEFF1F4),
 ).map { palette -> palette.map { Color(it) } }
 
-/** Kararlı karma (iPhone DSCoverArt.palette ile aynı: 7 tohum, ×31 + karakter kodu, 32 bit). */
+/** Kararlı karma (iPhone DSCoverArt.paletteIndex ile aynı: 7 tohum, ×31 + karakter kodu, 32 bit taşma). */
 fun coverPaletteIndex(seed: String): Int {
     var sum = 7L
     seed.codePoints().forEach { sum = (sum * 31 + it) and 0xFFFFFFFFL }
     return (sum % coverPalettes.size).toInt()
 }
 
+private val monogramSkip = setOf("the", "of", "a", "an", "and", "to", "in", "on", "for")
+
+/** Kesme işaretli ekler ("Assassin's" → "s") sözcük sayılmaz. */
+private fun coverWords(title: String): List<String> =
+    title.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        .filter { it.length > 1 || it.first().isUpperCase() || it.first().isDigit() }
+
+private fun isRoman(word: String) = word.isNotEmpty() && word.length <= 4 && word.all { it in "IVX" }
+private fun isNumeral(word: String) = word.all { it.isDigit() } || isRoman(word)
+
 /**
- * Tipografik oyun kapağı: gerçek kapak görseli yok (marka öğesi yok). Oyunun adından türetilen degrade (her oyun hep
- * aynı renkte), sağ üstte yumuşak ışık ve büyük, yarı saydam kısaltma ([code], ör. "GTA"). Kısaltma kapağın genişliğine
- * ([width]) göre çizilir; 40'tan dar kapakta (yığındaki küçük kapaklar) yalnız degrade.
+ * Oyunun kısaltması (iPhone DSCoverArt.monogram; yalnız harf, en çok 3): baştaki büyük harf kısaltma (GTA V → GTA), yoksa
+ * en çok üç anlamlı sözcüğün baş harfi (Red Dead Redemption 2 → RDR); tek sözcük → ilk iki harf (Mafia → Ma).
  */
-@Composable
-fun CoverArt(seed: String, code: String? = null, modifier: Modifier = Modifier, width: Dp = 0.dp) {
-    val (top, middle, bottom, light) = coverPalettes[coverPaletteIndex(seed)]
-    val density = LocalDensity.current
-    Box(modifier.drawBehind {
-        drawRect(Brush.linearGradient(listOf(top, middle, bottom), start = Offset(size.width * 0.4f, 0f), end = Offset(size.width * 0.6f, size.height)))
-        drawRect(Brush.radialGradient(listOf(light.copy(alpha = 0.85f), Color.Transparent), center = Offset(size.width * 0.62f, size.height * 0.3f),
-            radius = size.width * 0.55f))
-    }) {
-        val text = code ?: monogram(seed)
-        // Büyük kısaltma kapağın genişliğine göre (yazı boyu ayarından bağımsız: kapak bir görseldir).
-        if (width > 40.dp) Text(text, style = Tokens.Type.display.copy(fontSize = with(density) { (width * 0.34f).toSp() },
-            lineHeight = with(density) { (width * 0.36f).toSp() }, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp),
-            color = Color.White.copy(alpha = 0.92f), maxLines = 1, overflow = TextOverflow.Clip,
-            modifier = Modifier.padding(start = width * 0.1f, top = width * 0.36f).graphicsLayer { alpha = 0.9f })
-    }
+fun monogram(title: String): String {
+    val words = coverWords(title)
+    val first = words.firstOrNull() ?: return "?"
+    val english = java.util.Locale.US
+    if (first.length in 2..4 && first == first.uppercase(english) && first.all { it.isLetter() } && !isRoman(first)) return first.take(3)
+    val significant = words.filter { it.lowercase(english) !in monogramSkip && !isNumeral(it) }
+    if (significant.size >= 2) return significant.take(3).joinToString("") { it.take(1).uppercase(english) }
+    val word = significant.firstOrNull() ?: first
+    return word.take(1).uppercase(english) + word.drop(1).take(1).lowercase(english)
 }
 
-/** Başlıktan kısaltma: "Red Dead Redemption 2" → "RDR2", "Mafia" → "MAF". */
-fun monogram(title: String): String {
-    val words = title.split(' ', ':', '-').filter { it.isNotBlank() }
-    val initials = words.joinToString("") { word -> if (word.all { it.isDigit() }) word else word.first().uppercase() }
-    return if (initials.length >= 2) initials.take(4) else title.filter { it.isLetterOrDigit() }.take(3).uppercase()
+/** Adın sonundaki sayı ya da Roma rakamı (Red Dead Redemption 2 → 2, Grand Theft Auto VI → VI); yoksa null. */
+fun coverNumeral(title: String): String? {
+    val words = coverWords(title)
+    val last = words.lastOrNull() ?: return null
+    return last.takeIf { words.size > 1 && isNumeral(it) && it.length <= 4 }
+}
+
+/**
+ * Tipografik oyun kapağı (iPhone DSCoverArt/DSTypeCover): gerçek kapak görseli ya da logo yok (telif ve mağaza riski).
+ * Oyuna özgü kararlı degrade, köşe ışığı, çapraz ışık bandı ve oyunun kısaltması iri, ağır yazıyla; sıra numarası
+ * (V, VI, 2) yanında küçük. Küçük boyda (kapak yığını) yalnız kısaltma ortada.
+ */
+@Composable
+fun CoverArt(seed: String, modifier: Modifier = Modifier) {
+    val (top, bottom, light, ink) = coverPalettes[coverPaletteIndex(seed)]
+    val mark = monogram(seed)
+    BoxWithConstraints(modifier.clipToBounds().drawBehind {
+        val span = max(size.width, size.height)
+        drawRect(Brush.linearGradient(listOf(top, bottom), start = Offset(size.width * 0.15f, 0f), end = Offset(size.width * 0.85f, size.height)))
+        drawRect(Brush.radialGradient(listOf(light.copy(alpha = 0.7f), Color.Transparent), center = Offset(size.width * 0.9f, size.height * 0.05f),
+            radius = span * 0.7f))
+        // Çapraz ışık bandı (28°).
+        rotate(28f, Offset(size.width * 0.64f, size.height * 0.4f)) {
+            val band = span * 0.3f
+            drawRect(Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0f)),
+                startX = size.width * 0.64f - band / 2, endX = size.width * 0.64f + band / 2),
+                Offset(size.width * 0.64f - band / 2, size.height * 0.4f - span * 1.1f), Size(band, span * 2.2f))
+        }
+    }.clearAndSetSemantics { }) {
+        val w = maxWidth
+        val h = maxHeight
+        val density = LocalDensity.current
+        if (min(w.value, h.value) < 72f) {
+            Text(mark, style = TextStyle(fontSize = with(density) { (min(w.value, h.value).dp * (if (mark.length > 2) 0.34f else 0.44f)).toSp() },
+                fontWeight = FontWeight.ExtraBold), color = ink, maxLines = 1, softWrap = false,
+                modifier = Modifier.align(Alignment.Center))
+        } else {
+            // İri kısaltma üst bölgede; altında kısa çizgi ve sıra numarası. Başlık (GameCover) alttaki scrim'in üstünde kalır.
+            // Kısaltma kapağa sığmazsa küçülür (iPhone minimumScaleFactor 0,5): ağır büyük harf genişliği yazı boyunun ~0,72 katı.
+            val font = (w * if (mark.length > 2) 0.42f else 0.56f).coerceAtMost(w * 0.85f / (mark.length * 0.72f)).coerceAtLeast(w * 0.21f)
+            Column(Modifier.padding(start = w * 0.09f, end = w * 0.06f, top = h * 0.1f), verticalArrangement = Arrangement.spacedBy(font * 0.1f)) {
+                Text(mark, style = TextStyle(fontSize = with(density) { font.toSp() }, lineHeight = with(density) { (font * 1.05f).toSp() },
+                    fontWeight = FontWeight.Black, letterSpacing = with(density) { (-font * 0.03f).toSp() },
+                    shadow = androidx.compose.ui.graphics.Shadow(bottom.copy(alpha = 0.5f), Offset(0f, with(density) { (w * 0.015f).toPx() }),
+                        with(density) { (w * 0.03f).toPx() })), color = ink.copy(alpha = 0.94f), maxLines = 1, softWrap = false)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(w * 0.04f)) {
+                    Box(Modifier.size(w * 0.2f, max(2f, w.value * 0.02f).dp).background(ink.copy(alpha = 0.75f), CircleShape))
+                    coverNumeral(seed)?.let {
+                        Text(it, style = TextStyle(fontSize = with(density) { (w * 0.13f).toSp() }, fontWeight = FontWeight.ExtraBold),
+                            color = ink.copy(alpha = 0.9f), maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -615,7 +717,7 @@ fun monogram(title: String): String {
  * (oynanan) kapakta amber halka ve arkasında kapağın renginden durağan ışıma.
  */
 @Composable
-fun GameCover(title: String, code: String? = null, status: String? = null, selected: Boolean = false,
+fun GameCover(title: String, status: String? = null, selected: Boolean = false,
               width: Dp = DesignTokens.Size.coverWidthRail.dp, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Tokens.Radius.cover)
     val height = width / DesignTokens.Size.coverAspect
@@ -624,14 +726,14 @@ fun GameCover(title: String, code: String? = null, status: String? = null, selec
         if (selected) Box(Modifier.size(width, height).padding(horizontal = width * 0.08f).offset(y = height * 0.11f)
             .shadow(24.dp, RoundedCornerShape(30.dp), ambientColor = glow, spotColor = glow))
         Box(Modifier.size(width, height).clip(shape)) {
-            CoverArt(title, code, Modifier.fillMaxSize(), width)
+            CoverArt(title, Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Tokens.Color.coverScrim)))
             Text(title, style = Tokens.Type.label.copy(fontSize = if (width < 110.dp) 12.sp else 14.sp, fontWeight = FontWeight.Bold,
                 lineHeight = if (width < 110.dp) 14.sp else 16.sp), color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 9.dp))
             status?.let { StatusChip(it, ChipTone.GLASS, dot = false, modifier = Modifier.padding(6.dp).scale(0.85f)) }
         }
-        if (selected) Box(Modifier.size(width, height).padding(0.dp).border(2.dp, Tokens.Color.accent, shape))
+        if (selected) Box(Modifier.size(width, height).border(2.dp, Tokens.Color.accent, shape))
     }
 }
 
@@ -652,21 +754,21 @@ fun CoverShelf(title: String, allLabel: String? = null, onAll: (() -> Unit)? = n
 /** Paket satırındaki üç eğik küçük kapak (oyun enerjisi kapaklarda, krom nötr); üçü de farklı renkte. */
 @Composable
 fun CoverStack(titles: List<String>) {
-    val gray = coverPalettes.size - 1
-    val used = mutableListOf(gray)
+    // Üç kapak birbirinden farklı renkte olsun: aynı palete düşen ad, farklı palet bulunana dek uzatılır (gri kullanılmaz).
+    val used = mutableListOf(coverPalettes.size - 1)
     val shown = titles.take(3).map { title ->
         var seed = title
         repeat(12) { if (coverPaletteIndex(seed) in used) seed += " " }
         used += coverPaletteIndex(seed)
-        seed to title
+        seed
     }
     val surface = Tokens.Color.surface
     Box(Modifier.size(60.dp, 44.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-        shown.forEachIndexed { index, (seed, title) ->
+        shown.forEachIndexed { index, seed ->
             val shape = RoundedCornerShape(7.dp)
             Box(Modifier.offset(x = ((index - 1) * 12).dp).rotate((index - 1) * 8f)
                 .shadow(3.dp, shape).size(28.dp, 38.dp).clip(shape).border(1.5.dp, surface, shape)) {
-                CoverArt(seed, monogram(title).take(1), Modifier.fillMaxSize())
+                CoverArt(seed, Modifier.fillMaxSize())
             }
         }
     }

@@ -112,12 +112,12 @@ fun WelcomeScreen(onDemo: () -> Unit = {}, onDone: () -> Unit) {
                         Heading(stringResource(R.string.welcome2_title), stringResource(R.string.welcome2_body))
                         // Tipografik kapak rafı: hazır paketli oyunlar (gerçek kapak görseli yok).
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-                            listOf(Triple("Grand Theft Auto V", "GTA", stringResource(R.string.welcome2_gta)),
-                                Triple("Red Dead Redemption 2", "RDR", stringResource(R.string.welcome2_rdr_lines)),
-                                Triple("Mafia", "MAF", stringResource(R.string.welcome2_maf_lines))).forEachIndexed { index, (title, code, lines) ->
+                            listOf("Grand Theft Auto V" to stringResource(R.string.welcome2_gta),
+                                "Red Dead Redemption 2" to stringResource(R.string.welcome2_rdr_lines),
+                                "Mafia" to stringResource(R.string.welcome2_maf_lines)).forEachIndexed { index, (title, lines) ->
                                 BoxWithConstraints(Modifier.weight(1f)) { val coverWidth = maxWidth
                                     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.titleToBody)) {
-                                        GameCover(title, code, selected = index == 0, width = coverWidth)
+                                        GameCover(title, selected = index == 0, width = coverWidth)
                                         Text(lines, style = Tokens.Type.captionNumeric, color = Tokens.Color.secondary, maxLines = 2)
                                     }
                                 }

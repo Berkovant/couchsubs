@@ -256,9 +256,7 @@ fun PerdeSlider(
         return (valueRange.start + ((clamped - valueRange.start) / step).roundToInt() * step).coerceIn(valueRange.start, valueRange.endInclusive)
     }
     fun set(x: Float) {
-        val knob = with(density) { KNOB.toPx() }
-        val travel = (width - knob).coerceAtLeast(1f)
-        val fraction = ((x - knob / 2) / travel).coerceIn(0f, 1f)
+        val fraction = (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f)
         val next = snap(valueRange.start + fraction * span)
         if (next != current) {
             if (steps > 0) Haptics.selection(view)
@@ -300,8 +298,7 @@ fun PerdeSlider(
             val knob = KNOB.toPx()
             val track = TRACK.toPx()
             val y = size.height / 2
-            val travel = size.width - knob
-            val center = knob / 2 + travel * fraction
+            val center = size.width * fraction
             val radius = CornerRadius(track / 2)
             // İz: kartın iç genişliğinin tamamı (0 … genişlik).
             drawRoundRect(field, Offset(0f, y - track / 2), Size(size.width, track), radius)
@@ -314,8 +311,10 @@ fun PerdeSlider(
         Box(Modifier.align(Alignment.CenterStart)
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-                val track = (constraints.maxWidth - placeable.width).coerceAtLeast(0)
-                layout(constraints.maxWidth, placeable.height) { placeable.place((track * fraction).roundToInt(), 0) }
+                // Merkez iz üzerinde (0 … genişlik): uçlarda düğmecik yarıçapı kadar dışarı taşar (iPhone DSSlider).
+                layout(constraints.maxWidth, placeable.height) {
+                    placeable.place((constraints.maxWidth * fraction - placeable.width / 2f).roundToInt(), 0)
+                }
             }
             .size(KNOB).scale(knobScale)
             .shadow(4.dp, CircleShape).background(Color.White, CircleShape).border(1.dp, Color.Black.copy(alpha = 0.06f), CircleShape))
@@ -337,9 +336,10 @@ fun SliderRow(
             PerdeSlider(value, onValueChange, valueRange = valueRange, steps = steps, onValueChangeFinished = onValueChangeFinished, label = title)
             ends?.let { (low, high) ->
                 Row(Modifier.fillMaxWidth().clearAndSetSemantics { }) {
-                    Text(low, style = Tokens.Type.mono, color = Tokens.Color.secondary)
+                    Text(low, style = Tokens.Type.small.copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"), color = Tokens.Color.secondary)
                     Spacer(Modifier.weight(1f))
-                    Text(high, style = Tokens.Type.mono, color = Tokens.Color.secondary, textAlign = TextAlign.End)
+                    Text(high, style = Tokens.Type.small.copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"), color = Tokens.Color.secondary,
+                        textAlign = TextAlign.End)
                 }
             }
         }

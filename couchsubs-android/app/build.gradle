@@ -397,8 +397,8 @@ dependencies {
 }
 
 // Ekran görüntüsü testleri (app/src/test/.../screenshots) yavaştır ve Robolectric'in Android kitaplığını indirir: CI'daki
-// JVM testlerinde çalışmaz, yalnız `-Pcouchsubs.screenshots=true` ile (çıktı: build/outputs/roborazzi, ardından
-// scripts/android-screenshots.sh Masaüstü'ne kopyalar).
+// JVM testlerinde çalışmaz, yalnız `-Pcouchsubs.screenshots=true` ile (çıktı: app/build/outputs/roborazzi;
+// iPhone görüntüleriyle yan yana göz kontrolü için).
 def screenshots = (findProperty('couchsubs.screenshots') ?: 'false').toString().toBoolean()
 tasks.withType(Test).configureEach {
     if (!screenshots) exclude '**/screenshots/**'

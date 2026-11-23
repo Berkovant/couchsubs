@@ -14,12 +14,18 @@ class PerdeTest {
         val json = File(System.getProperty("user.dir")).let { dir ->
             generateSequence(dir) { it.parentFile }.map { File(it, "design/yeni-arayuz/tasarim.json") }.first { it.exists() }
         }.readText()
-        assertTrue(json.contains("\"version\": 2"))
-        assertEquals(2, DesignTokens.VERSION)
-        assertTrue(DesignTokens.DEFAULT_DARK)
-        assertEquals(0xFF0F1013L, DesignTokens.Dark.background)
-        assertEquals(0xFFF3F0EAL, DesignTokens.Light.background)
-        // #RRGGBBAA → 0xAARRGGBB
+        val tokens = org.json.JSONObject(json)
+        assertEquals(tokens.getInt("version"), DesignTokens.VERSION)
+        assertEquals(tokens.getString("defaultTheme") == "dark", DesignTokens.DEFAULT_DARK)
+        // #RRGGBB → 0xFFRRGGBB, #RRGGBBAA → 0xAARRGGBB (dosyadaki değerle birebir).
+        fun argb(hex: String): Long {
+            val h = hex.removePrefix("#")
+            return (if (h.length == 6) "FF$h" else h.substring(6) + h.substring(0, 6)).toLong(16)
+        }
+        val colors = tokens.getJSONObject("color")
+        assertEquals(argb(colors.getJSONObject("background").getString("dark")), DesignTokens.Dark.background)
+        assertEquals(argb(colors.getJSONObject("background").getString("light")), DesignTokens.Light.background)
+        assertEquals(argb(colors.getJSONObject("amberSoft").getString("dark")), DesignTokens.Dark.amberSoft)
         assertEquals(0x24F5B83DL, DesignTokens.Dark.amberSoft)
         assertEquals(16f, DesignTokens.Space.screenEdgeIOS)
         assertEquals(1600, DesignTokens.Motion.livePulse)
@@ -35,11 +41,19 @@ class PerdeTest {
 
     @Test
     fun coverPaletteMatchesIphoneHash() {
-        // iPhone DSCoverArt.palette: 7 tohum, ×31 + karakter, 32 bit taşma, 6 palet.
-        assertEquals(1, coverPaletteIndex("Death Stranding 2"))
-        assertEquals("GTAV", monogram("Grand Theft Auto V"))
-        assertEquals("RDR2", monogram("Red Dead Redemption 2"))
-        assertEquals("MAF", monogram("Mafia"))
+        // iPhone DSCoverArt.paletteIndex: 7 tohum, ×31 + karakter, 32 bit taşma, 8 palet.
+        assertEquals(1, coverPaletteIndex("Grand Theft Auto V"))
+        assertEquals(3, coverPaletteIndex("Death Stranding 2"))
+        // Kısaltma yalnız harf (en çok 3), sıra numarası ayrı (iPhone DSCoverArt.monogram / numeral).
+        assertEquals("GTA", monogram("Grand Theft Auto V"))
+        assertEquals("GTA", monogram("Grand Theft Auto VI"))
+        assertEquals("VI", coverNumeral("Grand Theft Auto VI"))
+        assertEquals("RDR", monogram("Red Dead Redemption 2"))
+        assertEquals("2", coverNumeral("Red Dead Redemption 2"))
+        assertEquals("Ma", monogram("Mafia"))
+        assertEquals(null, coverNumeral("Mafia"))
+        assertEquals("ACS", monogram("Assassin's Creed Shadows"))
+        assertEquals("GTA", monogram("GTA V"))
     }
 
     @Test

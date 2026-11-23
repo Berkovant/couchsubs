@@ -157,16 +157,15 @@ fun MainScreen(
     val xbox = settings.xbox
     val paired = if (xbox) settings.xboxConsole != null && Services.xboxAuth.signedIn else settings.console != null
     fun mark(step: TourStep) = Modifier.onGloballyPositioned { bounds[step] = it.boundsInRoot() }
-    // Perde (iPhone ile aynı): üstte logo ve durum hapı; Geçmiş ve Ayarlar alttaki cam sekme çubuğunda. Turun "Profil ve
-    // ayarlar" adımı Ayarlar sekmesini gösterir.
+    // Perde (iPhone ile aynı): üstte logo; çeviri sürerken sağda canlı süre hapı. Boşta durum tek yerde, büyük başlıkta
+    // ("Hazır"). Geçmiş ve Ayarlar alttaki cam sekme çubuğunda; turun "Profil ve ayarlar" adımı Ayarlar sekmesini gösterir.
     val topBar: @Composable () -> Unit = {
         TopBar {
             if (status.running) {
                 val elapsed = rememberElapsed(status.startedAt)
                 StatusChip(stringResource(R.string.running_pill, DateUtils.formatElapsedTime(elapsed)),
                     if (status.streaming) ChipTone.LIVE else ChipTone.AMBER)
-            } else StatusChip(stringResource(if (paired) R.string.main_ready else R.string.perde_almost_ready),
-                if (paired) ChipTone.OK else ChipTone.AMBER)
+            }
         }
     }
     val tabMarker: (PhoneTab) -> Modifier = { tab -> if (tab == PhoneTab.SETTINGS) mark(TourStep.PROFILE) else Modifier }
@@ -229,7 +228,16 @@ fun MainScreen(
                         }
                     }
                     // Telefon ana ekranı: PS5 ve Altyazı durum karoları ilgili ayarı açar; altlarında durum hapı.
-                    val targetReady = settings.target == SubtitleTarget.PHONE || settings.target == SubtitleTarget.OBS || settings.tvName != null
+                    val tv = settings.installedTv
+                    val targetReady = settings.target == SubtitleTarget.PHONE || settings.target == SubtitleTarget.OBS || tv != null || settings.tvName != null
+                    // Altyazı karosunun rozeti "Hazır" değil, anlamlı kısa bilgi: TV'nin markası ya da yeri; TV yoksa "Kurulmadı".
+                    val targetStatus = when {
+                        settings.target == SubtitleTarget.PHONE -> stringResource(R.string.perde_on_this_screen)
+                        settings.target == SubtitleTarget.OBS -> "OBS"
+                        tv != null -> brandName(tv.brand)
+                        targetReady -> stringResource(R.string.main_ready)
+                        else -> stringResource(R.string.perde_not_set_up)
+                    }
                     TwoColumns(
                         { if (xbox) StatusTile(CouchIcons.Gamepad, "Xbox · Beta", settings.xboxConsole?.name ?: stringResource(R.string.perde_choose_xbox), it,
                             status = stringResource(if (paired) R.string.main_ready else R.string.perde_not_set_up), statusOk = paired,
@@ -239,7 +247,7 @@ fun MainScreen(
                             statusOk = settings.console != null, iconTone = if (settings.console != null) IconTone.TEAL else IconTone.GRAY,
                             onClick = onPairing) },
                         { StatusTile(if (settings.target.showsOnTv) CouchIcons.Tv else CouchIcons.Smartphone, subtitlesLabel, targetLabel,
-                            it.then(mark(TourStep.TARGET)), status = stringResource(if (targetReady) R.string.main_ready else R.string.perde_not_set_up),
+                            it.then(mark(TourStep.TARGET)), status = targetStatus,
                             statusOk = targetReady, iconTone = IconTone.AMBER, onClick = onTarget) },
                     )
                     // Paket karosu: kapak yığını, başlık ve not tek satır, sağda `›`; paketler kapalıysa nötr "Kapalı" etiketi.
@@ -364,7 +372,7 @@ private fun RunningScreen(status: LiveStatus, topBar: @Composable () -> Unit, on
                 if (status.streaming) ScreenTranslateButton(status, Modifier.weight(1f))
             }
         // Perde: kırmızı yumuşak hap + nabız noktası; deneme modundan çıkış kare simgeli.
-        if (status.demo) DestructiveButton(stringResource(R.string.demo_mode_exit), onClick = onStop)
+        if (status.demo) StopButton(stringResource(R.string.demo_mode_exit), onClick = onStop)
         else LiveButton(stringResource(R.string.stop), onClick = onStop)
     }) {
         if (status.demo) DemoHeader(onStop)
@@ -582,7 +590,6 @@ fun PacksScreen(onBack: () -> Unit, packInUse: String?) {
                 // ışıma. Kapağa dokunmak paketi açar ya da kapatır (anahtar; seçim titreşimi).
                 if (list.isNotEmpty()) CoverShelf(stringResource(R.string.perde_installed_packs)) {
                     list.forEach { entry ->
-                        val (code, _) = packShort(entry.id, entry.title)
                         val on = entry.packIds.none { it in disabled }
                         val playing = packInUse != null && packInUse in entry.titles
                         val view = LocalView.current
@@ -595,7 +602,7 @@ fun PacksScreen(onBack: () -> Unit, packInUse: String?) {
                                 },
                             verticalArrangement = Arrangement.spacedBy(Tokens.Space.titleToBody),
                         ) {
-                            GameCover(entry.title, code, stringResource(when {
+                            GameCover(entry.title, stringResource(when {
                                 playing -> R.string.perde_now_playing
                                 on -> R.string.perde_installed
                                 else -> R.string.perde_off

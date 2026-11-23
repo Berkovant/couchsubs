@@ -309,7 +309,7 @@ fun InfoRow(label: String, value: String, onClick: (() -> Unit)? = null) {
 fun SliderHeader(title: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
         Text(title, style = Tokens.Type.headline, color = Tokens.Color.text, modifier = Modifier.weight(1f))
-        Text(value, style = Tokens.Type.mono.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Tokens.Color.accentText,
+        Text(value, style = Tokens.Type.label.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Tokens.Color.accentText,
             textAlign = TextAlign.End)
     }
 }

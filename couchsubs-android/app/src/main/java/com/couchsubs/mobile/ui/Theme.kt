@@ -67,6 +67,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -92,6 +93,7 @@ import com.couchsubs.mobile.ui.DesignTokens.Dark
 import com.couchsubs.mobile.ui.DesignTokens.Light
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 
 object Tokens {
     /**
@@ -176,6 +178,9 @@ object Tokens {
         val liveSoft get() = pick(Light.liveSoft, Dark.liveSoft)
         val liveRing get() = pick(Light.liveRing, Dark.liveRing)
         val liveDot get() = pick(Light.liveDot, Dark.liveDot)
+        /** Çeviriyi durduran dolu düğme: canlı zemin, beyaz yazı. */
+        val stopFill get() = pick(Light.stopFill, Dark.stopFill)
+        val onStop get() = pick(Light.onStop, Dark.onStop)
         val danger get() = liveText
         val dangerSoft get() = liveSoft
         val info get() = pick(Light.info, Dark.info)
@@ -453,7 +458,11 @@ fun SectionTitle(text: String) = Text(text, style = Tokens.Type.cardTitle, color
     modifier = Modifier.padding(bottom = Tokens.Space.hair).semantics { heading() })
 
 /** Düğme türleri (iPhone DSButtonStyle): ana, ikincil, hayalet, durdur (kırmızı tonlu, kare), canlı (kırmızı tonlu, nabız). */
-enum class ButtonKind { PRIMARY, SECONDARY, GHOST, STOP, LIVE }
+/**
+ * Düğme türleri (iPhone DSButtonStyle): ana, ikincil, hayalet; durdur (dolu canlı zemin, beyaz yazı, kare) ve canlı (dolu,
+ * beyaz nabız): çeviri sürerken birincil eylem; tehlikeli (Sil, Kaldır, Temizle) soluk kırmızı kalır.
+ */
+enum class ButtonKind { PRIMARY, SECONDARY, GHOST, STOP, LIVE, DANGER }
 
 /**
  * Düğme gövdesi: tam yuvarlak, en az 48. Ana düğme amber degrade + üst kenar parlaması + amber ışıma (ekranda tek);
@@ -479,7 +488,8 @@ fun PerdeButton(
         kind == ButtonKind.PRIMARY -> c.onAccent
         kind == ButtonKind.SECONDARY -> c.text
         kind == ButtonKind.GHOST -> c.accentText
-        else -> c.liveText
+        kind == ButtonKind.DANGER -> c.liveText
+        else -> c.onStop
     }
     val background: Modifier = when {
         kind == ButtonKind.PRIMARY && !enabled && !busy -> Modifier.background(c.field, shape)
@@ -489,7 +499,9 @@ fun PerdeButton(
             .border(1.dp, Brush.verticalGradient(0f to Color.White.copy(alpha = 0.45f), 0.5f to c.accentLine.copy(alpha = 0.6f)), shape)
         kind == ButtonKind.SECONDARY -> Modifier.background(if (pressed) c.surfaceHigh else c.raised, shape).border(1.dp, c.border, shape)
         kind == ButtonKind.GHOST -> Modifier.background(if (pressed) c.field else Color.Transparent, shape)
-        else -> Modifier.background(c.surface, shape).background(if (pressed) c.live.copy(alpha = 0.22f) else c.liveSoft, shape).border(1.dp, c.liveRing, shape)
+        kind == ButtonKind.DANGER -> Modifier.background(c.surface, shape)
+            .background(if (pressed) c.live.copy(alpha = 0.22f) else c.liveSoft, shape).border(1.dp, c.liveRing, shape)
+        else -> Modifier.background(c.stopFill, shape).background(Color.Black.copy(alpha = if (pressed) 0.16f else 0f), shape)
     }
     Row(
         modifier.let { if (fullWidth && kind != ButtonKind.GHOST) it.fillMaxWidth() else it }
@@ -508,8 +520,8 @@ fun PerdeButton(
     ) {
         when {
             busy -> BarsLoader(color = if (kind == ButtonKind.PRIMARY) c.onAccent else c.accent)
-            kind == ButtonKind.STOP -> Box(Modifier.size(10.dp).background(c.liveText, RoundedCornerShape(2.dp)))
-            kind == ButtonKind.LIVE -> PulseDot(c.liveDot, 8.dp)
+            kind == ButtonKind.STOP -> Box(Modifier.size(10.dp).background(c.onStop, RoundedCornerShape(2.dp)))
+            kind == ButtonKind.LIVE -> PulseDot(c.onStop, 8.dp)
             leading != null -> leading()
         }
         ButtonLabel(text, foreground, if (kind == ButtonKind.SECONDARY || kind == ButtonKind.GHOST) Tokens.Type.button.copy(fontWeight = FontWeight.Medium) else Tokens.Type.button)
@@ -551,12 +563,17 @@ private fun ButtonLabel(text: String, color: Color, style: TextStyle) {
         onTextLayout = { if (!large && it.didOverflowWidth && scale > 0.8f) scale = (scale - 0.05f).coerceAtLeast(0.8f) })
 }
 
-/** Tehlikeli / durdur: kırmızı tonlu yumuşak zemin, kırmızı yazı, kırmızı ince halka, solda küçük kare. */
+/** Tehlikeli (Sil, Kaldır, Temizle): soluk kırmızı zemin, kırmızı yazı, kırmızı ince halka. */
 @Composable
 fun DestructiveButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    PerdeButton(text, ButtonKind.DANGER, modifier, onClick = onClick)
+
+/** Durdur (ör. Deneme Modundan Çık): dolu canlı zemin, beyaz yazı, solda küçük kare. */
+@Composable
+fun StopButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) =
     PerdeButton(text, ButtonKind.STOP, modifier, onClick = onClick)
 
-/** "Çeviriyi Durdur": kırmızı tonlu hap + atan nokta (Perde canlı düğmesi). */
+/** "Çeviriyi Durdur": dolu canlı zemin + beyaz atan nokta (çeviri sürerken birincil eylem). */
 @Composable
 fun LiveButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) =
     PerdeButton(text, ButtonKind.LIVE, modifier, onClick = onClick)
@@ -726,7 +743,7 @@ fun ScreenScaffold(
                 }.map { it.measure(bar) }
                 val bottomBar = subcompose("bottom") {
                     if (hasBottom) Column(
-                        Modifier.fillMaxWidth().edgeFade(atTop = false)
+                        Modifier.fillMaxWidth().then(if (tabBar != null || adBand) Modifier.bottomGlass(haze) else Modifier.edgeFade(atTop = false))
                             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                             .padding(start = Tokens.Space.screen, end = Tokens.Space.screen, top = Tokens.Space.gap,
                                 bottom = when {
@@ -763,6 +780,20 @@ fun ScreenScaffold(
             }
         }
     }
+}
+
+/**
+ * Alt cam bölge (iPhone BottomGlass; ana eylem + reklam şeridi + sekme çubuğu): ekranın altına kadar tek yüzey, üst kenarda
+ * kıl çizgi. Android 12+'da arkadaki içerik bulanıklaşır; zemin rengi (%82) arkadaki yazıyı okunur gürültü olmaktan
+ * çıkarır. İçerik arkasından kaymaya devam eder; düğme hiçbir kartın yazısını yarım bırakacak biçimde yüzmez.
+ */
+private fun Modifier.bottomGlass(haze: HazeState?): Modifier {
+    val bg = Tokens.Color.bg
+    val line = Tokens.Color.border
+    val base = if (haze != null) this.hazeChild(haze, dev.chrisbanes.haze.HazeStyle(backgroundColor = bg,
+        tint = dev.chrisbanes.haze.HazeTint(bg.copy(alpha = 0.82f)), blurRadius = 24.dp, noiseFactor = 0f))
+    else this.background(bg.copy(alpha = 0.94f))
+    return base.drawBehind { drawRect(line, size = Size(size.width, 0.5.dp.toPx())) }
 }
 
 /**

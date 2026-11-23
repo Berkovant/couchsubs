@@ -896,5 +896,6 @@
     <string name="perde_free_no_account">Ücretsiz, hesap gerekmez</string>
     <string name="perde_done">Bitti</string>
     <string name="perde_not_set_up">Kurulmadı</string>
+    <string name="perde_on_this_screen">Bu ekranda</string>
     <string name="perde_ready_translation">Hazır çeviri</string>
 </resources>
