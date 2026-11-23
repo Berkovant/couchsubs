@@ -173,39 +173,21 @@ public static class ScreenRenderer
         }
     }
 
-    /// <summary>WM_GETMINMAXINFO: en büyük pencere boyu ekranla sınırlanmasın (yalnız ekran görüntüsü aracı).</summary>
-    private static IntPtr AllowLargeWindow(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        const int GetMinMaxInfo = 0x0024;
-        if (message != GetMinMaxInfo) return IntPtr.Zero;
-        // MINMAXINFO: ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize (her biri iki int).
-        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 8, 8000);
-        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 12, 8000);
-        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 32, 8000);
-        System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 36, 8000);
-        handled = true;
-        return IntPtr.Zero;
-    }
-
     private static void Render(FrameworkElement view, int width, int height, string path)
     {
         // Görüntüye pencere zemini de girsin (içerik saydam zemin üzerinde çizilir).
-        var root = new System.Windows.Controls.Border { Child = view };
+        var root = new System.Windows.Controls.Border { Child = view, Width = width, Height = height };
         root.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "windowBackgroundBrush");
         root.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "textPrimaryBrush");
         var window = new Window
         {
-            Content = root, Width = width, Height = height, WindowStyle = WindowStyle.None, ShowInTaskbar = false,
+            Content = new System.Windows.Controls.Canvas { Children = { root } }, Width = width, Height = height, WindowStyle = WindowStyle.None, ShowInTaskbar = false,
             Left = -10000, Top = -10000, ShowActivated = false,
         };
         window.SetResourceReference(Window.BackgroundProperty, "backgroundBrush");
-        // Windows pencereyi ekrandan büyük açmaz (CI'daki sanal ekran 1024 × 768): en büyük boy sınırı kaldırılır, görüntü
-        // istenen boyda (1200 × 760, geniş 1680 × 945) çizilir.
-        window.SourceInitialized += (_, _) =>
-            System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(window).Handle)?.AddHook(AllowLargeWindow);
+        // WPF pencereyi ekrandan büyük açmaz (CI'daki sanal ekran 1024 × 768). Görüntü istenen boyda (1200 × 760, geniş
+        // 1680 × 945) çizilsin diye içerik, sınır koymayan bir Canvas içinde kendi boyunda yerleşir ve doğrudan çizilir.
         window.Show();
-        window.Width = width;
-        window.Height = height;
         window.UpdateLayout();
         // Yükleme sırasında başlayan arama vb. işlerin ekrana yansıması için kısa bekleme.
         var frame = new System.Windows.Threading.DispatcherFrame();
@@ -215,7 +197,7 @@ public static class ScreenRenderer
         System.Windows.Threading.Dispatcher.PushFrame(frame);
 
         var bitmap = new RenderTargetBitmap(width * 2, height * 2, 192, 192, PixelFormats.Pbgra32);
-        bitmap.Render((Visual)window.Content);
+        bitmap.Render(root);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var file = File.Create(path);

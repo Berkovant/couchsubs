@@ -616,6 +616,13 @@ public partial class MainView : UserControl
         }
     }
 
+    /// <summary>Kapak rafı yatay kayar (kaydırma çubuğu gizli, Mac gibi): fare tekerleği rafı yana kaydırır.</summary>
+    private void OnShelfWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        GameShelf.ScrollToHorizontalOffset(GameShelf.HorizontalOffset - e.Delta / 2.0);
+        e.Handled = true;
+    }
+
     private void OnChangeGame(object sender, RoutedEventArgs e) => controller.AskGame();
 
     private void OnDontAskGame(object sender, RoutedEventArgs e) => controller.DismissGame();

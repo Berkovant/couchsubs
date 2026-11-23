@@ -37,7 +37,7 @@ public static class IdleCpu
             foreach (var (tab, name) in new[] { (ShellTab.Home, "ana"), (ShellTab.History, "gecmis"), (ShellTab.Settings, "ayarlar") })
             {
                 window.ShowForRender(tab);
-                Wait(TimeSpan.FromSeconds(3));
+                Wait(TimeSpan.FromSeconds(tab == ShellTab.Home ? 10 : 3)); // Ana Ekran: işlemci koruması (Controls/Perde.cs › AmbientGlow) karar versin.
                 var process = Process.GetCurrentProcess();
                 process.Refresh();
                 var cpuStart = process.TotalProcessorTime;
@@ -50,7 +50,7 @@ public static class IdleCpu
                 lines.Add(string.Format(CultureInfo.InvariantCulture, "{0}: tek çekirdek %{1:0.0}, toplam %{2:0.00} ({3} çekirdek, {4:0} sn)",
                     name, single, total, Environment.ProcessorCount, clock.Elapsed.TotalSeconds));
             }
-            lines.Add($"çizim katmanı: {System.Windows.Media.RenderCapability.Tier >> 16} (2 = ekran kartı; 0 = yazılım, ortam ışığı durağan)");
+            lines.Add($"çizim katmanı: {System.Windows.Media.RenderCapability.Tier >> 16} (2 = ekran kartı), ortam ışığı süzülebilir: {Controls.AmbientGlow.Hardware} (false: yazılım çizimi, uzak masaüstü ya da işlemci koruması devrede)");
             window.Close();
         }
         catch (Exception error)

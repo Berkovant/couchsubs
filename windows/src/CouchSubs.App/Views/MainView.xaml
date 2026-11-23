@@ -359,7 +359,8 @@
                                    VerticalAlignment="Center" IsHitTestVisible="False" />
                     </Grid>
                     <TextBlock Text="{t:T 'Suggestions'}" Style="{StaticResource CardTitleText}" Margin="{t:Sp '0,m,0,0'}" />
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Focusable="False">
+                    <ScrollViewer x:Name="GameShelf" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Focusable="False"
+                                  PreviewMouseWheel="OnShelfWheel">
                         <!-- Seçili kapağın halkası ve ışıması kırpılmasın: rafın içinde dikeyde 12, yatayda 4 boşluk. -->
                         <StackPanel x:Name="GameList" Orientation="Horizontal" Margin="{t:Sp 'xxs,s'}" />
                     </ScrollViewer>

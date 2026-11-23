@@ -1239,10 +1239,39 @@ public sealed class AmbientGlow : Canvas
     public double Intensity { get; set; } = 0.8;
 
     /// <summary>
-    /// Süzülme yalnız ekran kartıyla çizimde (WPF çizim katmanı 2). Yazılımla çizimde (ekran kartı sürücüsü yok, uzak masaüstü,
-    /// sanal makine) bütün pencere her karede işlemcide yeniden çizilir; ölçümde boşta %90'ı geçti. Orada lekeler durağan.
+    /// Süzülme yalnız ekran kartıyla çizimde (WPF çizim katmanı 2) ve uzak masaüstünde değilken. Yazılımla çizimde bütün
+    /// pencere her karede işlemcide yeniden çizilir (CI'daki sanal makinede boşta %90'a çıktı); orada lekeler durağan.
     /// </summary>
-    public static bool Hardware => (RenderCapability.Tier >> 16) >= 2;
+    public static bool Hardware => (RenderCapability.Tier >> 16) >= 2 && !SystemParameters.IsRemoteSession && !throttled;
+
+    /// <summary>
+    /// Boşta işlemci koruması (Perde hedefi ≤ %2): süzülme sürerken sürecin işlemci payı 4 sn'lik iki ölçümde üst üste %2'yi
+    /// geçerse (ekran kartı aslında yazılımla çiziyor: sürücüsüz sanal makine, Temel Görüntü Bağdaştırıcısı) süzülme bu
+    /// oturumda kapanır, lekeler durağan kalır. Ölçüm Process.TotalProcessorTime farkıdır, kendisi yük getirmez.
+    /// </summary>
+    private static bool throttled;
+    private readonly System.Windows.Threading.DispatcherTimer guard = new() { Interval = TimeSpan.FromSeconds(4) };
+    private TimeSpan guardCpu;
+    private DateTime guardAt;
+    private int guardStrikes;
+
+    private void Guard()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            var cpu = process.TotalProcessorTime;
+            var now = DateTime.UtcNow;
+            var share = (cpu - guardCpu).TotalSeconds / Math.Max(0.001, (now - guardAt).TotalSeconds) / Environment.ProcessorCount * 100;
+            guardCpu = cpu;
+            guardAt = now;
+            guardStrikes = share > 2 ? guardStrikes + 1 : 0;
+            if (guardStrikes < 2) return;
+            throttled = true;
+            Stop();
+        }
+        catch (Exception error) { System.Diagnostics.Debug.WriteLine($"Ortam ışığı ölçümü: {error.Message}"); }
+    }
 
     private void OnGateChanged()
     {
@@ -1283,7 +1312,14 @@ public sealed class AmbientGlow : Canvas
 
     private void Start()
     {
+        if (throttled) return;
         running = true;
+        guardStrikes = 0;
+        using (var process = System.Diagnostics.Process.GetCurrentProcess()) guardCpu = process.TotalProcessorTime;
+        guardAt = DateTime.UtcNow;
+        guard.Tick -= OnGuard;
+        guard.Tick += OnGuard;
+        guard.Start();
         var half = TimeSpan.FromMilliseconds(Palette.MotionMs("ambient", 24000) / 2);
         for (var i = 0; i < Blobs.Length; i++)
         {
@@ -1296,9 +1332,12 @@ public sealed class AmbientGlow : Canvas
         }
     }
 
+    private void OnGuard(object? sender, EventArgs e) => Guard();
+
     private void Stop()
     {
         running = false;
+        guard.Stop();
         for (var i = 0; i < Blobs.Length; i++)
         {
             drifts[i].BeginAnimation(TranslateTransform.XProperty, null);
