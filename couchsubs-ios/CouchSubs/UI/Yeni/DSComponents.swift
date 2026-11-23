@@ -41,9 +41,9 @@ private struct DSButtonBody: View {
             if busy {
                 DSBarsLoader(color: kind == .primary ? .dsOnAmber : .dsAmber)
             } else if kind == .stop {
-                RoundedRectangle(cornerRadius: 2).fill(Color.dsLiveText).frame(width: 10, height: 10).accessibilityHidden(true)
+                RoundedRectangle(cornerRadius: 2).fill(Color.dsOnStop).frame(width: 10, height: 10).accessibilityHidden(true)
             } else if kind == .live {
-                DSPulseDot(color: .dsLiveDot, size: 8)
+                DSPulseDot(color: .dsOnStop, size: 8)
             }
             configuration.label
                 .labelStyle(.titleAndIcon)
@@ -90,7 +90,9 @@ private struct DSButtonBody: View {
                     .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .center)))
             case .dark: shape.fill(Color.dsCharcoal)
             case .secondary, .compact: shape.fill(pressed ? Color.dsSurfaceHigh : Color.dsSurfaceRaised)
-            case .stop, .live, .danger: shape.fill(pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
+            // Durdur (çeviri sürerken birincil eylem): dolu canlı zemin, beyaz yazı. Sil/Kaldır (danger) soluk kalır.
+            case .stop, .live: shape.fill(Color.dsStopFill).overlay(shape.fill(Color.black.opacity(pressed ? 0.16 : 0)))
+            case .danger: shape.fill(pressed ? Color.dsLive.opacity(0.22) : .dsLiveSoft)
             case .ghost: shape.fill(pressed ? Color.dsField : .clear)
             }
         }
@@ -100,7 +102,7 @@ private struct DSButtonBody: View {
         switch kind {
         case .primary: Capsule().strokeBorder(isEnabled ? Color.dsAmberLine.opacity(0.6) : .clear)
         case .secondary, .compact: Capsule().strokeBorder(Color.dsBorder)
-        case .stop, .live, .danger: Capsule().strokeBorder(Color.dsLiveRing)
+        case .danger: Capsule().strokeBorder(Color.dsLiveRing)
         default: EmptyView()
         }
     }
@@ -110,7 +112,8 @@ private struct DSButtonBody: View {
         case .primary: .dsOnAmber
         case .dark: .dsOnCharcoal
         case .secondary, .compact: .dsText
-        case .stop, .live, .danger: .dsLiveText
+        case .stop, .live: .dsOnStop
+        case .danger: .dsLiveText
         case .ghost: .dsAmberText
         }
     }
@@ -471,7 +474,7 @@ struct DSBadge: View {
 // MARK: Kaydırıcı
 
 /// Kaydırıcı: 4 pt ince iz (kapalı anahtar rengi), dolu kısmı amber, 24 pt beyaz gölgeli düğmecik; nokta (tick) yok.
-/// İz düğmeciğin yarıçapı kadar içeriden başlar; değer yazıları iz uçlarına hizalanacaksa `DSSlider.inset` kullanılır.
+/// İz tam genişlik (uçları başlık ve değer yazısının kenarlarıyla aynı hizada); düğmecik uçlarda yarıçapı kadar taşar.
 struct DSSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -485,29 +488,34 @@ struct DSSlider: View {
     @State private var dragging = false
 
     static let knob: CGFloat = 24
-    static var inset: CGFloat { knob / 2 }
+    /// Uç etiketlerinin iç boşluğu: iz tam genişlik olduğundan 0.
+    static var inset: CGFloat { 0 }
     private static let track: CGFloat = 4
+
+    /// İz kartın iç genişliğini tam kaplar: sol ucu 0, sağ ucu genişlik (başlık, değer ve uç etiketleriyle aynı iki dikey
+    /// çizgi). Düğmeciğin merkezi iz üzerinde gezer; uçlarda yarıçapı kadar dışarı taşar.
+    static func trackSpan(width: CGFloat) -> ClosedRange<CGFloat> { 0...max(width, 0) }
+
+    static func knobCenter(fraction: CGFloat, width: CGFloat) -> CGFloat { max(width, 0) * min(max(fraction, 0), 1) }
 
     var body: some View {
         GeometryReader { geometry in
             let knob = Self.knob
-            let travel = max(geometry.size.width - knob, 1)
-            let offset = travel * fraction
+            let width = max(geometry.size.width, 1)
+            let center = Self.knobCenter(fraction: fraction, width: width)
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.dsField)
                     .overlay(Capsule().strokeBorder(Color.dsBorder, lineWidth: 0.5))
-                    .frame(width: travel, height: Self.track)
-                    .offset(x: knob / 2)
+                    .frame(width: width, height: Self.track)
                 Capsule().fill(Color.dsAmber)
-                    .frame(width: offset, height: Self.track)
+                    .frame(width: center, height: Self.track)
                     .shadow(color: isEnabled ? Color.dsAmberGlow : .clear, radius: 5)
-                    .offset(x: knob / 2)
                 Circle().fill(Color.white)
                     .frame(width: knob, height: knob)
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.06)))
                     .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                     .scaleEffect(dragging && !reduceMotion ? 1.08 : 1)
-                    .offset(x: offset)
+                    .offset(x: center - knob / 2)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
@@ -518,7 +526,7 @@ struct DSSlider: View {
                             dragging = true
                             onEditingChanged(true)
                         }
-                        set(fraction: (gesture.location.x - knob / 2) / travel)
+                        set(fraction: gesture.location.x / width)
                     }
                     .onEnded { _ in
                         dragging = false
@@ -579,7 +587,7 @@ struct DSSliderRow: View {
                 Text(title).font(.dsBodyStrong).foregroundStyle(Color.dsText).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: DS.space("s"))
                 Text(verbatim: valueText)
-                    .font(.system(.footnote, design: .monospaced).weight(.semibold).monospacedDigit())
+                    .font(.system(.footnote).weight(.semibold).monospacedDigit())
                     .foregroundStyle(Color.dsAmberText)
             }
             VStack(spacing: 0) {
@@ -593,8 +601,8 @@ struct DSSliderRow: View {
     }
 }
 
-/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri (Mac DSSliderRange): çubuğun gerçek uçlarıyla hizalı (çubuk
-/// düğmecik yarıçapı kadar içeriden başlar; etiketler de aynı iç boşlukla).
+/// Kaydırıcının altındaki en küçük / en büyük değer etiketleri (Mac DSSliderRange): çubuğun uçlarıyla hizalı (çubuk tam
+/// genişlik; sol etiket sol kenarda, sağ etiket sağ kenarda).
 struct DSSliderRange: View {
     let low: String
     let high: String
@@ -605,9 +613,8 @@ struct DSSliderRange: View {
             Spacer()
             Text(verbatim: high)
         }
-        .font(.system(.caption, design: .monospaced).weight(.medium).monospacedDigit())
+        .font(.system(.caption).weight(.medium).monospacedDigit())
         .foregroundStyle(Color.dsMuted)
-        .padding(.horizontal, DSSlider.inset)
         .accessibilityHidden(true)
     }
 }
