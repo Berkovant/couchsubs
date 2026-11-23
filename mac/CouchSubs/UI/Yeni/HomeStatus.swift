@@ -171,9 +171,9 @@ private struct FixRow: View {
                 Text(title).font(.dsButtonSecondary).lineLimit(1)
                 Spacer(minLength: DS.space("s"))
                 if finished && state == nil {
-                    Text("Completed").font(.system(size: 12, weight: .medium, design: .monospaced))
+                    Text("Completed").font(.system(size: 12, weight: .medium))
                 } else if let state {
-                    Text(state).font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Color.dsMuted)
+                    Text(state).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsMuted)
                 }
             }
             .foregroundStyle(finished && state == nil ? Color.dsSuccessText : amber ? Color.dsOnAmber : Color.dsText)

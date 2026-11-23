@@ -44,15 +44,17 @@ final class HomeTicker: ObservableObject {
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @State private var ticker = HomeTicker()
+    @Environment(\.dsChromeInsets) private var chrome
 
     var body: some View {
         ZStack {
-            // Sayfa kayar: perde (16:9) ve düğme satırı kısa pencerede de tamamıyla görülür, reklam bandının altına girmez.
-            // Sağ sütun perde + düğmelerle aynı yükseklikte.
+            // Sayfa pencere boyu kayar; üst ve alt cam çubuğun arkasından geçer. İlk açılışta perde ve düğme satırı
+            // çubukların arasında tam görünür. Sağ sütun perde + düğmelerle aynı yükseklikte.
             GeometryReader { outer in
                 let gap = DS.space("l")
                 let width = max(outer.size.width - 2 * gap, 0)
-                let left = ((width - gap) * 2 / 3).rounded(.down)
+                let free = outer.size.height - chrome.top - chrome.bottom
+                let left = HomeStage.leftWidth(total: width, gap: gap, availableHeight: free - 2 * gap)
                 let height = HomeStage.height(width: left)
                 ScrollView(.vertical) {
                     HStack(alignment: .top, spacing: gap) {
@@ -60,6 +62,11 @@ struct HomeView: View {
                         RightColumn(ticker: ticker).frame(maxWidth: .infinity).frame(height: height)
                     }
                     .padding(gap)
+                    // Uzun pencerede kalan boşluk düğme satırı ile reklam bandı arasında tek şerit olarak kalmaz: içerik
+                    // çubukların arasında dikeyde ortalanır (iki sütunun alt kenarı zaten aynı hizada).
+                    .frame(minHeight: max(free, 0))
+                    .padding(.top, chrome.top)
+                    .padding(.bottom, chrome.bottom)
                 }
                 .scrollIndicators(.automatic)
             }
@@ -87,6 +94,14 @@ private struct HomeStage: View {
         (width * 9 / 16).rounded(.down) + gap + DS.size("button")
     }
 
+    /// Sol sütun genişliği: en az 2/3; pencere uzunsa perde boş yüksekliği dolduracak kadar (en çok %70) büyür, sağ
+    /// sütun karoları okunur genişlikte kalır.
+    static func leftWidth(total: CGFloat, gap: CGFloat, availableHeight: CGFloat) -> CGFloat {
+        let base = (total - gap) * 2 / 3
+        let fill = (availableHeight - Self.gap - DS.size("button")) * 16 / 9
+        return min(max(base, fill), (total - gap) * 0.7).rounded(.down)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
@@ -99,7 +114,7 @@ private struct HomeStage: View {
 }
 
 /// Perde: oyunun son karesi (yoksa sıcak sahne), üstte durağan projeksiyon ışığı, okunan alan (kesikli amber), son çeviri
-/// altyazı plakasında (konuşan adı amber), sağ üstte cam haplar (CANLI nabız + kare hızı).
+/// altyazı plakasında (konuşan adı amber; boşta örnek plaka), sağ üstte cam hap (kaynak + kare hızı).
 private struct HomePerde: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var ticker: HomeTicker
@@ -135,18 +150,23 @@ private struct HomePerde: View {
                                 .position(x: size.width / 2, y: Self.plateY(area: area, height: size.height))
                                 .id(model.lastTranslation)
                                 .transition(.opacity.combined(with: .offset(y: 8)))
+                        } else if !running, ticker.image == nil {
+                            // Boşta örnek plaka: altyazının nerede ve nasıl görüneceğini gösterir.
+                            DSSubtitlePlate(line: String(localized: "Subtitles will appear here while you play."), size: 17)
+                                .lineLimit(2)
+                                .frame(maxWidth: size.width * 0.78)
+                                .position(x: size.width / 2, y: Self.plateY(area: area, height: size.height))
+                                .accessibilityHidden(true)
                         }
                     }
                 }
             }
+            // Çeviri durumu tek yerde: üst çubuktaki hap ("Çeviri Açık"). Perdede yalnız kaynak ve kare hızı.
             .overlay(alignment: .topTrailing) {
-                HStack(spacing: DS.space("xs")) {
-                    GlassPill(live: running) { Text(running ? "LIVE" : "STOPPED").tracking(0.66) }
-                    if running {
-                        GlassPill(mono: true) { Text(verbatim: frameRate) }
-                    }
+                if running {
+                    GlassPill { Text(verbatim: frameRate) }
+                        .padding(DS.space("s"))
                 }
-                .padding(DS.space("s"))
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(Color.white.opacity(0.06)))
@@ -214,20 +234,13 @@ struct SpeakerSplit {
     }
 }
 
-/// Perdenin üstündeki cam hap (e3): canlıyken kırmızı nabız noktası (Core Animation), değilse soluk nokta.
+/// Perdenin üstündeki cam hap (e3). Yazı sans; sayılar sabit genişlikte (kare hızı değişirken hap titremez).
 private struct GlassPill<Label: View>: View {
-    var live: Bool?
-    var mono = false
     @ViewBuilder var label: Label
 
     var body: some View {
-        HStack(spacing: DS.space("xs")) {
-            if let live {
-                if live { DSPulseDot(color: .dsLiveDot, size: 7) } else { Circle().fill(Color.white.opacity(0.6)).frame(width: 7, height: 7) }
-            }
-            label
-        }
-        .font(.system(size: 11, weight: mono ? .medium : .semibold, design: mono ? .monospaced : .default))
+        label
+        .font(.system(size: 11, weight: .semibold).monospacedDigit())
         .foregroundStyle(Color(red: 0.953, green: 0.933, blue: 0.894))
         .padding(.horizontal, DS.space("s"))
         .frame(height: 28)
@@ -323,7 +336,7 @@ private struct StatusTiles: View {
         LazyVGrid(columns: columns, spacing: DS.space("s")) {
             consoleTile
             tvTile
-            HomeTile(key: "Game", value: choice.game?.name ?? String(localized: "Unknown Game"),
+            HomeTile(key: "Game", value: choice.game?.name ?? String(localized: "Not Recognized"),
                        detail: gameHasPack ? String(localized: "Pack") : nil,
                        tone: choice.game == nil ? .idle : .good, icon: .cover(choice.game?.name)) { choice.ask() }
             HomeTile(key: "Translation", value: engineName, detail: languages,
@@ -424,16 +437,18 @@ private struct HomeTile: View {
                         Text(key).font(.dsCaption).foregroundStyle(Color.dsMuted).lineLimit(1)
                         Circle().fill(dot).frame(width: 6, height: 6).accessibilityHidden(true)
                     }
-                    Text(verbatim: value).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsText).lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    // Uzun ad iki satıra kırılır (kesilmez); tam ad ipucunda.
+                    Text(verbatim: value).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsText).lineLimit(2)
+                        .minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
                     if let detail {
-                        Text(verbatim: detail).font(.system(size: 11, weight: .medium, design: .monospaced))
+                        Text(verbatim: detail).font(.system(size: 11, weight: .medium).monospacedDigit())
                             .foregroundStyle(Color.dsMuted).lineLimit(1).truncationMode(.middle)
                     }
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.space("s"))
+            .padding(.vertical, DS.space("xs"))
             .frame(maxWidth: .infinity, minHeight: DS.size("option"), alignment: .leading)
             .dsElevation(.card, in: shape)
             .overlay(hovering ? shape.strokeBorder(Color.dsBorderStrong) : nil)
@@ -442,6 +457,7 @@ private struct HomeTile: View {
         .buttonStyle(DSFocusPlainStyle(cornerRadius: DS.radius("tile")))
         .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
+        .help(Text(verbatim: value))
     }
 
     @ViewBuilder private var iconView: some View {

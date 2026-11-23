@@ -17,45 +17,57 @@ struct HistoryPage: View {
     @State private var selected: Int?
     @State private var confirmClear = false
     @State private var copiedAll = false
+    @Environment(\.dsChromeInsets) private var chrome
 
     var body: some View {
         let rows = filtered
-        VStack(spacing: DS.space("m")) {
-            HStack(spacing: DS.space("s")) {
-                DSFieldChrome {
+        // Sayfa pencere boyu tek kaydırma: arama satırı, tablo kartı (başlık, satırlar, alt bilgi). İçerik üst ve alt cam
+        // çubuğun arkasından kayar; kart en az çubukların arasındaki yüksekliği doldurur (kesik kenar, boş şerit yok).
+        GeometryReader { outer in
+            let free = max(outer.size.height - chrome.top - chrome.bottom - 2 * DS.space("l"), 0)
+            ScrollView(.vertical) {
+                VStack(spacing: DS.space("m")) {
                     HStack(spacing: DS.space("s")) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(Color.dsMuted).accessibilityHidden(true)
-                        TextField("Search History", text: $query).textFieldStyle(.plain)
-                    }
-                }
-                DSTabs(selection: $filter, items: [(.all, "All"), (.pack, "Pack"), (.engine, "Translation")], fill: true)
-                    .frame(width: 360)
-            }
-            VStack(spacing: 0) {
-                header
-                if rows.isEmpty {
-                    VStack(spacing: DS.space("m")) {
-                        DSIconSquare(symbol: model.history.entries.isEmpty ? "captions.bubble" : "magnifyingglass", tone: .gray, size: 48)
-                        Text(model.history.entries.isEmpty ? "No subtitles yet. Lines translated while you play appear here." : "No lines match this search.")
-                            .dsMuted(.dsBody)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(DS.space("xxl"))
-                } else {
-                    ScrollView(.vertical) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(rows, id: \.id) { entry in row(entry) }
+                        DSFieldChrome {
+                            HStack(spacing: DS.space("s")) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(Color.dsMuted).accessibilityHidden(true)
+                                TextField("Search History", text: $query).textFieldStyle(.plain)
+                            }
                         }
+                        DSTabs(selection: $filter, items: [(.all, "All"), (.pack, "Pack"), (.engine, "Translation")], fill: true)
+                            .frame(width: 360)
                     }
+                    VStack(spacing: 0) {
+                        header
+                        if rows.isEmpty {
+                            VStack(spacing: DS.space("m")) {
+                                DSIconSquare(symbol: model.history.entries.isEmpty ? "captions.bubble" : "magnifyingglass", tone: .gray, size: 48)
+                                Text(model.history.entries.isEmpty ? "No subtitles yet. Lines translated while you play appear here." : "No lines match this search.")
+                                    .dsMuted(.dsBody)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(DS.space("xxl"))
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(rows, id: \.id) { entry in row(entry) }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        DSDivider()
+                        footer(count: rows.count)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
+                    .dsElevation(.card, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
                 }
-                DSDivider()
-                footer(count: rows.count)
+                .frame(minHeight: free, alignment: .top)
+                .padding(DS.space("l"))
+                .padding(.top, chrome.top)
+                .padding(.bottom, chrome.bottom)
             }
-            .clipShape(RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
-            .dsElevation(.card, in: RoundedRectangle(cornerRadius: DS.radius("card"), style: .continuous))
+            .scrollIndicators(.automatic)
         }
-        .padding(DS.space("l"))
         .confirmationDialog("Clear the history?", isPresented: $confirmClear) {
             Button("Clear", role: .destructive) { model.clearHistory() }
         } message: {
@@ -94,13 +106,14 @@ struct HistoryPage: View {
         let isSelected = selected == entry.id
         return HStack(alignment: .center, spacing: DS.space("m")) {
             Text(verbatim: entry.date.formatted(date: .omitted, time: .shortened))
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.dsMuted)
+                .font(HistoryRowStyle.timeFont)
+                .foregroundStyle(HistoryRowStyle.time)
                 .frame(width: Self.columns.time, alignment: .leading)
-            Text(verbatim: entry.translation).font(.system(size: 14, weight: .medium)).lineSpacing(3)
+            Text(verbatim: entry.translation).font(.system(size: 14, weight: .semibold)).foregroundStyle(HistoryRowStyle.translation)
+                .lineSpacing(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(verbatim: entry.source).font(.dsSmall).foregroundStyle(Color.dsMuted).lineSpacing(3)
+            Text(verbatim: entry.source).font(.dsSmall).foregroundStyle(HistoryRowStyle.source).lineSpacing(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -184,6 +197,19 @@ struct HistoryPage: View {
                                   URLQueryItem(name: "body", value: body)]
         if let url = components?.url { NSWorkspace.shared.open(url) }
     }
+}
+
+/// Geçmiş satırının yazı renkleri (kontrast testi bunları ölçer: çeviri ≥ 7:1, kaynak ve saat ≥ 4.5:1, iki temada,
+/// kart yüzeyinde ve seçili satırın amber zemininde).
+enum HistoryRowStyle {
+    static let translationToken = "text"
+    static let sourceToken = "muted"
+    static let timeToken = "muted"
+    static let translation = DS.color(translationToken)
+    static let source = DS.color(sourceToken)
+    static let time = DS.color(timeToken)
+    /// Saat sayıdır: sans, sabit genişlikte rakamlar (sütun hizalı).
+    static let timeFont = Font.system(size: 12, weight: .medium).monospacedDigit()
 }
 
 /// Geçmiş altındaki küçük ikincil düğmeler (40 yükseklik, 13 pt).
