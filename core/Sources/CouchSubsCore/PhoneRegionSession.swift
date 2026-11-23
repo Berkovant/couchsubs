@@ -64,7 +64,8 @@ final class PhoneRegionSession {
     private var sentOptions: PhonePanelOptions?
     /// Son gönderilen düzen ve Yanda Panel'in dayandığı telefon yeri (`PhoneSteady.steadyPose`, `samePicture`).
     private var sentShown: [ScreenTranslation.Item] = []
-    private var anchor: GamePhoneGeometry.Pose?
+    /// Yanda Panel'in kilitli telefon yeri ve yazı boyu (#1152): el titremesiyle değişmez.
+    private var steady = PhonePanelSteady()
     /// Boş okumanın art arda kaç turdur sürdüğü: `PhoneSteady.missTurns` tur (~1,35 sn) sürmeden ekran silinmez.
     private var empties = 0
 
@@ -403,17 +404,21 @@ final class PhoneRegionSession {
 
     private func publish(_ fresh: [ScreenTranslation.Item]) {
         var items = fresh
+        let now = lastPass ?? 0
         if let region = latest?.region {
             let height = region.bottom - region.top
-            // Telefon gerçekten yakınlaşıp uzaklaşınca yeni boyutlar hemen kullanılır.
+            // Telefon gerçekten yakınlaşıp uzaklaşınca balonların yerindeki görünüşü hemen yenilenir (Balonların Üstünde).
             if abs(height - scale) > scale * 0.03 {
                 scale = height
-                anchor = nil
             } else if !rendered.isEmpty {
                 items = PhoneSteady.steadyPositions(Self.stableBlocks(items, previous: rendered), previous: rendered,
                                                     aspect: Double(frameSize.width) / Double(max(1, frameSize.height)))
             }
         }
+        // Yanda Panel'in dayandığı telefon yeri ve yazı boyu ise el titremesiyle değişmez (`PhonePanelSteady`): yalnız
+        // belirgin ve kalıcı yakınlaşma/kaymada yenilenir. Ekran silinince (telefon kayboldu) sonraki gönderi baştan ölçer.
+        if fresh.isEmpty { steady.reset() }
+        let placed = fresh.isEmpty ? nil : latest.map { steady.steadyPose($0.pose, now: now) }
         let options = panel()
         let sameOptions = sentOptions == options
         guard rendered != items || (!sameOptions && !items.isEmpty) else { return }
@@ -425,10 +430,10 @@ final class PhoneRegionSession {
         }) { return }
         rendered = items
         sentOptions = options
-        // Panel telefonun el titremesiyle kaymaz (`PhoneSteady.steadyPose`); TV'de aynı görünen gönderi yinelenmez.
-        let pose = latest.map { PhoneSteady.steadyPose($0.pose, anchor: anchor) }
-        anchor = pose ?? anchor
-        let shown = Self.arranged(items, pose: pose, frameSize: frameSize, options: options)
+        // Panel telefonun el titremesiyle kaymaz, yazı boyu değişmez (`PhonePanelSteady`); TV'de aynı görünen gönderi
+        // yinelenmez.
+        let line = steady.steadyLine(ScreenPhoneCard.measuredLine(items), now: now)
+        let shown = Self.arranged(items, pose: placed?.pose, frameSize: frameSize, options: options, line: line)
         if sameOptions, PhoneSteady.samePicture(shown, sentShown) { return }
         sentShown = shown
         let boxes = shown.map(\.box)
@@ -444,10 +449,11 @@ final class PhoneRegionSession {
     /// ekran yazıları yerinde kalır), Balonların Üstünde'de her çeviri kendi balonunun yerinde (çevirisi aslıyla aynı
     /// olanlar atılır). Telefonun yeri bilinmiyorsa balonlar yerinde kalır.
     nonisolated static func arranged(_ items: [ScreenTranslation.Item], pose: GamePhoneGeometry.Pose?,
-                                     frameSize: (width: Int, height: Int), options: PhonePanelOptions) -> [ScreenTranslation.Item] {
+                                     frameSize: (width: Int, height: Int), options: PhonePanelOptions,
+                                     line: Double? = nil) -> [ScreenTranslation.Item] {
         guard options.enabled, let pose, !items.isEmpty else { return items.filter { !$0.unchanged } }
         let handset = ScreenPhoneCard.Handset(pose: pose, aspect: Double(frameSize.width) / Double(max(1, frameSize.height)))
-        return ScreenPhoneCard.layout(items, handset: handset, textScale: options.textScale).filter { !$0.unchanged }
+        return ScreenPhoneCard.layout(items, handset: handset, textScale: options.textScale, line: line).filter { !$0.unchanged }
     }
 
     private static func sameSurface(_ a: PhoneTextStyle?, _ b: PhoneTextStyle?) -> Bool {
