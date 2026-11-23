@@ -465,7 +465,7 @@ struct RunningScreen: View {
                 if model.demoMode { model.exitDemo() } else { model.stop() }
             } label: {
                 if model.demoMode {
-                    Label("Exit Demo Mode", systemImage: "xmark")
+                    Text("Exit Demo Mode")
                 } else {
                     // Perde: kırmızı yumuşak hap + nabız noktası.
                     Text("Stop Translating")

@@ -124,7 +124,7 @@ struct MobileButtonStyle: ButtonStyle {
         case .primary: .primary
         case .secondary: .secondary
         case .ghost: .ghost
-        case .destructive: .stop
+        case .destructive: .danger
         }
     }
 }
