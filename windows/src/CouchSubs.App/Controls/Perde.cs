@@ -1025,6 +1025,26 @@ public sealed class CoverArt : FrameworkElement
     /// </summary>
     public static string Monogram(string title)
     {
+        var words = Words(title);
+        if (words.Count == 0) return "?";
+        var first = words[0];
+        if (first.Length is >= 2 and <= 4 && first == first.ToUpper(English) && first.All(char.IsLetter) && !IsRoman(first)) return first[..Math.Min(3, first.Length)];
+        string[] skip = ["the", "of", "a", "an", "and", "to", "in", "on", "for"];
+        var significant = words.Where(w => !skip.Contains(w.ToLower(English)) && !IsNumeral(w)).ToList();
+        if (significant.Count >= 2) return string.Concat(significant.Take(3).Select(w => w[..1].ToUpper(English)));
+        var word = significant.FirstOrDefault() ?? first;
+        return word[..1].ToUpper(English) + (word.Length > 1 ? word.Substring(1, 1).ToLower(English) : "");
+    }
+
+    /// <summary>Adın sonundaki sayı ya da Roma rakamı (Red Dead Redemption 2 → 2, Grand Theft Auto VI → VI); yoksa null.</summary>
+    public static string? Numeral(string title)
+    {
+        var words = Words(title);
+        return words.Count > 1 && IsNumeral(words[^1]) && words[^1].Length <= 4 ? words[^1] : null;
+    }
+
+    private static List<string> Words(string title)
+    {
         var words = new List<string>();
         var current = new System.Text.StringBuilder();
         foreach (var ch in title + " ")
@@ -1036,22 +1056,7 @@ public sealed class CoverArt : FrameworkElement
                 current.Clear();
             }
         }
-        words = words.Where(w => w.Length > 1 || char.IsUpper(w[0]) || char.IsDigit(w[0])).ToList();
-        if (words.Count == 0) return "?";
-        var first = words[0];
-        if (first.Length is >= 2 and <= 4 && first == first.ToUpper(English) && first.All(char.IsLetter) && !IsRoman(first)) return first;
-        string[] skip = ["the", "of", "a", "an", "and", "to", "in", "on", "for"];
-        var numeral = words.Count > 1 && IsNumeral(words[^1]) ? words[^1] : null;
-        var significant = words.Where(w => !skip.Contains(w.ToLower(English)) && !IsNumeral(w)).ToList();
-        string result;
-        if (significant.Count >= 2) result = string.Concat(significant.Take(2).Select(w => w[..1].ToUpper(English)));
-        else
-        {
-            var word = significant.FirstOrDefault() ?? first;
-            result = word[..1].ToUpper(English) + (word.Length > 1 ? word.Substring(1, 1).ToLower(English) : "");
-        }
-        if (numeral is not null && result.Length + numeral.Length <= 3) result += numeral;
-        return result;
+        return words.Where(w => w.Length > 1 || char.IsUpper(w[0]) || char.IsDigit(w[0])).ToList();
     }
 
     private static bool IsNumeral(string word) => word.All(char.IsDigit) || IsRoman(word);
@@ -1108,6 +1113,13 @@ public sealed class CoverArt : FrameworkElement
             var lineY = origin.Y + text.Baseline + text.Height * 0.12;
             var lineHeight = Math.Max(2, w * 0.02);
             context.DrawRoundedRectangle(new SolidColorBrush(PerdeColors.WithAlpha(ink, 0.75)), null, new Rect(origin.X, lineY, w * 0.2, lineHeight), lineHeight / 2, lineHeight / 2);
+            // Sıra numarası (V, VI, 2) çizginin yanında küçük: V ile VI karışmaz.
+            if (Numeral(Seed ?? "") is { } numeral)
+            {
+                var number = new FormattedText(numeral, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, w * 0.13,
+                    new SolidColorBrush(PerdeColors.WithAlpha(ink, 0.9)), dpi);
+                context.DrawText(number, new Point(origin.X + w * 0.24, lineY + lineHeight / 2 - number.Height / 2));
+            }
         }
         context.Pop();
     }

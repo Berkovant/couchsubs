@@ -70,6 +70,7 @@ public partial class MainView : UserControl
         ShowNotices();
         OnTick();
         Preview.SetRegion(controller.Settings.Region);
+        Preview.SetLine(controller.IsRunning ? controller.LastTranslation : null);
         _ = controller.CheckForUpdateAsync();
     }
 

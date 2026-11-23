@@ -550,10 +550,10 @@
         <Setter Property="ContentTemplate">
             <Setter.Value>
                 <DataTemplate>
-                    <!-- Durdur (Perde): çeviri sürerken birincil eylem; dolu canlı zemin (stopFill), beyaz yazı; solda beyaz nabız
-                         noktası (ekrandaki tek sürekli animasyon; hareket azaltılmışken sabit). Sil/Kaldır (DangerButton) soluk kalır. -->
+                    <!-- Durdur (Perde): çeviri sürerken birincil eylem; dolu canlı zemin (stopFill), beyaz yazı; solda beyaz
+                         kare (Mac .stop). Sil/Kaldır (DangerButton) soluk kalır. -->
                     <StackPanel Orientation="Horizontal">
-                        <c:PulseDot Diameter="8" Margin="0,0,10,0" Fill="{DynamicResource onStopBrush}" />
+                        <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource onStopBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
                         <ContentPresenter Content="{Binding}" VerticalAlignment="Center" />
                     </StackPanel>
                 </DataTemplate>

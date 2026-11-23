@@ -92,11 +92,11 @@ public static class ThemeManager
         var bg = Get("background");
         resources["glassBarBrush"] = Frozen(new LinearGradientBrush(new GradientStopCollection
         {
-            new(Color.FromArgb(0xF2, bg.R, bg.G, bg.B), 0), new(Color.FromArgb(0xD9, bg.R, bg.G, bg.B), 0.7), new(Color.FromArgb(0x00, bg.R, bg.G, bg.B), 1),
+            new(Color.FromArgb(0xFA, bg.R, bg.G, bg.B), 0), new(Color.FromArgb(0xEB, bg.R, bg.G, bg.B), 0.72), new(Color.FromArgb(0x00, bg.R, bg.G, bg.B), 1),
         }, 90));
         resources["glassBarBottomBrush"] = Frozen(new LinearGradientBrush(new GradientStopCollection
         {
-            new(Color.FromArgb(0x00, bg.R, bg.G, bg.B), 0), new(Color.FromArgb(0xD9, bg.R, bg.G, bg.B), 0.3), new(Color.FromArgb(0xF2, bg.R, bg.G, bg.B), 1),
+            new(Color.FromArgb(0x00, bg.R, bg.G, bg.B), 0), new(Color.FromArgb(0xEB, bg.R, bg.G, bg.B), 0.28), new(Color.FromArgb(0xFA, bg.R, bg.G, bg.B), 1),
         }, 90));
         resources["glassFillBrush"] = Frozen(new SolidColorBrush(Color.FromArgb((byte)Math.Min(255, glass.A + 0x30), glass.R, glass.G, glass.B)));
         // Durdur düğmesi: üzerine gelince dolu canlı zemin %8 koyulaşır (Mac: siyah %8 örtü).
