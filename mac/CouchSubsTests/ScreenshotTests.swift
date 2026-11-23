@@ -256,14 +256,18 @@ final class ScreenshotTests: XCTestCase {
             getrusage(RUSAGE_SELF, &usage)
             return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
         }
-        func measure(_ view: AnyView, animate: Bool) async throws -> Double {
+        func measure(_ view: AnyView, animate: Bool?) async throws -> Double {
             DSMotionGate.forced = animate
             let window = show(view, size: CGSize(width: 1200, height: 760), offset: 0, dark: true)
             try await Task.sleep(for: .seconds(3))
             let (start, began) = (cpu(), Date())
             try await Task.sleep(for: .seconds(15))
             let percent = (cpu() - start) / Date().timeIntervalSince(began) * 100
+            // Kapanan pencerenin görünümleri (ve görevleri) sonraki ölçüme yük bindirmesin.
+            window.contentView = nil
             window.close()
+            windows.removeAll { $0 === window }
+            try await Task.sleep(for: .seconds(1))
             return percent
         }
         let main = try await mainModel()
@@ -274,13 +278,22 @@ final class ScreenshotTests: XCTestCase {
         let home = AnyView(RootView().environmentObject(main))
         let homeStill = try await measure(home, animate: false)
         let homeMoving = try await measure(home, animate: true)
-        main.settingsSection = .packs
-        main.showSettings = true
-        let settingsMoving = try await measure(home, animate: true)
+        // Geçmiş ve Ayarlar'da ortam ışığı durağan (yalnız Ana Ekran'da süzülür): kapı zorlanmadan, uygulamadaki gibi ölçülür.
+        var pages: [(String, Double)] = []
+        main.showHistory = true
+        pages.append(("gecmis", try await measure(home, animate: nil)))
+        main.showHistory = false
+        for section in [SettingsSection.basics, .appearance, .packs, .outputs] {
+            main.settingsSection = section
+            main.showSettings = true
+            pages.append(("ayarlar-\(section)", try await measure(home, animate: nil)))
+        }
         print("CPU_HOME home still=\(String(format: "%.2f", homeStill)) moving=\(String(format: "%.2f", homeMoving)) " +
-              "cost=\(String(format: "%.2f", homeMoving - homeStill)) | settings moving=\(String(format: "%.2f", settingsMoving))")
+              "cost=\(String(format: "%.2f", homeMoving - homeStill)) | " +
+              pages.map { "\($0.0)=\(String(format: "%.2f", $0.1))" }.joined(separator: " "))
         // Hedef %2; test sürecinde XCTest ve Main Thread Checker yükü de sayıldığı için sınır biraz geniş (gürültü ±0,5).
         XCTAssertLessThan(homeMoving, 2.5)
+        for (name, value) in pages { XCTAssertLessThan(value, 2.5, name) }
     }
 
     /// Ayarlar menüsünün renk geçişinin işlemci maliyeti: aynı pencere önce durağan, sonra oynarken 15'er sn ölçülür;

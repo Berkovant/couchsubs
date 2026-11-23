@@ -48,9 +48,16 @@ struct AppShell: View {
         }
         .frame(maxWidth: DS.size("contentMax"))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Ortam ışığı: amber, şeftali ve gök mavisi lekeler çok yavaş süzülür (Core Animation); çeviri sürerken, hareketi
-        // azaltta ve pencere arka plandayken durağan.
-        .background { DSAmbientGlow(intensity: 0.8) }
+        // Ortam ışığı: amber, şeftali ve gök mavisi lekeler çok yavaş süzülür (Core Animation) — yalnız Ana Ekran'da;
+        // Geçmiş ve Ayarlar'da aynı lekeler durağan (boşta ≤ %2 işlemci). Çeviri sürerken, hareketi azaltta ve pencere
+        // arka plandayken her sayfada durağan.
+        .background {
+            if tab.wrappedValue == .home {
+                DSAmbientGlow(intensity: 0.8)
+            } else {
+                DSAmbientGlow(intensity: 0.8).environment(\.dsMotionGate, DSMotionGate(reduced: true))
+            }
+        }
         .background(Color.dsBackground)
         .animation(DS.animation(.page, reduced: reduceMotion || !model.settings.transitionAnimations), value: tab.wrappedValue)
         // Tek hareket kapısı: çeviri sürerken, hareketi azaltta, Geçiş Animasyonları kapalıyken ya da pencere önde
