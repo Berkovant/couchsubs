@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.91';
+  var APP_VERSION = '0.9.92';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -676,7 +676,7 @@
   // Android ve OBS (SubtitleWrap) hâlâ 42 karakter kuralını uygular.
   var WRAP_MAX_CHARS = 42;
   var WRAP_MAX_LINES = 3;
-  var WRAP_MIN_SCALE = 0.75;
+  var WRAP_MIN_SCALE = 1;
   var fontBase = 46;
 
   function wrapTokens(text) {
@@ -865,19 +865,9 @@
     el.style.whiteSpace = 'pre-line';
     var size = Math.round(baseSize * wrapped.scale);
     el.style.fontSize = size + 'px';
-    // Altyazı kutusu ekranın alt dörtte birini geçmez ve dengeli bölünmüş satırlar korunur: 3 satıra bölünüp %75'e
-    // küçültülse de genişliğe sığmayan yazıda tarayıcı kendiliğinden yeni satır açıyordu. Yazı, hem yükseklik sınırına
-    // hem bölünmüş satır sayısına sığana dek küçülür. Görev paneli gibi satır satır yazılar bu sınırın dışındadır.
-    // Gizli satır (display: none) ölçülemez, 0 yüksekliğiyle döngüye girmez.
     if (paragraphs) return fitBox(el);
-    var limit = (document.documentElement.clientHeight || window.innerHeight || 1080) / (window.COUCHSUBS_ZOOM || 1) * SUBTITLE_MAX_HEIGHT;
-    var lines = wrapped.text.split('\n').length;
-    // Örtü: yazı hiç küçülmez; sığmazsa daha çok satıra bölünür ve örtü onunla büyür (bkz. coverWrap).
-    if (stable) return fitBox(el);
-    while (size > SUBTITLE_MIN_FONT && (el.offsetHeight > limit || extraLines(el, lines))) {
-      size -= 1;
-      el.style.fontSize = size + 'px';
-    }
+    // Konuşma altyazısı hiçbir modda küçülmez ve sıkıştırılmaz (TV uygulaması 0.9.92): uzun satır bölünür, kutu büyür.
+    // Önceden "Üstünde" ve bantta sığmayan satır %75'e, yükseklik sınırına göre daha da küçülüyordu.
     fitBox(el);
   }
 
@@ -1428,8 +1418,11 @@
   // taşmaz: simgeyi örtmez.
   // Önceden sığmayan sekme %60'a kadar küçülüyor (şerit iki ayrı boyda), kenar payı ve genişleme tuş simgesinin üstüne
   // biniyordu (#859, #860). Satır aralığı özgün satırlarınki (rows): iki satırlık açıklama iki satırda kalır.
-  var FIT_FIRST_SQUEEZE = 0.8;
-  var FIT_MIN_SQUEEZE = 0.7;
+  // Yatay sıkıştırma yalnız tek satırlık kısa etikette (menü sekmesi, düğme) ve en çok %10 (TV uygulaması 0.9.92). Çok
+  // satırlı ya da uzun yazı (görev açıklaması, oyunun konuşma altyazısı) hiç sıkıştırılmaz: satır kırılır, yazı boyu aynı
+  // kalır, kutu aşağı uzar. Önceden paragraf da %30'a kadar sıkışıyor, altyazının harfleri yatayda ezik görünüyordu (X, beta.90).
+  var FIT_FIRST_SQUEEZE = 0.9;
+  var FIT_MIN_SQUEEZE = 0.85;
   var FIT_SQUEEZE_STEP = 0.05;
 
   function fitStyled(el, item, box, width, height, pad, line) {
@@ -1525,6 +1518,9 @@
       label = false;
       inner.style.whiteSpace = 'normal';
       el.style.whiteSpace = '';
+      // Satıra inen yazı sıkıştırılmaz.
+      squeeze = 1;
+      place();
     }
     if (label) {
       r0 = 0;
