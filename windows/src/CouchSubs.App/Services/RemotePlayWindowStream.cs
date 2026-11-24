@@ -22,7 +22,7 @@ namespace CouchSubs.App.Services;
 /// yakalanır: üstündeki altyazı penceremiz okunmaz. Kareler <see cref="StreamSession"/>'ınkiler gibi
 /// <see cref="FrameReceived"/> ile gelir; okuma hattının geri kalanı aynıdır (Mac'teki RemotePlayWindowStream'in karşılığı).
 /// </summary>
-public sealed class RemotePlayWindowStream : IStreamSession
+public sealed class RemotePlayWindowStream : IStreamSession, IWindowCaptureSession
 {
     /// <summary>En çok saniyedeki kare (<see cref="FrameCadence"/>; işlemci doluysa ve okuma yavaşsa daha az).</summary>
     private const int FramesPerSecond = FrameCadence.MaxFramesPerSecond;
@@ -48,6 +48,7 @@ public sealed class RemotePlayWindowStream : IStreamSession
     private bool running;
     private CancellationTokenSource? search;
     private Capture? capture;
+    public IntPtr CapturedWindowHandle { get { lock (gate) return capture?.Window ?? IntPtr.Zero; } }
     private SessionState? reported;
     /// <summary>Karelerin kopyalanma sıklığı; okuma hattı kendi örneğini verir (<see cref="UseCadence"/>).</summary>
     private FrameCadence cadence = new();
@@ -272,17 +273,8 @@ public sealed class RemotePlayWindowStream : IStreamSession
         return best;
     }
 
-    /// <summary>Bilgisayar altyazısını yakalanan Remote Play penceresine hizalamak için görünen oyun penceresi.</summary>
-    internal static IntPtr OverlayTarget(RemotePlayApp app) => FindGameWindow(app switch
+    internal static (int Left, int Top, int Right, int Bottom)? OverlayTargetBounds(IntPtr window)
     {
-        RemotePlayApp.Sony => SonyProcesses,
-        RemotePlayApp.Chiaki => ChiakiProcesses,
-        _ => [.. SonyProcesses, .. ChiakiProcesses],
-    });
-
-    internal static (int Left, int Top, int Right, int Bottom)? OverlayTargetBounds(RemotePlayApp app)
-    {
-        var window = OverlayTarget(app);
         return window != IntPtr.Zero && Native.GetWindowRect(window, out var rect)
             ? (rect.Left, rect.Top, rect.Right, rect.Bottom) : null;
     }
@@ -407,6 +399,7 @@ public sealed class RemotePlayWindowStream : IStreamSession
         private bool fallbackFailureNoted;
 
         public string Name { get; }
+        public IntPtr Window => window;
         public int Width => size.Width;
         public int Height => size.Height;
 

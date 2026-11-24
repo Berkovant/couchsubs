@@ -51,6 +51,28 @@ public class ComputerScreenTests
     }
 
     [Fact]
+    public void LegacyRemotePlayCoverMigratesOnceAndPreservesExplicitChoice()
+    {
+        const string legacy = """{"FrameSource":1,"Style":{"Placement":"Cover"}}""";
+        var migrated = ExtraAreaMigration.Load(legacy);
+        Assert.True(migrated.OverlayFollowSubtitle);
+        Assert.Equal(SubtitlePlacement.Cover, migrated.Style.Placement);
+        var disabled = migrated with { OverlayFollowSubtitle = false };
+        Assert.False(ExtraAreaMigration.Load(JsonSerializer.Serialize(disabled)).OverlayFollowSubtitle);
+    }
+
+    [Theory]
+    [InlineData("Above")]
+    [InlineData("Below")]
+    [InlineData("Fixed")]
+    public void LegacyOtherPlacementsDoNotEnableComputerCover(string placement)
+    {
+        var json = $$"""{"FrameSource":1,"Style":{"Placement":"{{placement}}"}}""";
+        Assert.False(ExtraAreaMigration.Load(json).OverlayFollowSubtitle);
+        Assert.False(ExtraAreaMigration.Load("""{"FrameSource":0,"Style":{"Placement":"Cover"}}""").OverlayFollowSubtitle);
+    }
+
+    [Fact]
     public void OutputAndWindowAreSavedAsText()
     {
         var settings = new UserSettings { Output = SubtitleOutput.Both, OverlayClickThrough = true, Overlay = new OverlayBounds(100, 800, 1200) };

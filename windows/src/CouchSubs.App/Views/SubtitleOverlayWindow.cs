@@ -65,7 +65,7 @@ public sealed partial class SubtitleOverlayWindow : Window
     private double Now => clock.Elapsed.TotalSeconds;
 
     /// <summary>Remote Play penceresinde bilgisayarın yerleşimi TV ayarından bağımsızdır.</summary>
-    private bool CoveringSubtitle => !controller.IsXbox && controller.Settings.FrameSource == FrameSource.RemotePlayWindow
+    private bool CoveringSubtitle => controller.ReadsComputerWindow
         ? controller.Settings.OverlayFollowSubtitle : controller.Settings.Style.Placement == SubtitlePlacement.Cover;
 
     /// <summary>Yazı boyu TV'deki gibi 1080 satırlık ekrana göredir.</summary>
@@ -276,7 +276,7 @@ public sealed partial class SubtitleOverlayWindow : Window
 
         var visible = controller.ShowsOnComputer && (lines.Count > 0 || regions.Count > 0);
         if (visible && !IsVisible) Show();
-        var follow = visible && !adjusting && !controller.IsXbox && controller.Settings.FrameSource == FrameSource.RemotePlayWindow
+        var follow = visible && !adjusting && controller.ReadsComputerWindow
             && controller.Settings.OverlayFollowSubtitle;
         coverSource = follow ? RemotePlaySource() : null;
         if (!follow && followingCover)
@@ -571,7 +571,7 @@ public sealed partial class SubtitleOverlayWindow : Window
     private ScreenArea? RemotePlaySource()
     {
         if (PresentationSource.FromVisual(this) is null
-            || RemotePlayWindowStream.OverlayTargetBounds(controller.Settings.RemotePlayApp) is not { } pixels)
+            || RemotePlayWindowStream.OverlayTargetBounds(controller.CapturedWindowHandle) is not { } pixels)
             return null;
         // PointFromScreen fiziksel pikseli bu WPF penceresinin ekran birimine çevirir.
         var upper = PointFromScreen(new Point(pixels.Left, pixels.Top));

@@ -227,6 +227,12 @@ public enum XboxFrameSource { Xbox, CaptureWindow }
 /// </summary>
 public sealed record WindowCaptureTarget(string ProcessName, string Title);
 
+/// <summary>Halen yakalanan pencere; yakalama yoksa sıfır. Tutamak iş parçacıkları arasında güvenle okunur.</summary>
+public interface IWindowCaptureSession
+{
+    IntPtr CapturedWindowHandle { get; }
+}
+
 /// <summary>
 /// Seçilen pencere OBS'in ve Kaynak projektörü değil (Program/Önizleme projektörü ya da OBS'in ana penceresi): bu
 /// görüntüde CouchSubs'ın OBS katmanı (tarayıcı kaynağı) da vardır, kendi altyazısını okur (bkz. <c>OwnSubtitles</c>).

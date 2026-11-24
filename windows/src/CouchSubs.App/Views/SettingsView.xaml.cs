@@ -587,8 +587,7 @@ public partial class SettingsView : UserControl
         // OBS katmanı da yeri kullanır ("Yalnız OBS (yayın)").
         TvPlacementPanel.Visibility = controller.ShowsOnTv || controller.Settings.Output == SubtitleOutput.Obs ? Visibility.Visible : Visibility.Collapsed;
         ComputerPlacementPanel.Visibility = controller.ShowsOnComputer ? Visibility.Visible : Visibility.Collapsed;
-        ComputerCoverPanel.Visibility = !controller.IsXbox && controller.ShowsOnComputer
-            && controller.Settings.FrameSource == FrameSource.RemotePlayWindow ? Visibility.Visible : Visibility.Collapsed;
+        ComputerCoverPanel.Visibility = controller.ShowsOnComputer && controller.ReadsComputerWindow ? Visibility.Visible : Visibility.Collapsed;
         var wanted = controller.Settings.OverlayFollowSubtitle ? "Cover" : "Fixed";
         if (ComputerCoverChoice.SelectedItem is not ComboBoxItem { Tag: string tag } || tag != wanted)
         {
