@@ -67,7 +67,7 @@ public class ComputerScreenTests
     [InlineData("Fixed")]
     public void LegacyOtherPlacementsDoNotEnableComputerCover(string placement)
     {
-        var json = $$"""{"FrameSource":1,"Style":{"Placement":"{{placement}}"}}""";
+        var json = JsonSerializer.Serialize(new { FrameSource = 1, Style = new { Placement = placement } });
         Assert.False(ExtraAreaMigration.Load(json).OverlayFollowSubtitle);
         Assert.False(ExtraAreaMigration.Load("""{"FrameSource":0,"Style":{"Placement":"Cover"}}""").OverlayFollowSubtitle);
     }
