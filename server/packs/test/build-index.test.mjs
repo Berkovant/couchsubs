@@ -41,7 +41,7 @@ it("still builds an index for a valid local pack archive", () => {
   const dir = mkdtempSync(join(tmpdir(), "couchsubs-index-valid-"));
   try {
     writeFileSync(join(dir, "sample-game.json.gz"), gzipSync(Buffer.from(JSON.stringify({
-      format: 2, id: "sample-game", title: "Sample Game", entries: { abc: "Example" },
+      format: 2, id: "sample-game", title: "Sample Game", entries: { "0123456789abcdef": "Example" },
     }))));
     const output = JSON.parse(execFileSync(process.execPath, [script, dir, "7"], { encoding: "utf8" }));
     expect(output.packs).toHaveLength(1);
@@ -67,6 +67,59 @@ it("refuses an index whose advertised pack ID does not match its downloadable fi
     expect(() => execFileSync(process.execPath, [script, dir, "7"], {
       encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     })).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it.each([
+  ["no translated entries", {}],
+  ["non-string translated entry", { abc: 42 }],
+  ["blank translated entry", { abc: "   " }],
+])("refuses format-2 archives with unusable translations (%s)", (_label, entries) => {
+  const dir = mkdtempSync(join(tmpdir(), "couchsubs-invalid-archive-"));
+  try {
+    writeFileSync(join(dir, "game.json.gz"), gzipSync(Buffer.from(JSON.stringify({
+      format: 2, id: "game", title: "Game", entries,
+    }))));
+    expect(() => execFileSync(process.execPath, [script, dir, "7"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    })).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it.each([
+  ["short full-line hash", { abc: "Text" }, {}],
+  ["non-hex full-line hash", { zzzzzzzzzzzzzzzz: "Text" }, {}],
+  ["invalid fragment hash", { "0000000000000001": "Text" }, { notahash: "Fragment" }],
+  ["blank fragment", { "0000000000000001": "Text" }, { "0000000000000002": "   " }],
+])("refuses format-2 subtitle hashes or unusable fragments (%s)", (_label, entries, segments) => {
+  const dir = mkdtempSync(join(tmpdir(), "couchsubs-invalid-hash-"));
+  try {
+    writeFileSync(join(dir, "game.json.gz"), gzipSync(Buffer.from(JSON.stringify({
+      format: 2, id: "game", title: "Game", entries, segments,
+    }))));
+    expect(() => execFileSync(process.execPath, [script, dir, "7"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    })).toThrow();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("keeps valid full-line and fragment hashes available for clients", () => {
+  const dir = mkdtempSync(join(tmpdir(), "couchsubs-valid-hash-"));
+  try {
+    writeFileSync(join(dir, "game.json.gz"), gzipSync(Buffer.from(JSON.stringify({
+      format: 2, id: "game", title: "Game",
+      entries: { "0123456789abcdef": "Translation" },
+      segments: { "fedcba9876543210": "Fragment" },
+    }))));
+    const index = JSON.parse(execFileSync(process.execPath, [script, dir, "7"], { encoding: "utf8" }));
+    expect(index.packs).toHaveLength(1);
+    expect(index.packs[0].entries).toBe(1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
