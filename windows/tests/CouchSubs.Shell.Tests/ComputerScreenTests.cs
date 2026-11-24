@@ -31,8 +31,23 @@ public class ComputerScreenTests
         var old = JsonSerializer.Deserialize<UserSettings>("""{"SourceLanguage":"en","Style":{"FontSize":58}}""")!;
         Assert.Equal(SubtitleOutput.Tv, old.Output);
         Assert.False(old.OverlayClickThrough);
+        Assert.False(old.OverlayFollowSubtitle);
         Assert.Null(old.Overlay);
         Assert.Equal(58, old.Style.FontSize);
+    }
+
+    [Theory]
+    [InlineData(SubtitlePlacement.Above)]
+    [InlineData(SubtitlePlacement.Below)]
+    public void ComputerFollowIsSavedIndependentlyOfTvPlacement(SubtitlePlacement tvPlacement)
+    {
+        var settings = new UserSettings { Style = new SubtitleStyle(Placement: tvPlacement), OverlayFollowSubtitle = true };
+        var restored = JsonSerializer.Deserialize<UserSettings>(JsonSerializer.Serialize(settings))!;
+        Assert.True(restored.OverlayFollowSubtitle);
+        Assert.Equal(tvPlacement, restored.Style.Placement);
+        var disabled = restored with { OverlayFollowSubtitle = false };
+        Assert.Equal(tvPlacement, disabled.Style.Placement);
+        Assert.False(disabled.OverlayFollowSubtitle);
     }
 
     [Fact]
