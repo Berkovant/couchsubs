@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import CoreGraphics
+import ImageIO
 import XCTest
 @testable import CouchSubsCore
 
@@ -210,5 +211,51 @@ final class ScreenTextDetectorTests: XCTestCase {
         for text in ["Go to the Saloon.", "Follow Paulie to the car.", "Lamar has sent you a message.", "Press ✕ to open the map."] {
             XCTAssertFalse(ScreenTextNoise.isNoise(text), text)
         }
+    }
+
+    /// #1268, gerçek kare (testdata/frames/gta6-harita-kart.jpg): desenli açık haritanın üstündeki tuş listesi (RECENTER,
+    /// 2D VIEW, ADD MARKER, SET DESTINATION, EXIT; beyaz harf, koyu kontur) menüde bir alan olur. Eskiden karolarında ne
+    /// koyu zemin ne açık zemin yetiyordu; liste hiç okunmuyordu. Kart ve üst şerit eskisi gibi bulunur.
+    func testOutlinedMapHintsOnARealMapFrameAreFound() throws {
+        let url = ScreenFitTests.directory.appendingPathComponent("gta6-harita-kart.jpg")
+        let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let frame = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let detector = ScreenTextDetector()
+        for now in stride(from: 0, through: 2000, by: 100) { detector.sample(frame, now: now, excluded: []) }
+        XCTAssertTrue(detector.inMenu)
+        func holds(_ left: Double, _ top: Double, _ right: Double, _ bottom: Double) -> Bool {
+            detector.areas.contains { a in
+                a.region.left <= left && a.region.right >= right && a.region.top <= top && a.region.bottom >= bottom
+            }
+        }
+        XCTAssertTrue(holds(0.84, 0.70, 0.98, 0.97), "tuş listesi: \(detector.areas.map(\.region))")
+        XCTAssertTrue(holds(0.54, 0.38, 0.81, 0.62), "harita kartı")
+        XCTAssertLessThanOrEqual(detector.areas.count, ScreenTextDetector.menuMaxAreas)
+    }
+
+    /// #1268, gerçek kare: tuş listesinin kutuları denizin renginde (yanındaki Ⓛ3/Ⓡ3 simgesi ve taşan harf konturu zemine
+    /// karışmaz). Eskiden "RECENTER" ve "2D VIEW" açık gri çiziliyordu.
+    func testOutlinedMapHintsAreDrawnInTheSeaColour() throws {
+        let url = ScreenFitTests.directory.appendingPathComponent("gta6-harita-kart.jpg")
+        let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let frame = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let crop = RegionCropper.crop(frame, to: CropRegion(top: 0.639, bottom: 1.0, left: 0.812, right: 1.0))
+        // Kayıtlı okumanın kutuları (alana oranla).
+        let lines: [(String, [Double])] = [("RECENTER", [0.378, 0.183, 0.772, 0.258]), ("2D VIEW", [0.450, 0.343, 0.761, 0.431]),
+                                           ("ADD MARKER", [0.278, 0.507, 0.750, 0.596]),
+                                           ("SET DESTINATION", [0.128, 0.672, 0.750, 0.759])]
+        for (text, b) in lines {
+            let box = TextBox(left: b[0], top: b[1], right: b[2], bottom: b[3])
+            let style = TextStyleSampler.sample(crop, box: box, lines: [TextLine(text, box: box)], source: text).surface
+            XCTAssertLessThanOrEqual(TextPainter.distance(TextPainter.rgb(style.background), (0x3A, 0x94, 0xBB)), 24,
+                                     "\(text): \(style.background)")
+        }
+    }
+
+    func testOutlinedTileRule() {
+        XCTAssertTrue(ScreenTextDetector.outlined(bright: 48, dark: 74))
+        XCTAssertFalse(ScreenTextDetector.outlined(bright: 8, dark: 71), "harfsiz kontur")
+        XCTAssertFalse(ScreenTextDetector.outlined(bright: 0, dark: 576), "düz koyu zemin")
+        XCTAssertFalse(ScreenTextDetector.outlined(bright: 400, dark: 100), "açık sahne")
     }
 }
