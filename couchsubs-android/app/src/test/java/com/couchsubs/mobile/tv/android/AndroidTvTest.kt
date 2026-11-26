@@ -34,7 +34,7 @@ class AndroidTvTest {
 
     private fun installer(adbd: FakeAdbd, key: AdbKey, steps: MutableList<InstallStep> = mutableListOf(), pairing: AndroidTvInstaller.Pairing? = null,
                           pairer: (AdbKey, AndroidTvInstaller.Pairing) -> Unit = { _, _ -> }) =
-        AndroidTvInstaller("127.0.0.1", adbd.port, { key }, pairing, { steps += it }, pairer = pairer)
+        AndroidTvInstaller("127.0.0.1", adbd.port, { key }, pairing, { steps += it }, pairer = pairer).apply { exitWaitMs = 0 }
 
     private inline fun <reified T : Throwable> expect(block: () -> Unit): T {
         try {
@@ -135,7 +135,10 @@ class AndroidTvTest {
         assertFalse(AndroidTvInstaller.installExistingSucceeded("Failure [NameNotFoundException]"))
     }
 
-    /** Güncellemede TV'de çalışan eski uygulama önce kapatılır (am force-stop), sonra kurulur ve temiz açılır. */
+    /**
+     * Güncellemede TV'de çalışan eski uygulama önce kapatılır (kapanma isteği, durum denetimi, hâlâ çalışıyor ya da
+     * bilinmiyorsa am force-stop; #1221), sonra kurulur ve temiz açılır.
+     */
     @Test
     fun updateStopsTheRunningAppBeforeInstalling() {
         val key = tempKey()
@@ -149,26 +152,61 @@ class AndroidTvTest {
         }).start()
         val result = installer(adbd, key).ensureInstalled({ apk }, "0.9.104")
         assertEquals(AndroidTvInstaller.Result("0.9.104", true), result)
+        val exit = adbd.opened.indexOf(AndroidTvInstaller.EXIT_COMMAND)
+        val check = adbd.opened.indexOf(AndroidTvInstaller.RUNNING_COMMAND)
         val stop = adbd.opened.indexOf(AndroidTvInstaller.FORCE_STOP_COMMAND)
         val install = adbd.opened.indexOfFirst { it.startsWith("exec:cmd package install") }
-        val open = adbd.opened.indexOfFirst { it.startsWith("shell:am start -n") }
-        assertTrue(adbd.opened.joinToString(" | "), stop >= 0 && install > stop && open > install)
+        // Kapanma isteği de "am start -n" ile başlar: temiz açılış kurulumdan sonraki, çıkış bayrağı olmayan am start'tır.
+        val open = adbd.opened.indexOfLast { it.startsWith("shell:am start -n") && it != AndroidTvInstaller.EXIT_COMMAND }
+        assertTrue(adbd.opened.joinToString(" | "),
+            exit >= 0 && check > exit && stop > check && install > stop && open > install)
         adbd.join()
     }
 
     /**
-     * Bekçinin "kapat ve aç" denemesi (uygulama çalışıyordu ama 10 sn'de bağlanmadı): önce am force-stop, sonra am start;
-     * çalışıyor denetimi yapılmaz (Samsung'daki was_kill + was_execute ile aynı sıra).
+     * Bekçinin "kapat ve aç" denemesi (uygulama çalışıyordu ama 10 sn'de bağlanmadı): önce kapanma isteği (#1221), uygulama
+     * hâlâ çalışıyorsa ya da bilinemiyorsa am force-stop, sonra am start (Samsung'daki was_kill + was_execute ile aynı sıra).
      */
     @Test
-    fun restartForceStopsThenStarts() {
+    fun restartAsksTheAppToExitThenForceStopsThenStarts() {
         val key = tempKey()
         val adbd = FakeAdbd(authorized = mutableListOf(key.publicKey), services = { _, _ -> "Starting: Intent { cmp=com.couchsubs.tv/.MainActivity }\n" }).start()
-        val output = AndroidTvInstaller("127.0.0.1", adbd.port, { key }).apply { lane = com.couchsubs.mobile.tv.TvLane() }
+        val output = AndroidTvInstaller("127.0.0.1", adbd.port, { key }).apply { lane = com.couchsubs.mobile.tv.TvLane(); exitWaitMs = 0 }
             .open(null, restart = true)
         assertTrue(output.startsWith("Starting"))
-        assertEquals(listOf(AndroidTvInstaller.FORCE_STOP_COMMAND, "shell:am start -n com.couchsubs.tv/.MainActivity"), adbd.opened)
+        assertEquals(listOf(AndroidTvInstaller.EXIT_COMMAND, AndroidTvInstaller.RUNNING_COMMAND, AndroidTvInstaller.FORCE_STOP_COMMAND,
+            "shell:am start -n com.couchsubs.tv/.MainActivity"), adbd.opened)
         adbd.join()
+    }
+
+    /**
+     * #1221: TV uygulaması kapanma isteğiyle kapandıysa (HDMI'yı kendisi bıraktı) am force-stop gönderilmez; MediaTek'li
+     * Philips Google TV'de öldürülen işlem HDMI'yı bırakmıyor, giriş TV kapatılana kadar siyah kalıyordu.
+     */
+    @Test
+    fun appThatExitsOnRequestIsNotForceStopped() {
+        val key = tempKey()
+        val adbd = FakeAdbd(authorized = mutableListOf(key.publicKey), services = { service, _ ->
+            if (service == AndroidTvInstaller.RUNNING_COMMAND) "    * Hist #0: ActivityRecord{2a1d9e1 u0 com.google.android.tvlauncher/.MainActivity t1}\n"
+            else "Starting: Intent { cmp=com.couchsubs.tv/.MainActivity }\n"
+        }).start()
+        AndroidTvInstaller("127.0.0.1", adbd.port, { key }).apply { lane = com.couchsubs.mobile.tv.TvLane(); exitWaitMs = 0 }
+            .open(null, restart = true)
+        assertEquals(listOf(AndroidTvInstaller.EXIT_COMMAND, AndroidTvInstaller.RUNNING_COMMAND,
+            "shell:am start -n com.couchsubs.tv/.MainActivity"), adbd.opened)
+        adbd.join()
+    }
+
+    @Test
+    fun forceStopIsNeededOnlyWhileTheAppStillShowsOrTheListCannotBeRead() {
+        val launcher = "    * Hist #0: ActivityRecord{2a1d9e1 u0 com.google.android.tvlauncher/.MainActivity t1}"
+        val ours = "    * Hist #1: ActivityRecord{6c1b2f0 u0 com.couchsubs.tv/.MainActivity t42}"
+        assertFalse(AndroidTvInstaller.needsForceStop(launcher))
+        assertTrue(AndroidTvInstaller.needsForceStop("$ours\n$launcher"))
+        assertTrue(AndroidTvInstaller.needsForceStop("$launcher\n    ServiceRecord{1f2e u0 com.couchsubs.tv/.OverlayService}"))
+        assertTrue(AndroidTvInstaller.needsForceStop(""))
+        assertTrue(AndroidTvInstaller.needsForceStop("/system/bin/sh: grep: not found"))
+        assertEquals("shell:am start -n com.couchsubs.tv/.MainActivity --ez exit true", AndroidTvInstaller.EXIT_COMMAND)
     }
 
     /** Güncel uygulamayı açarken TV "zaten çalışıyor, öne getirildi" derse eski ekran kapatılıp temiz açılır. */
@@ -185,7 +223,8 @@ class AndroidTvTest {
         }).start()
         assertEquals(AndroidTvInstaller.Result("0.9.104", false), installer(adbd, key).ensureInstalled({ apk }, "0.9.104"))
         val start = "shell:am start -n com.couchsubs.tv/.MainActivity"
-        assertEquals(listOf(start, AndroidTvInstaller.FORCE_STOP_COMMAND, start), adbd.opened.filter { it.startsWith("shell:am ") })
+        assertEquals(listOf(start, AndroidTvInstaller.EXIT_COMMAND, AndroidTvInstaller.FORCE_STOP_COMMAND, start),
+            adbd.opened.filter { it.startsWith("shell:am ") })
         adbd.join()
     }
 
@@ -246,6 +285,7 @@ class AndroidTvTest {
         val logFile = java.io.File.createTempFile("tvinstall", ".log").apply { deleteOnExit() }
         val installer = AndroidTvInstaller("127.0.0.1", adbd.port, { key }, log = com.couchsubs.mobile.tv.samsung.InstallLog(logFile))
         installer.stallLimits = { if (it == "installing") 300L else 10_000L }
+        installer.exitWaitMs = 0
         val result = installer.ensureInstalled({ apk }, "0.9.104")
         assertTrue(result.installed)
         assertEquals("0.9.104", result.version)
@@ -266,6 +306,7 @@ class AndroidTvTest {
         }).start(connections = 2)
         val installer = installer(adbd, key)
         installer.stallLimits = { if (it == "installing") 300L else 10_000L }
+        installer.exitWaitMs = 0
         val error = expect<AndroidInstallException> { installer.ensureInstalled({ apk }, "0.9.104") }
         assertEquals(AndroidInstallError.CONNECTION_LOST, error.error)
         assertTrue(error.detail!!.contains("bir kez daha denendi"))
